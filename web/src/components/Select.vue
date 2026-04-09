@@ -9,16 +9,19 @@ interface SelectOption {
 interface Props {
   modelValue: string
   options: SelectOption[]
+  placeholder?: string
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  placeholder: '请选择',
+})
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 
 const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
 
 const selectedLabel = computed(
-  () => props.options.find((item) => item.value === props.modelValue)?.label ?? '请选择',
+  () => props.options.find((item) => item.value === props.modelValue)?.label ?? props.placeholder,
 )
 
 const toggleOpen = () => {
