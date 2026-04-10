@@ -1,16 +1,25 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import Badge from './components/Badge.vue'
-import Button2 from './components/Button2.vue'
-import Card from './components/Card.vue'
-import CardBody from './components/CardBody.vue'
-import CardHeader from './components/CardHeader.vue'
-import Icon from './components/Icon.vue'
-import Select from './components/Select.vue'
-import Container from './components/layout/Container.vue'
-import Flex from './components/layout/Flex.vue'
-import Stack from './components/layout/Stack.vue'
-import { useI18n, type Locale } from './i18n'
+import Avatar from '@/components/Avatar.vue'
+import Badge from '@/components/Badge.vue'
+import Button from '@/components/Button.vue'
+import CallAudioPlayer from '@/components/CallAudioPlayer.vue'
+import Card from '@/components/Card.vue'
+import CardBody from '@/components/CardBody.vue'
+import CardHeader from '@/components/CardHeader.vue'
+import CodeEditor from '@/components/CodeEditor.vue'
+import Divider from '@/components/Divider.vue'
+import FileUpload from '@/components/FileUpload.vue'
+import Icon from '@/components/Icon.vue'
+import Input from '@/components/Input.vue'
+import MarkdownEditor from '@/components/MarkdownEditor.vue'
+import MarkdownPreview from '@/components/MarkdownPreview.vue'
+import Select from '@/components/Select.vue'
+import Textarea from '@/components/Textarea.vue'
+import Container from '@/components/layout/Container.vue'
+import Flex from '@/components/layout/Flex.vue'
+import Stack from '@/components/layout/Stack.vue'
+import { useI18n, type Locale } from '@/i18n'
 
 const { t, locale, setLocale } = useI18n()
 
@@ -26,19 +35,37 @@ const localeModel = computed<string>({
   set: (v: string) => setLocale((v || 'zh') as Locale),
 })
 
-const button2VariantOptions = [
+const demoName = ref('Cinyu User')
+const demoDesc = ref('这是一条多行文本，作为基础组件演示内容。')
+const uploadedFilesCount = ref(0)
+const markdownValue = ref(`# Markdown Editor
+
+这是一个 **MarkdownEditor** + **MarkdownPreview** 示例。
+
+\`\`\`ts
+const hello = 'CinyuVerse'
+console.log(hello)
+\`\`\`
+`)
+const codeValue = ref(`function sum(a: number, b: number) {
+  return a + b
+}
+
+console.log(sum(1, 2))`)
+
+const buttonVariantOptions = [
   { label: '实心', value: 'solid' },
   { label: '柔和', value: 'soft' },
   { label: '描边', value: 'outline' },
 ]
 
-const button2SizeOptions = [
+const buttonSizeOptions = [
   { label: 'SM', value: 'sm' },
   { label: 'MD', value: 'md' },
   { label: 'LG', value: 'lg' },
 ]
 
-const button2ColorOptions = [
+const buttonColorOptions = [
   { label: '紫色（预设）', value: 'purple' },
   { label: '橙色（预设）', value: 'orange' },
   { label: '绿色（预设）', value: 'green' },
@@ -70,14 +97,14 @@ const cardInteractiveOptions = [
   { label: 'Press', value: 'press' },
 ]
 
-type Button2Variant = 'solid' | 'soft' | 'outline'
-type Button2Size = 'sm' | 'md' | 'lg'
-type Button2ColorMode = 'purple' | 'orange' | 'green' | 'blue' | 'custom'
+type ButtonVariant = 'solid' | 'soft' | 'outline'
+type ButtonSize = 'sm' | 'md' | 'lg'
+type ButtonColorMode = 'purple' | 'orange' | 'green' | 'blue' | 'custom'
 
-interface Button2PlaygroundState {
-  variant: Button2Variant
-  size: Button2Size
-  colorMode: Button2ColorMode
+interface ButtonPlaygroundState {
+  variant: ButtonVariant
+  size: ButtonSize
+  colorMode: ButtonColorMode
   customColor: string
   radius: string
   width: string
@@ -87,7 +114,7 @@ interface Button2PlaygroundState {
   label: string
 }
 
-const button2Playground = ref<Button2PlaygroundState>({
+const buttonPlayground = ref<ButtonPlaygroundState>({
   variant: 'solid',
   size: 'md',
   colorMode: 'purple',
@@ -100,46 +127,46 @@ const button2Playground = ref<Button2PlaygroundState>({
   label: '预览按钮',
 })
 
-const button2ResolvedColor = computed(() =>
-  button2Playground.value.colorMode === 'custom'
-    ? button2Playground.value.customColor
-    : button2Playground.value.colorMode,
+const buttonResolvedColor = computed(() =>
+  buttonPlayground.value.colorMode === 'custom'
+    ? buttonPlayground.value.customColor
+    : buttonPlayground.value.colorMode,
 )
 
-const button2UsageCode = computed(() => {
+const buttonUsageCode = computed(() => {
   const attrs: string[] = []
 
-  if (button2Playground.value.variant !== 'solid') attrs.push(`variant="${button2Playground.value.variant}"`)
-  if (button2Playground.value.size !== 'md') attrs.push(`size="${button2Playground.value.size}"`)
+  if (buttonPlayground.value.variant !== 'solid') attrs.push(`variant="${buttonPlayground.value.variant}"`)
+  if (buttonPlayground.value.size !== 'md') attrs.push(`size="${buttonPlayground.value.size}"`)
 
-  if (button2Playground.value.colorMode === 'custom') {
-    attrs.push(`color="${button2Playground.value.customColor}"`)
+  if (buttonPlayground.value.colorMode === 'custom') {
+    attrs.push(`color="${buttonPlayground.value.customColor}"`)
   } else {
-    attrs.push(`color="${button2Playground.value.colorMode}"`)
+    attrs.push(`color="${buttonPlayground.value.colorMode}"`)
   }
 
-  if (button2Playground.value.radius) attrs.push(`radius="${button2Playground.value.radius}"`)
-  if (button2Playground.value.width) attrs.push(`width="${button2Playground.value.width}"`)
-  if (button2Playground.value.height) attrs.push(`height="${button2Playground.value.height}"`)
-  if (button2Playground.value.padding) attrs.push(`padding="${button2Playground.value.padding}"`)
-  if (button2Playground.value.fontSize) attrs.push(`font-size="${button2Playground.value.fontSize}"`)
+  if (buttonPlayground.value.radius) attrs.push(`radius="${buttonPlayground.value.radius}"`)
+  if (buttonPlayground.value.width) attrs.push(`width="${buttonPlayground.value.width}"`)
+  if (buttonPlayground.value.height) attrs.push(`height="${buttonPlayground.value.height}"`)
+  if (buttonPlayground.value.padding) attrs.push(`padding="${buttonPlayground.value.padding}"`)
+  if (buttonPlayground.value.fontSize) attrs.push(`font-size="${buttonPlayground.value.fontSize}"`)
 
   const attrText = attrs.length ? ` ${attrs.join(' ')}` : ''
-  return `<Button2${attrText}>${button2Playground.value.label}</Button2>`
+  return `<Button${attrText}>${buttonPlayground.value.label}</Button>`
 })
 
-const button2SfcCode = computed(() => {
+const buttonSfcCode = computed(() => {
   return `<script setup lang="ts">
-import Button2 from './components/Button2.vue'
+import Button from '@/components/Button.vue'
 <\/script>
 
 <template>
-  ${button2UsageCode.value}
+  ${buttonUsageCode.value}
 </template>
 `
 })
 
-const button2MainTsCode = computed(() => {
+const buttonMainTsCode = computed(() => {
   return `import { createApp } from 'vue'
 import './style/global.css'
 import App from './App.vue'
@@ -148,9 +175,9 @@ createApp(App).mount('#app')
 `
 })
 
-const copyButton2Code = async () => {
+const copyButtonCode = async () => {
   try {
-    await navigator.clipboard.writeText(button2SfcCode.value)
+    await navigator.clipboard.writeText(buttonSfcCode.value)
   } catch {
     return
   }
@@ -257,9 +284,9 @@ const layoutUsageCode = computed(() => {
 
 const layoutSfcCode = computed(() => {
   return `<script setup lang="ts">
-import Container from './components/layout/Container.vue'
-import Stack from './components/layout/Stack.vue'
-import Flex from './components/layout/Flex.vue'
+import Container from '@/components/layout/Container.vue'
+import Stack from '@/components/layout/Stack.vue'
+import Flex from '@/components/layout/Flex.vue'
 <\/script>
 
 <template>
@@ -387,11 +414,11 @@ const cardUsageCode = computed(() => {
 
 const cardSfcCode = computed(() => {
   return `<script setup lang="ts">
-import Card from './components/Card.vue'
-import CardHeader from './components/CardHeader.vue'
-import CardBody from './components/CardBody.vue'
+import Card from '@/components/Card.vue'
+import CardHeader from '@/components/CardHeader.vue'
+import CardBody from '@/components/CardBody.vue'
 import CardFooter from './components/CardFooter.vue'
-import Stack from './components/layout/Stack.vue'
+import Stack from '@/components/layout/Stack.vue'
 <\/script>
 
 <template>
@@ -447,7 +474,7 @@ const iconUsageCode = computed(() => {
 
 const iconSfcCode = computed(() => {
   return `<script setup lang="ts">
-import Icon from './components/Icon.vue'
+import Icon from '@/components/Icon.vue'
 <\/script>
 
 <template>
@@ -488,9 +515,9 @@ const copyIconCode = async () => {
       <article class="mt-7 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
         <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
           <h2 class="text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-            {{ t('section.button2') }}
+            {{ t('section.button') }}
           </h2>
-          <div class="text-xs text-[var(--text-muted)]">{{ t('section.button2.hint') }}</div>
+          <div class="text-xs text-[var(--text-muted)]">{{ t('section.button.hint') }}</div>
         </div>
 
         <div class="grid gap-5 lg:grid-cols-3">
@@ -501,14 +528,14 @@ const copyIconCode = async () => {
                   {{ t('field.variant') }}
                   <span class="ml-1 font-normal text-[var(--text-muted)]/80">Variant</span>
                 </div>
-                <Select v-model="button2Playground.variant" :options="button2VariantOptions" />
+                <Select v-model="buttonPlayground.variant" :options="buttonVariantOptions" />
               </div>
               <div class="space-y-2">
                 <div class="text-xs font-semibold text-[var(--text-muted)]">
                   {{ t('field.size') }}
                   <span class="ml-1 font-normal text-[var(--text-muted)]/80">Size</span>
                 </div>
-                <Select v-model="button2Playground.size" :options="button2SizeOptions" />
+                <Select v-model="buttonPlayground.size" :options="buttonSizeOptions" />
               </div>
             </div>
 
@@ -518,20 +545,20 @@ const copyIconCode = async () => {
                   {{ t('field.color') }}
                   <span class="ml-1 font-normal text-[var(--text-muted)]/80">Color</span>
                 </div>
-                <Select v-model="button2Playground.colorMode" :options="button2ColorOptions" />
+                <Select v-model="buttonPlayground.colorMode" :options="buttonColorOptions" />
               </div>
-              <div v-if="button2Playground.colorMode === 'custom'" class="space-y-2">
+              <div v-if="buttonPlayground.colorMode === 'custom'" class="space-y-2">
                 <div class="text-xs font-semibold text-[var(--text-muted)]">{{ t('field.custom_color') }}</div>
                 <div class="flex items-center gap-3">
-                  <input v-model="button2Playground.customColor" type="color"
+                  <input v-model="buttonPlayground.customColor" type="color"
                     class="h-10 w-12 cursor-pointer rounded-lg border border-[var(--border)] bg-transparent" />
-                  <input v-model="button2Playground.customColor" type="text"
+                  <input v-model="buttonPlayground.customColor" type="text"
                     class="h-10 w-full rounded-xl border border-[var(--border)] bg-transparent px-3 text-sm" />
                 </div>
               </div>
               <div class="space-y-2">
                 <div class="text-xs font-semibold text-[var(--text-muted)]">{{ t('field.radius') }}</div>
-                <input v-model="button2Playground.radius" type="text" placeholder="例如：18px / 999px / 1rem"
+                <input v-model="buttonPlayground.radius" type="text" placeholder="例如：18px / 999px / 1rem"
                   class="h-10 w-full rounded-xl border border-[var(--border)] bg-transparent px-3 text-sm" />
               </div>
             </div>
@@ -539,17 +566,17 @@ const copyIconCode = async () => {
             <div class="grid gap-4 md:grid-cols-4">
               <div class="space-y-2">
                 <div class="text-xs font-semibold text-[var(--text-muted)]">{{ t('field.width') }}</div>
-                <input v-model="button2Playground.width" type="text" placeholder="例如：180px"
+                <input v-model="buttonPlayground.width" type="text" placeholder="例如：180px"
                   class="h-10 w-full rounded-xl border border-[var(--border)] bg-transparent px-3 text-sm" />
               </div>
               <div class="space-y-2">
                 <div class="text-xs font-semibold text-[var(--text-muted)]">{{ t('field.height') }}</div>
-                <input v-model="button2Playground.height" type="text" placeholder="例如：44px"
+                <input v-model="buttonPlayground.height" type="text" placeholder="例如：44px"
                   class="h-10 w-full rounded-xl border border-[var(--border)] bg-transparent px-3 text-sm" />
               </div>
               <div class="space-y-2 md:col-span-2">
                 <div class="text-xs font-semibold text-[var(--text-muted)]">{{ t('field.padding') }}</div>
-                <input v-model="button2Playground.padding" type="text" placeholder="例如：14px 26px / 0 22px"
+                <input v-model="buttonPlayground.padding" type="text" placeholder="例如：14px 26px / 0 22px"
                   class="h-10 w-full rounded-xl border border-[var(--border)] bg-transparent px-3 text-sm" />
               </div>
             </div>
@@ -557,20 +584,20 @@ const copyIconCode = async () => {
             <div class="grid gap-4 md:grid-cols-2">
               <div class="space-y-2">
                 <div class="text-xs font-semibold text-[var(--text-muted)]">{{ t('field.font_size') }}</div>
-                <input v-model="button2Playground.fontSize" type="text" placeholder="例如：16px"
+                <input v-model="buttonPlayground.fontSize" type="text" placeholder="例如：16px"
                   class="h-10 w-full rounded-xl border border-[var(--border)] bg-transparent px-3 text-sm" />
               </div>
               <div class="space-y-2">
                 <div class="text-xs font-semibold text-[var(--text-muted)]">{{ t('field.label') }}</div>
-                <input v-model="button2Playground.label" type="text"
+                <input v-model="buttonPlayground.label" type="text"
                   class="h-10 w-full rounded-xl border border-[var(--border)] bg-transparent px-3 text-sm" />
               </div>
             </div>
 
             <div class="flex flex-wrap items-center justify-between gap-3">
               <button type="button"
-               class="cmp-btn2 cmp-btn2--soft"
-                @click="copyButton2Code">
+               class="cmp-btn cmp-btn--soft"
+                @click="copyButtonCode">
                 {{ t('common.copy') }}
               </button>
             </div>
@@ -581,12 +608,12 @@ const copyIconCode = async () => {
                 <div>
                   <div class="mb-2 text-xs font-semibold text-[var(--text-muted)]">{{ t('common.example_component') }}</div>
                   <pre
-                    class="overflow-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-xs leading-relaxed text-[var(--text)]"><code>{{ button2SfcCode }}</code></pre>
+                    class="overflow-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-xs leading-relaxed text-[var(--text)]"><code>{{ buttonSfcCode }}</code></pre>
                 </div>
                 <div>
                   <div class="mb-2 text-xs font-semibold text-[var(--text-muted)]">{{ t('common.entry_styles') }}</div>
                   <pre
-                    class="overflow-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-xs leading-relaxed text-[var(--text)]"><code>{{ button2MainTsCode }}</code></pre>
+                    class="overflow-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-xs leading-relaxed text-[var(--text)]"><code>{{ buttonMainTsCode }}</code></pre>
                 </div>
               </div>
             </details>
@@ -595,29 +622,29 @@ const copyIconCode = async () => {
           <div
             class="flex flex-col justify-center rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)] p-5">
             <div class="flex flex-wrap items-center gap-x-4 gap-y-4">
-              <Button2 :variant="button2Playground.variant" :size="button2Playground.size" :color="button2ResolvedColor"
-                :radius="button2Playground.radius || undefined" :width="button2Playground.width || undefined"
-                :height="button2Playground.height || undefined" :padding="button2Playground.padding || undefined"
-                :font-size="button2Playground.fontSize || undefined">
-                {{ button2Playground.label }}
-              </Button2>
+              <Button :variant="buttonPlayground.variant" :size="buttonPlayground.size" :color="buttonResolvedColor"
+                :radius="buttonPlayground.radius || undefined" :width="buttonPlayground.width || undefined"
+                :height="buttonPlayground.height || undefined" :padding="buttonPlayground.padding || undefined"
+                :font-size="buttonPlayground.fontSize || undefined">
+                {{ buttonPlayground.label }}
+              </Button>
               <div class="w-full" />
-              <Button2 :variant="button2Playground.variant" :size="button2Playground.size" shape="pill"
-                :color="button2ResolvedColor" :radius="button2Playground.radius || undefined">
+              <Button :variant="buttonPlayground.variant" :size="buttonPlayground.size" shape="pill"
+                :color="buttonResolvedColor" :radius="buttonPlayground.radius || undefined">
                 Pill
-              </Button2>
-              <Button2 :variant="button2Playground.variant" :size="button2Playground.size" shape="square"
-                :color="button2ResolvedColor" :radius="button2Playground.radius || undefined">
+              </Button>
+              <Button :variant="buttonPlayground.variant" :size="buttonPlayground.size" shape="square"
+                :color="buttonResolvedColor" :radius="buttonPlayground.radius || undefined">
                 Square
-              </Button2>
-              <Button2 :variant="button2Playground.variant" :size="button2Playground.size" shape="circle"
-                :color="button2ResolvedColor" :radius="button2Playground.radius || undefined">
+              </Button>
+              <Button :variant="buttonPlayground.variant" :size="buttonPlayground.size" shape="circle"
+                :color="buttonResolvedColor" :radius="buttonPlayground.radius || undefined">
                 ★
-              </Button2>
-              <Button2 variant="outline" :size="button2Playground.size" :color="button2ResolvedColor"
-                :radius="button2Playground.radius || undefined">
+              </Button>
+              <Button variant="outline" :size="buttonPlayground.size" :color="buttonResolvedColor"
+                :radius="buttonPlayground.radius || undefined">
                 Outline
-              </Button2>
+              </Button>
             </div>
           </div>
         </div>
@@ -694,7 +721,7 @@ const copyIconCode = async () => {
                   class="h-10 w-full rounded-xl border border-[var(--border)] bg-transparent px-3 text-sm" />
               </div>
               <div class="flex items-end justify-end">
-                <button type="button" class="cmp-btn2 cmp-btn2--soft" @click="copyLayoutCode">{{ t('common.copy') }}</button>
+                <button type="button" class="cmp-btn cmp-btn--soft" @click="copyLayoutCode">{{ t('common.copy') }}</button>
               </div>
             </div>
 
@@ -770,8 +797,8 @@ const copyIconCode = async () => {
                 <Select v-model="activeCardIndexModel" :options="cardIndexOptions" />
               </div>
               <div class="flex items-end gap-3 md:col-span-2">
-                <button type="button" class="cmp-btn2 cmp-btn2--soft" @click="addCard">{{ t('card.action.add') }}</button>
-                <button type="button" class="cmp-btn2 cmp-btn2--soft" @click="removeActiveCard">{{ t('card.action.remove') }}</button>
+                <button type="button" class="cmp-btn cmp-btn--soft" @click="addCard">{{ t('card.action.add') }}</button>
+                <button type="button" class="cmp-btn cmp-btn--soft" @click="removeActiveCard">{{ t('card.action.remove') }}</button>
               </div>
             </div>
 
@@ -829,7 +856,7 @@ const copyIconCode = async () => {
             </div>
 
             <div class="flex items-center justify-end">
-              <button type="button" class="cmp-btn2 cmp-btn2--soft" @click="copyCardCode">{{ t('common.copy') }}</button>
+              <button type="button" class="cmp-btn cmp-btn--soft" @click="copyCardCode">{{ t('common.copy') }}</button>
             </div>
 
             <details class="rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)] p-4">
@@ -907,7 +934,7 @@ const copyIconCode = async () => {
             </div>
 
             <div class="flex items-center justify-end">
-              <button type="button" class="cmp-btn2 cmp-btn2--soft" @click="copyIconCode">{{ t('common.copy') }}</button>
+              <button type="button" class="cmp-btn cmp-btn--soft" @click="copyIconCode">{{ t('common.copy') }}</button>
             </div>
 
             <details class="rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)] p-4">
@@ -942,6 +969,59 @@ const copyIconCode = async () => {
               </div>
             </div>
           </div>
+        </div>
+      </article>
+
+      <article class="mt-7 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+        <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+            Base Components
+          </h2>
+          <div class="text-xs text-[var(--text-muted)]">Audio / Avatar / Upload / Form</div>
+        </div>
+
+        <div class="space-y-5">
+          <div class="grid gap-4 md:grid-cols-2">
+            <Input v-model="demoName" label="输入框组件" placeholder="请输入昵称" />
+            <Textarea v-model="demoDesc" label="多行文本输入组件" placeholder="请输入描述" />
+          </div>
+
+          <Divider label="头像与上传" inset="6px" />
+
+          <div class="grid gap-4 md:grid-cols-2">
+            <div class="rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)] p-4">
+              <div class="mb-3 text-xs font-semibold text-[var(--text-muted)]">Avatar 头像组件</div>
+              <div class="flex items-center gap-3">
+                <Avatar :name="demoName" status="online" />
+                <Avatar :name="demoName" shape="rounded" status="busy" />
+              </div>
+            </div>
+            <div class="rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)] p-4">
+              <FileUpload label="上传组件" accept="image/*,.pdf" multiple :max-files="3" :max-size="8"
+                @change="(files) => (uploadedFilesCount = files.length)" />
+              <div class="mt-2 text-xs text-[var(--text-muted)]">当前文件数：{{ uploadedFilesCount }}</div>
+            </div>
+          </div>
+
+          <CallAudioPlayer call-id="demo-call-001" audio-url="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+            :has-audio="true" :duration-seconds="356" />
+        </div>
+      </article>
+
+      <article class="mt-7 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+        <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+            Markdown & Code Editor
+          </h2>
+          <div class="text-xs text-[var(--text-muted)]">Editor + Preview</div>
+        </div>
+
+        <div class="grid gap-5 lg:grid-cols-2">
+          <div class="space-y-4">
+            <MarkdownEditor v-model="markdownValue" />
+            <MarkdownPreview :source="markdownValue" />
+          </div>
+          <CodeEditor v-model="codeValue" language="typescript" />
         </div>
       </article>
     </section>
