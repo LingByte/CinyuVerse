@@ -15,7 +15,7 @@ const messages: Record<Locale, Messages> = {
     'app.title': '自定义组件展示页',
     'app.subtitle': '你现在可以基于 Button、Badge、Select 快速构建自己的组件体系。默认主题为淡紫色，并且支持一键切换主题色。',
 
-    'section.button2': 'Button2 Playground',
+    'section.button': 'Button Playground',
     'section.layout': 'Layout Playground',
     'section.card': 'Card Playground',
     'section.icon': 'Icon Playground',
@@ -28,7 +28,7 @@ const messages: Record<Locale, Messages> = {
     'icon.subtitle': '字体图标组件库（Iconfont Symbol）',
     'common.language': '语言',
 
-    'section.button2.hint': '在浏览器内选择你喜欢的样式（实时预览）',
+    'section.button.hint': '在浏览器内选择你喜欢的样式（实时预览）',
     'section.layout.hint': '布局容器组件库（实时预览 + 可复制用法）',
     'section.card.hint': '卡片组件库（实时预览 + 可复制用法）',
     'section.icon.hint': '字体图标组件库（Iconfont Symbol）',
@@ -89,7 +89,7 @@ const messages: Record<Locale, Messages> = {
     'app.title': 'Custom Components Showcase',
     'app.subtitle': 'Build your own component system quickly with Button, Badge and Select. Default theme is lavender and you can switch theme colors.',
 
-    'section.button2': 'Button2 Playground',
+    'section.button': 'Button Playground',
     'section.layout': 'Layout Playground',
     'section.card': 'Card Playground',
     'section.icon': 'Icon Playground',
@@ -102,7 +102,7 @@ const messages: Record<Locale, Messages> = {
     'icon.subtitle': 'Iconfont Symbol Icon Library',
     'common.language': 'Language',
 
-    'section.button2.hint': 'Choose your preferred styles in the browser (live preview).',
+    'section.button.hint': 'Choose your preferred styles in the browser (live preview).',
     'section.layout.hint': 'Layout component library (live preview + copy usage).',
     'section.card.hint': 'Card component library (live preview + copy usage).',
     'section.icon.hint': 'Iconfont Symbol icon library.',
@@ -163,7 +163,7 @@ const messages: Record<Locale, Messages> = {
     'app.title': 'カスタムコンポーネント表示ページ',
     'app.subtitle': 'Button・Badge・Select を使ってコンポーネント体系を素早く構築できます。デフォルトはラベンダーテーマで、テーマ色の切替にも対応します。',
 
-    'section.button2': 'Button2 Playground',
+    'section.button': 'Button Playground',
     'section.layout': 'Layout Playground',
     'section.card': 'Card Playground',
     'section.icon': 'Icon Playground',
@@ -176,7 +176,7 @@ const messages: Record<Locale, Messages> = {
     'icon.subtitle': 'Iconfont Symbol アイコンライブラリ',
     'common.language': '言語',
 
-    'section.button2.hint': 'ブラウザで好みのスタイルを選択（ライブプレビュー）。',
+    'section.button.hint': 'ブラウザで好みのスタイルを選択（ライブプレビュー）。',
     'section.layout.hint': 'レイアウトコンポーネント（ライブプレビュー + 使用例コピー）。',
     'section.card.hint': 'カードコンポーネント（ライブプレビュー + 使用例コピー）。',
     'section.icon.hint': 'Iconfont Symbol アイコンライブラリ。',
@@ -237,7 +237,7 @@ const messages: Record<Locale, Messages> = {
     'app.title': 'Витрина пользовательских компонентов',
     'app.subtitle': 'Быстро создавайте свою систему компонентов на основе Button, Badge и Select. Тема по умолчанию — лавандовая, поддерживается смена цветовой темы.',
 
-    'section.button2': 'Button2 Playground',
+    'section.button': 'Button Playground',
     'section.layout': 'Layout Playground',
     'section.card': 'Card Playground',
     'section.icon': 'Icon Playground',
@@ -250,7 +250,7 @@ const messages: Record<Locale, Messages> = {
     'icon.subtitle': 'Библиотека иконок Iconfont Symbol',
     'common.language': 'Язык',
 
-    'section.button2.hint': 'Выберите стили в браузере (живой предпросмотр).',
+    'section.button.hint': 'Выберите стили в браузере (живой предпросмотр).',
     'section.layout.hint': 'Библиотека layout-компонентов (предпросмотр + копирование).',
     'section.card.hint': 'Библиотека карточек (предпросмотр + копирование).',
     'section.icon.hint': 'Библиотека иконок Iconfont Symbol.',
