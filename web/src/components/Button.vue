@@ -21,7 +21,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const buttonClass = computed(() => [
-  'relative inline-flex items-center justify-center gap-2 overflow-hidden border font-bold leading-none transition-all duration-200 ease-out active:translate-y-px active:scale-[0.985]',
+  'relative inline-flex items-center justify-center gap-2 border font-bold leading-none transition-all duration-200 ease-out active:translate-y-px active:scale-[0.985]',
   props.size === 'sm' ? 'min-h-9 px-4 py-2 text-sm' : '',
   props.size === 'md' ? 'min-h-10 px-4.5 py-2.5 text-[0.95rem]' : '',
   props.size === 'lg' ? 'min-h-12 px-5.5 py-3 text-base' : '',
@@ -101,9 +101,35 @@ const onMouseDown = () => {
   >
     <span
       :key="waveKey"
-      class="pointer-events-none absolute inset-0 rounded-[inherit] shadow-[0_10px_22px_-14px_var(--btn)] animate-ping"
+      class="cv-btn__diffuse pointer-events-none absolute inset-0 rounded-[inherit]"
       aria-hidden="true"
     />
     <slot />
   </button>
 </template>
+
+<style scoped>
+.cv-btn__diffuse {
+  transform: scale(0.92);
+  opacity: 0.75;
+  animation: cv-btn-diffuse 560ms ease-out;
+}
+
+@keyframes cv-btn-diffuse {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.65;
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0), 0 10px 22px -14px var(--btn-strong);
+  }
+  70% {
+    transform: scale(1.07);
+    opacity: 0.28;
+    box-shadow: 0 0 0 10px color-mix(in oklab, var(--btn-strong) 20%, transparent), 0 18px 30px -18px var(--btn-strong);
+  }
+  100% {
+    transform: scale(1.12);
+    opacity: 0;
+    box-shadow: 0 0 0 14px color-mix(in oklab, var(--btn-strong) 0%, transparent), 0 18px 30px -18px var(--btn-strong);
+  }
+}
+</style>
