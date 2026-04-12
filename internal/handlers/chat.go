@@ -20,7 +20,6 @@ import (
 
 const maxPersistedHistoryMessages = 80 // 约 40 轮 user+assistant，控制上下文体积
 
-// lingoroutine LLMHandler 仅接受单条 user text，历史与会话摘要合并进 SystemPrompt（与各 Provider 内部 mem 空状态配合）。
 const maxSystemPromptContextBytes = 28000
 
 // CreateChatSessionRequest 创建会话

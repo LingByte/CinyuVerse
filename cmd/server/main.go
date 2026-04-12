@@ -81,6 +81,7 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(middleware.InjectDB(db))
+	r.Use(middleware.CorsMiddleware())
 	app := NewCinyuVerseApp(db)
 	app.RegisterRoutes(r)
 	addr := config.GlobalConfig.Server.Addr
