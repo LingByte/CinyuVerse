@@ -1,14 +1,9 @@
 package models
 
-import (
-	"time"
-
-	"gorm.io/gorm"
-)
+import "gorm.io/gorm"
 
 const TABLE_CHAT_MESSAGE = "ci_chat_messages"
 
-// 与 OpenAI / lingoroutine 对话 role 取值一致，便于序列化为 llm 请求中的 messages。
 const (
 	ChatMessageRoleSystem    = "system"
 	ChatMessageRoleUser      = "user"
@@ -24,7 +19,7 @@ type ChatMessage struct {
 	Role         string `json:"role" gorm:"size:32;not null;index;comment:消息角色"`
 	Content      string `json:"content" gorm:"type:text;not null;comment:消息正文"`
 	FinishReason string `json:"finishReason,omitempty" gorm:"size:64;comment:助手完成原因(若有)"`
-	RequestID    string `json:"requestId,omitempty" gorm:"size:128;comment:lingoroutine LLMDetails.RequestID 等链路ID"`
+	RequestID    string `json:"requestId,omitempty" gorm:"size:128;comment:请求链路ID"`
 
 	PromptTokens     int `json:"promptTokens,omitempty" gorm:"comment:提示 token 数"`
 	CompletionTokens int `json:"completionTokens,omitempty" gorm:"comment:生成 token 数"`
@@ -33,39 +28,6 @@ type ChatMessage struct {
 
 func (ChatMessage) TableName() string {
 	return TABLE_CHAT_MESSAGE
-}
-
-// ToLLMChatPair 转为 OpenAI 兼容的单条 message（map 形状与 lingoroutine asyncTurnMemory 中一致）。
-func (m *ChatMessage) ToLLMChatPair() map[string]string {
-	return map[string]string{
-		"role":    m.Role,
-		"content": m.Content,
-	}
-}
-
-// ChatMessagesToLLMMaps 将会话内消息转为 []map[string]string，供拼接历史上下文时使用。
-func ChatMessagesToLLMMaps(messages []*ChatMessage) []map[string]string {
-	out := make([]map[string]string, 0, len(messages))
-	for _, m := range messages {
-		if m == nil {
-			continue
-		}
-		out = append(out, m.ToLLMChatPair())
-	}
-	return out
-}
-
-func CreateChatMessage(db *gorm.DB, m *ChatMessage) error {
-	return db.Create(m).Error
-}
-
-func GetChatMessageByID(db *gorm.DB, id uint) (*ChatMessage, error) {
-	var row ChatMessage
-	err := db.Where("id = ? AND is_deleted = ?", id, SoftDeleteStatusActive).First(&row).Error
-	if err != nil {
-		return nil, err
-	}
-	return &row, nil
 }
 
 func ListChatMessagesBySessionID(db *gorm.DB, sessionID uint) ([]*ChatMessage, error) {
@@ -86,17 +48,4 @@ func NextChatMessageSeq(db *gorm.DB, sessionID uint) (int, error) {
 		return 0, err
 	}
 	return maxSeq + 1, nil
-}
-
-// TouchChatSessionLastMessage 更新会话的最后消息时间与可选摘要。
-func TouchChatSessionLastMessage(db *gorm.DB, sessionID uint, summary string) error {
-	updates := map[string]interface{}{
-		"last_message_at": time.Now().Unix(),
-		"updated_at":      time.Now(),
-	}
-	if summary != "" {
-		updates["summary"] = summary
-	}
-	return db.Model(&ChatSession{}).Where("id = ? AND is_deleted = ?", sessionID, SoftDeleteStatusActive).
-		Updates(updates).Error
 }

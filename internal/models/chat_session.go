@@ -6,7 +6,6 @@ import (
 
 const TABLE_CHAT_SESSION = "ci_chat_sessions"
 
-// 与 github.com/LingByte/lingoroutine/llm 中 Provider* 常量一致，便于落库后还原 Handler。
 const (
 	ChatLLMProviderOpenAI    = "openai"
 	ChatLLMProviderOllama    = "ollama"
