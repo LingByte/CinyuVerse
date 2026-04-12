@@ -33,6 +33,10 @@ go.work.sum
 # Logs
 logs
 *.log
+
+# Local sqlite (lingoroutine / gorm dev)
+data/
+*.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
