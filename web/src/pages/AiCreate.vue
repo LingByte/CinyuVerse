@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import chatApi, { type ChatSession, type ChatTurnResponse } from '@/api/chat'
 import Avatar from '@/components/Avatar.vue'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
@@ -16,13 +17,6 @@ interface ChatMessage {
   speaking?: boolean
 }
 
-interface Conversation {
-  id: string
-  title: string
-  messages: ChatMessage[]
-  createdAt: number
-}
-
 const chatContainerRef = ref<HTMLDivElement | null>(null)
 const inputValue = ref('')
 const messages = ref<ChatMessage[]>([])
@@ -32,14 +26,10 @@ const canSend = ref(false)
 
 const sidebarHidden = ref(false)
 
-const conversations = ref<Conversation[]>([])
-const activeConversationId = ref<string>('active')
+const USER_ID = 1
 
-const buildConversationTitle = (list: ChatMessage[]) => {
-  const firstUser = list.find((m) => m.role === 'user' && m.text.trim())
-  const raw = (firstUser?.text ?? '新对话').trim()
-  return raw.length > 18 ? `${raw.slice(0, 18)}…` : raw
-}
+const sessions = ref<ChatSession[]>([])
+const activeSessionId = ref<number | null>(null)
 
 const loadSidebarState = () => {
   sidebarHidden.value = window.localStorage.getItem('sidebarHidden') === 'true'
@@ -63,37 +53,16 @@ const scrollToBottom = async () => {
   el.scrollTop = el.scrollHeight
 }
 
-const startStreamingReply = async (fullText: string) => {
-  isTyping.value = true
-  const id = `ai-${Date.now()}`
-
+const appendAssistantMessage = async (text: string) => {
   const aiMsg: ChatMessage = {
-    id,
+    id: `ai-${Date.now()}`,
     role: 'ai',
-    text: '',
-    loading: true,
+    text,
+    loading: false,
     speaking: false,
   }
   messages.value.push(aiMsg)
   await scrollToBottom()
-
-  await new Promise((resolve) => setTimeout(resolve, 420))
-  aiMsg.loading = false
-
-  let index = 0
-  const step = async () => {
-    if (index >= fullText.length) {
-      isTyping.value = false
-      await scrollToBottom()
-      return
-    }
-
-    aiMsg.text += fullText[index]
-    index += 1
-    await scrollToBottom()
-    window.setTimeout(step, 18)
-  }
-  step()
 }
 
 const toggleSpeak = (msg: ChatMessage) => {
@@ -115,7 +84,7 @@ const copyMessage = async (msg: ChatMessage) => {
 
 const regenerateLast = async () => {
   if (isTyping.value) return
-  await startStreamingReply('我已经准备好重新生成回答。下一步请你接入真实后端流式接口。')
+  await appendAssistantMessage('我已经准备好重新生成回答。')
 }
 
 const sendMessage = async (text: string) => {
@@ -123,47 +92,77 @@ const sendMessage = async (text: string) => {
   if (!content) return
   if (isTyping.value) return
 
+  if (!activeSessionId.value) {
+    try {
+      const res = await chatApi.createSession({ userId: USER_ID })
+      activeSessionId.value = res.data.id
+      sessions.value.unshift(res.data)
+    } catch {
+      return
+    }
+  }
+
   messages.value.push({ id: `u-${Date.now()}`, role: 'user', text: content })
   inputValue.value = ''
   await scrollToBottom()
 
-  const reply = `收到：${content}\n\n你可以继续补充需求，我会按你的项目风格（白色 + 紫色点缀）帮你完善 UI 和交互。`
-  await startStreamingReply(reply)
+  const loadingId = `ai-${Date.now()}`
+  const loadingMsg: ChatMessage = { id: loadingId, role: 'ai', text: '', loading: true, speaking: false }
+  messages.value.push(loadingMsg)
+  await scrollToBottom()
+
+  isTyping.value = true
+  try {
+    const res = await chatApi.chatTurn(String(activeSessionId.value), { message: content })
+    const data = res.data as ChatTurnResponse
+    const assistantText = data.assistantMessage?.content ?? ''
+    const idx = messages.value.findIndex((m) => m.id === loadingId)
+    if (idx >= 0) {
+      messages.value.splice(idx, 1)
+    }
+    await appendAssistantMessage(assistantText)
+    const refreshed = await chatApi.listSessions({ userId: USER_ID, page: 1, size: 20 })
+    sessions.value = refreshed.data.sessions
+  } catch {
+    const idx = messages.value.findIndex((m) => m.id === loadingId)
+    if (idx >= 0) {
+      messages.value.splice(idx, 1)
+    }
+  } finally {
+    isTyping.value = false
+  }
 }
 
 const onNewChat = async () => {
   if (isTyping.value) return
 
-  const snapshot = messages.value
-    .filter((m) => !m.loading)
-    .map((m) => ({ ...m }))
-
-  if (snapshot.length) {
-    const id = `c-${Date.now()}`
-    conversations.value.unshift({
-      id,
-      title: buildConversationTitle(snapshot),
-      messages: snapshot,
-      createdAt: Date.now(),
-    })
-  }
-
   messages.value = []
   activeSpeakingId.value = null
   inputValue.value = ''
-  activeConversationId.value = 'active'
+  activeSessionId.value = null
   await scrollToBottom()
 }
 
-const openConversation = async (id: string) => {
+const openConversation = async (id: number) => {
   if (isTyping.value) return
-  const conv = conversations.value.find((c) => c.id === id)
-  if (!conv) return
-  messages.value = conv.messages.map((m) => ({ ...m }))
+  activeSessionId.value = id
   activeSpeakingId.value = null
   inputValue.value = ''
-  activeConversationId.value = id
-  await scrollToBottom()
+
+  try {
+    const res = await chatApi.listMessages(String(id))
+    const list = (res.data as unknown as { messages?: Array<{ role: string; content: string }> }).messages ?? []
+    messages.value = list.map((m, idx) => ({
+      id: `m-${id}-${idx}`,
+      role: m.role === 'assistant' ? 'ai' : 'user',
+      text: m.content,
+      loading: false,
+      speaking: false,
+    }))
+    await scrollToBottom()
+  } catch {
+    return
+  }
 }
 
 const sidebarItems = [
@@ -186,11 +185,11 @@ const onToolClick = (key: string) => {
 
 const clearHistory = async () => {
   messages.value = []
-  conversations.value = []
+  sessions.value = []
   activeSpeakingId.value = null
   isTyping.value = false
   inputValue.value = ''
-  activeConversationId.value = 'active'
+  activeSessionId.value = null
   await scrollToBottom()
 }
 
@@ -224,6 +223,13 @@ watch(
 onMounted(async () => {
   loadSidebarState()
   await scrollToBottom()
+
+  try {
+    const res = await chatApi.listSessions({ userId: USER_ID, page: 1, size: 20 })
+    sessions.value = res.data.sessions
+  } catch {
+    sessions.value = []
+  }
 
   const onKeydown = (e: KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -272,14 +278,14 @@ onMounted(async () => {
           <button type="button" class="chat__history-clear" @click="clearHistory">清空</button>
         </div>
         <button
-          v-for="c in conversations"
-          :key="c.id"
+          v-for="s in sessions"
+          :key="s.id"
           type="button"
           class="chat__history-item"
-          :class="{ 'is-active': activeConversationId === c.id }"
-          @click="openConversation(c.id)"
+          :class="{ 'is-active': activeSessionId === s.id }"
+          @click="openConversation(s.id)"
         >
-          {{ c.title }}
+          {{ s.title || `会话 ${s.id}` }}
         </button>
       </div>
 
