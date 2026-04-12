@@ -64,6 +64,8 @@ func main() {
 		MigrationsDir: "migrations",
 		Models: []any{
 			&models.Novel{},
+			&models.ChatSession{},
+			&models.ChatMessage{},
 		},
 	})
 	db, err := bs.SetupDatabase()
