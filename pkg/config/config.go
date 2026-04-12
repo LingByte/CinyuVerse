@@ -44,9 +44,10 @@ type ServicesConfig struct {
 
 // LLMConfig 大模型调用（供后续引擎使用）。
 type LLMConfig struct {
-	APIKey  string `env:"LLM_API_KEY"`
-	BaseURL string `env:"LLM_BASE_URL"`
-	Model   string `env:"LLM_MODEL"`
+	Provider string `env:"LLM_PROVIDER"` // openai | ollama | lmstudio 等，走 OpenAI 兼容 Chat Completions
+	APIKey   string `env:"LLM_API_KEY"`
+	BaseURL  string `env:"LLM_BASE_URL"`
+	Model    string `env:"LLM_MODEL"`
 }
 
 // StorageConfig storage configuration
@@ -89,9 +90,10 @@ func Load() error {
 		},
 		Services: ServicesConfig{
 			LLM: LLMConfig{
-				APIKey:  getStringOrDefault("LLM_API_KEY", ""),
-				BaseURL: getStringOrDefault("LLM_BASE_URL", "https://api.openai.com/v1"),
-				Model:   getStringOrDefault("LLM_MODEL", "gpt-4o-mini"),
+				Provider: getStringOrDefault("LLM_PROVIDER", "openai"),
+				APIKey:   getStringOrDefault("LLM_API_KEY", ""),
+				BaseURL:  getStringOrDefault("LLM_BASE_URL", "https://api.openai.com/v1"),
+				Model:    getStringOrDefault("LLM_MODEL", "gpt-4o-mini"),
 			},
 			Storage: StorageConfig{
 				BaseURL:   getStringOrDefault("LINGSTORAGE_BASE_URL", "https://api.lingstorage.com"),

@@ -34,6 +34,9 @@ go.work.sum
 logs
 *.log
 
+# Local Go build cache (optional dev override)
+.gocache/
+
 # Local sqlite (lingoroutine / gorm dev)
 data/
 *.db
