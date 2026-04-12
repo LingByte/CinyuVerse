@@ -11,6 +11,7 @@ import (
 
 	"github.com/LingByte/lingoroutine/logger"
 	"github.com/LingByte/lingoroutine/utils"
+	"github.com/LingByte/lingstorage-sdk-go"
 )
 
 // Config 应用主配置（精简版：仅服务、数据库、日志与 LLM）。
@@ -37,7 +38,8 @@ type DatabaseConfig struct {
 
 // ServicesConfig 外部服务。
 type ServicesConfig struct {
-	LLM LLMConfig `mapstructure:"llm"`
+	LLM     LLMConfig     `mapstructure:"llm"`
+	Storage StorageConfig `mapstructure:"storage"`
 }
 
 // LLMConfig 大模型调用（供后续引擎使用）。
@@ -47,8 +49,18 @@ type LLMConfig struct {
 	Model   string `env:"LLM_MODEL"`
 }
 
+// StorageConfig storage configuration
+type StorageConfig struct {
+	BaseURL   string `env:"LINGSTORAGE_BASE_URL"`
+	APIKey    string `env:"LINGSTORAGE_API_KEY"`
+	APISecret string `env:"LINGSTORAGE_API_SECRET"`
+	Bucket    string `env:"LINGSTORAGE_BUCKET"`
+}
+
 // GlobalConfig 进程级单例，在 Load 成功后可用。
 var GlobalConfig *Config
+
+var GlobalStore *lingstorage.Client
 
 // Load 读取环境（含可选 .env / .env.$MODE），填充 GlobalConfig。
 func Load() error {
@@ -56,7 +68,6 @@ func Load() error {
 	if err := utils.LoadEnv(mode); err != nil {
 		log.Printf("config: optional env file not loaded: %v (using defaults / OS env)", err)
 	}
-
 	GlobalConfig = &Config{
 		Server: ServerConfig{
 			Name:      getStringOrDefault("SERVER_NAME", "CinyuVerse"),
@@ -65,7 +76,7 @@ func Load() error {
 			APIPrefix: getStringOrDefault("API_PREFIX", "/api"),
 		},
 		Database: DatabaseConfig{
-			Driver: getStringOrDefault("DB_DRIVER", ""),
+			Driver: getStringOrDefault("DB_DRIVER", "sqlite"),
 			DSN:    getStringOrDefault("DSN", "./data/cinyuverse.db"),
 		},
 		Log: logger.LogConfig{
@@ -82,9 +93,19 @@ func Load() error {
 				BaseURL: getStringOrDefault("LLM_BASE_URL", "https://api.openai.com/v1"),
 				Model:   getStringOrDefault("LLM_MODEL", "gpt-4o-mini"),
 			},
+			Storage: StorageConfig{
+				BaseURL:   getStringOrDefault("LINGSTORAGE_BASE_URL", "https://api.lingstorage.com"),
+				APIKey:    getStringOrDefault("LINGSTORAGE_API_KEY", ""),
+				APISecret: getStringOrDefault("LINGSTORAGE_API_SECRET", ""),
+				Bucket:    getStringOrDefault("LINGSTORAGE_BUCKET", "default"),
+			},
 		},
 	}
-
+	GlobalStore = lingstorage.NewClient(&lingstorage.Config{
+		BaseURL:   GlobalConfig.Services.Storage.BaseURL,
+		APIKey:    GlobalConfig.Services.Storage.APIKey,
+		APISecret: GlobalConfig.Services.Storage.APISecret,
+	})
 	return nil
 }
 

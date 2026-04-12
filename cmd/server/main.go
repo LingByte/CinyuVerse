@@ -56,14 +56,15 @@ func main() {
 	if err := logger.Init(&config.GlobalConfig.Log, config.GlobalConfig.LogMode()); err != nil {
 		log.Fatalf("init logger: %v", err)
 	}
-
 	bs := bootstrap.NewBootstrap(os.Stdout, &bootstrap.Options{
 		DBDriver:      config.GlobalConfig.Database.Driver,
 		DSN:           config.GlobalConfig.Database.DSN,
 		AutoMigrate:   true,
 		SeedNonProd:   false,
 		MigrationsDir: "migrations",
-		Models:        models.All(),
+		Models: []any{
+			&models.Novel{},
+		},
 	})
 	db, err := bs.SetupDatabase()
 	if err != nil {
