@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import chatApi, { type ChatSession, type ChatTurnResponse } from '@/api/chat'
 import Avatar from '@/components/Avatar.vue'
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const emit = defineEmits<{
   (e: 'back'): void
@@ -30,6 +30,12 @@ const USER_ID = 1
 
 const sessions = ref<ChatSession[]>([])
 const activeSessionId = ref<number | null>(null)
+
+const topbarTitle = computed(() => {
+  if (!activeSessionId.value) return '新对话'
+  const s = sessions.value.find((x) => x.id === activeSessionId.value)
+  return (s?.title?.trim() || `会话 ${activeSessionId.value}`).slice(0, 24)
+})
 
 const loadSidebarState = () => {
   sidebarHidden.value = window.localStorage.getItem('sidebarHidden') === 'true'
@@ -194,15 +200,15 @@ const clearHistory = async () => {
 }
 
 const quickPrompts = [
-  '解释一下什么是链式思维？',
-  '帮我把这段文字总结成要点',
-  '给我一个学习计划（7 天）',
-  '写一封礼貌的英文邮件',
-  '把下面的代码重构一下',
-  '帮我生成一个项目 README',
-  '把这段内容改写得更口语化',
-  '给我 5 个标题备选方案',
-  '把它翻译成英文并润色',
+  { icon: '🧠', text: '解释一下什么是链式思维？' },
+  { icon: '📝', text: '帮我把这段文字总结成要点' },
+  { icon: '📅', text: '给我一个学习计划（7 天）' },
+  { icon: '✉️', text: '写一封礼貌的英文邮件' },
+  { icon: '🛠️', text: '把下面的代码重构一下' },
+  { icon: '📄', text: '帮我生成一个项目 README' },
+  { icon: '💬', text: '把这段内容改写得更口语化' },
+  { icon: '✨', text: '给我 5 个标题备选方案' },
+  { icon: '🌍', text: '把它翻译成英文并润色' },
 ]
 
 watch(
@@ -245,6 +251,21 @@ onMounted(async () => {
 
 <template>
   <main class="chat" :class="{ 'is-hidden': sidebarHidden }">
+    <button
+      v-if="sidebarHidden"
+      type="button"
+      class="chat__floating-toggle"
+      aria-label="显示侧边栏"
+      @click="toggleHidden"
+    >
+      <svg viewBox="0 0 24 24" class="chat__sidebar-toggle-icon" aria-hidden="true">
+        <path
+          d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm6 0H6v14h4V5zm2 0v14h6V5h-6z"
+          fill="currentColor"
+        />
+      </svg>
+    </button>
+
     <aside class="chat__sidebar" :aria-hidden="sidebarHidden" :class="{ 'is-hidden': sidebarHidden }">
       <div class="chat__sidebar-brand" aria-label="QinyuSpiritBook">
         <span class="chat__brand-mark" aria-hidden="true">
@@ -316,12 +337,16 @@ onMounted(async () => {
             />
           </svg>
         </button>
-        <div class="chat__topbar-title">新对话</div>
+        <div class="chat__topbar-title">{{ topbarTitle }}</div>
         <div class="chat__topbar-subtitle">开始一个 AI 对话</div>
       </header>
 
       <div class="chat__center">
-        <div ref="chatContainerRef" class="chat-container">
+        <div
+          ref="chatContainerRef"
+          class="chat-container"
+          :class="{ 'is-empty': messages.length === 0 }"
+        >
           <template v-for="m in messages" :key="m.id">
             <div
               v-if="m.loading"
@@ -390,12 +415,13 @@ onMounted(async () => {
             <div class="chat__prompt-grid">
               <button
                 v-for="p in quickPrompts"
-                :key="p"
+                :key="p.text"
                 type="button"
                 class="chat__prompt"
-                @click="sendMessage(p)"
+                @click="sendMessage(p.text)"
               >
-                {{ p }}
+                <span class="chat__prompt-icon" aria-hidden="true">{{ p.icon }}</span>
+                <span class="chat__prompt-text">{{ p.text }}</span>
               </button>
             </div>
           </div>
@@ -488,16 +514,15 @@ onMounted(async () => {
 .chat {
   min-height: 100vh;
   background: #ffffff;
-  display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  transition: grid-template-columns 260ms ease;
-}
-
-.chat.is-hidden {
-  grid-template-columns: 0px minmax(0, 1fr);
+  padding-left: 0px;
 }
 
 .chat__sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 280px;
+  height: 100vh;
   border-right: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
   padding: 18px 14px;
   display: flex;
@@ -506,26 +531,16 @@ onMounted(async () => {
   overflow: hidden;
   transition: width 260ms ease, transform 260ms ease;
   will-change: transform;
+  background: #ffffff;
+  z-index: 60;
 }
 
 
 .chat.is-hidden .chat__sidebar {
-  position: fixed;
-  left: 0;
-  top: 0;
-  width: 280px;
-  height: 100vh;
-  background: #ffffff;
   transform: translateX(-100%);
   opacity: 0;
   pointer-events: none;
-  border-right: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
   box-shadow: 0 24px 60px -48px rgba(2, 6, 23, 0.35);
-  z-index: 60;
-}
-
-.chat.is-hidden .chat__main {
-  grid-column: 1 / -1;
 }
 
 .chat__nav-label,
@@ -681,6 +696,29 @@ onMounted(async () => {
   position: relative;
 }
 
+.chat__floating-toggle {
+  position: fixed;
+  left: 12px;
+  top: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: color-mix(in oklab, #0b1220 58%, #ffffff);
+  transition: background 160ms ease, color 160ms ease;
+  z-index: 120;
+}
+
+.chat__floating-toggle:hover {
+  background: color-mix(in oklab, var(--surface-strong) 65%, transparent);
+  color: #0b1220;
+}
+
 .chat__sidebar-toggle {
   position: absolute;
   left: 12px;
@@ -697,14 +735,7 @@ onMounted(async () => {
   cursor: pointer;
   color: color-mix(in oklab, #0b1220 58%, #ffffff);
   transition: background 160ms ease, color 160ms ease;
-}
-
-.chat.is-hidden .chat__sidebar-toggle {
-  position: fixed;
-  left: 12px;
-  top: 12px;
-  transform: none;
-  z-index: 80;
+  z-index: 70;
 }
 
 .chat__sidebar-toggle:hover {
@@ -795,11 +826,19 @@ onMounted(async () => {
   gap: 12px;
 }
 
+.chat-container.is-empty {
+  justify-content: center;
+  min-height: calc(100vh - 180px);
+}
+
 .chat__empty {
-  margin: auto 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 200px);
+  width: 100%;
 }
 
 .message-box {
@@ -981,38 +1020,48 @@ onMounted(async () => {
 
 
 .chat__prompt-grid {
-  --cv-pill-h: 42px;
-  --cv-row-gap: 14px;
-  margin-top: 20px;
+  margin-top: 24px;
   width: 100%;
   max-width: 860px;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: var(--cv-row-gap) 14px;
-  max-height: calc((var(--cv-pill-h) + var(--cv-row-gap)) * 3 - var(--cv-row-gap));
-  overflow: hidden;
+  gap: 12px 16px;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
 }
 
 .chat__prompt {
-  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
-  background: color-mix(in oklab, var(--surface) 96%, transparent);
-  border-radius: 999px;
-  height: var(--cv-pill-h);
-  padding: 0 16px;
+  background: #f5f5f5;
+  border-radius: 20px;
+  padding: 10px 18px;
+  border: none;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  font-size: 14px;
+  gap: 8px;
+  cursor: pointer;
+  color: #0b1220;
+  font-size: 16px;
   font-weight: 500;
   white-space: nowrap;
-  cursor: pointer;
-  color: color-mix(in oklab, #0b1220 62%, #ffffff);
 }
 
 .chat__prompt:hover {
-  border-color: color-mix(in oklab, var(--theme) 35%, transparent);
-  background: color-mix(in oklab, var(--theme-soft) 40%, transparent);
+  background: #efefef;
+}
+
+.chat__prompt-icon {
+  width: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.chat__prompt-text {
+  display: inline-block;
 }
 
 .chat__composer {
