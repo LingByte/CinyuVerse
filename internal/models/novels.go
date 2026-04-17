@@ -10,7 +10,6 @@ const TABLE_NOVEL = "ci_novels"
 type Novel struct {
 	BaseModel
 	Title          string `json:"title" gorm:"size:255;not null;comment:小说标题"`
-	AuthorID       uint   `json:"authorId" gorm:"comment:作者ID"`
 	Status         string `json:"status" gorm:"size:50;comment:小说状态"`
 	Genre          string `json:"genre" gorm:"size:100;comment:小说类型(玄幻/都市/科幻/武侠等)"`
 	Audience       string `json:"audience" gorm:"size:50;comment:小说受众(male/female)"`
@@ -53,13 +52,6 @@ func DeleteNovel(db *gorm.DB, id uint, operator string) error {
 		"is_deleted": SoftDeleteStatusDeleted,
 		"update_by":  operator,
 	}).Error
-}
-
-// GetNovelsByAuthorID 根据作者ID获取小说列表
-func GetNovelsByAuthorID(db *gorm.DB, authorID uint) ([]*Novel, error) {
-	var novels []*Novel
-	err := db.Where("author_id = ? AND is_deleted = ?", authorID, SoftDeleteStatusActive).Find(&novels).Error
-	return novels, err
 }
 
 // GetNovelsByGenre 根据类型获取小说列表

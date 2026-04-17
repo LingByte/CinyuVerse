@@ -82,6 +82,7 @@ func main() {
 	r.Use(gin.Recovery())
 	r.Use(middleware.InjectDB(db))
 	r.Use(middleware.CorsMiddleware())
+	r.StaticFile("/novel-crud-demo", "web/novel-crud-demo.html")
 	app := NewCinyuVerseApp(db)
 	app.RegisterRoutes(r)
 	addr := config.GlobalConfig.Server.Addr

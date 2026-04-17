@@ -15,7 +15,6 @@ import (
 // CreateNovelRequest 创建小说请求结构
 type CreateNovelRequest struct {
 	Title          string `json:"title" binding:"required"`
-	AuthorID       uint   `json:"authorId" binding:"required"`
 	Status         string `json:"status"`
 	Genre          string `json:"genre"`
 	Audience       string `json:"audience"`
@@ -47,7 +46,6 @@ type UpdateNovelRequest struct {
 type NovelResponse struct {
 	ID             uint   `json:"id"`
 	Title          string `json:"title"`
-	AuthorID       uint   `json:"authorId"`
 	Status         string `json:"status"`
 	Genre          string `json:"genre"`
 	Audience       string `json:"audience"`
@@ -75,16 +73,17 @@ type PaginatedNovelResponse struct {
 func (ch *CinyuHandlers) registerNovelRoutes(r *gin.RouterGroup) {
 	novels := r.Group("/novels")
 	{
-		novels.POST("", ch.CreateNovel)                       // 创建小说
-		novels.GET("", ch.GetAllNovels)                       // 获取所有小说（分页）
-		novels.GET("/search", ch.SearchNovels)                // 搜索小说
-		novels.GET("/:id", ch.GetNovel)                       // 获取单个小说
-		novels.PUT("/:id", ch.UpdateNovel)                    // 更新小说
-		novels.DELETE("/:id", ch.DeleteNovel)                 // 删除小说
-		novels.POST("/:id/restore", ch.RestoreNovel)          // 恢复小说
-		novels.GET("/author/:authorId", ch.GetNovelsByAuthor) // 根据作者ID获取小说
-		novels.GET("/genre/:genre", ch.GetNovelsByGenre)      // 根据类型获取小说
-		novels.GET("/status/:status", ch.GetNovelsByStatus)   // 根据状态获取小说
+		novels.POST("", ch.CreateNovel)                     // 创建小说
+		novels.GET("", ch.GetAllNovels)                     // 获取所有小说（分页）
+		novels.GET("/search", ch.SearchNovels)              // 搜索小说
+		novels.POST("/generate", ch.GenerateNovelByAI)      // AI 生成小说 JSON 草稿
+		novels.POST("/cover/upload", ch.UploadNovelCover)   // 上传小说封面
+		novels.GET("/:id", ch.GetNovel)                     // 获取单个小说
+		novels.PUT("/:id", ch.UpdateNovel)                  // 更新小说
+		novels.DELETE("/:id", ch.DeleteNovel)               // 删除小说
+		novels.POST("/:id/restore", ch.RestoreNovel)        // 恢复小说
+		novels.GET("/genre/:genre", ch.GetNovelsByGenre)    // 根据类型获取小说
+		novels.GET("/status/:status", ch.GetNovelsByStatus) // 根据状态获取小说
 	}
 }
 
@@ -98,7 +97,6 @@ func (ch *CinyuHandlers) CreateNovel(c *gin.Context) {
 
 	novel := &models.Novel{
 		Title:          req.Title,
-		AuthorID:       req.AuthorID,
 		Status:         req.Status,
 		Genre:          req.Genre,
 		Audience:       req.Audience,
@@ -232,29 +230,6 @@ func (ch *CinyuHandlers) DeleteNovel(c *gin.Context) {
 	response.Success(c, "Novel deleted successfully", nil)
 }
 
-// GetNovelsByAuthor 根据作者ID获取小说列表
-func (ch *CinyuHandlers) GetNovelsByAuthor(c *gin.Context) {
-	authorIDStr := c.Param("authorId")
-	authorID, err := strconv.ParseUint(authorIDStr, 10, 32)
-	if err != nil {
-		response.Fail(c, "Invalid author ID", nil)
-		return
-	}
-
-	novels, err := models.GetNovelsByAuthorID(ch.db, uint(authorID))
-	if err != nil {
-		response.Fail(c, "Failed to get novels by author", nil)
-		return
-	}
-
-	responses := make([]*NovelResponse, len(novels))
-	for i, novel := range novels {
-		responses[i] = novelToResponse(novel)
-	}
-
-	response.Success(c, "Novels retrieved successfully", responses)
-}
-
 // GetNovelsByGenre 根据类型获取小说列表
 func (ch *CinyuHandlers) GetNovelsByGenre(c *gin.Context) {
 	genre := c.Param("genre")
@@ -338,23 +313,19 @@ func (ch *CinyuHandlers) SearchNovels(c *gin.Context) {
 	if err != nil || page < 1 {
 		page = 1
 	}
-
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil || size < 1 || size > 100 {
 		size = 10
 	}
-
 	novels, total, err := models.SearchNovels(ch.db, keyword, page, size)
 	if err != nil {
 		response.Fail(c, "Failed to search novels", nil)
 		return
 	}
-
 	responses := make([]*NovelResponse, len(novels))
 	for i, novel := range novels {
 		responses[i] = novelToResponse(novel)
 	}
-
 	response.Success(c, "Novels searched successfully", PaginatedNovelResponse{
 		Novels: responses,
 		Total:  total,
@@ -385,7 +356,6 @@ func novelToResponse(novel *models.Novel) *NovelResponse {
 	return &NovelResponse{
 		ID:             novel.ID,
 		Title:          novel.Title,
-		AuthorID:       novel.AuthorID,
 		Status:         novel.Status,
 		Genre:          novel.Genre,
 		Audience:       novel.Audience,
