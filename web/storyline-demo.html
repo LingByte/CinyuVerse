@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Storyline Demo</title>
+  <script src="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 20px; color: #1f2937; }
+    .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    input, textarea, button { font-size: 14px; padding: 8px; }
+    input, textarea { border: 1px solid #d1d5db; border-radius: 6px; }
+    textarea { width: 100%; min-height: 84px; }
+    button { border: none; border-radius: 6px; background: #2563eb; color: white; cursor: pointer; }
+    button.secondary { background: #4b5563; }
+    pre { background: #0b1020; color: #e5e7eb; padding: 12px; border-radius: 8px; white-space: pre-wrap; }
+    .w-full { width: 100%; }
+    .stats { display: grid; grid-template-columns: repeat(6, minmax(100px, 1fr)); gap: 8px; margin-bottom: 10px; }
+    .stat { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; text-align: center; }
+    .stat .num { font-size: 20px; font-weight: 700; }
+    #graph { width: 100%; height: 680px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; }
+    .chip { padding: 6px 10px; border-radius: 999px; color: #fff; border: none; cursor: pointer; font-size: 12px; }
+    .chip.off { opacity: .35; text-decoration: line-through; }
+    .tools { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+    .detail { border: 1px dashed #d1d5db; border-radius: 8px; padding: 8px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h2>Storyline CRUD + AI + 可视化 Demo</h2>
+  <div class="card">
+    <div class="row"><label>API Base</label><input id="apiBase" class="w-full" /></div>
+  </div>
+
+  <div class="card">
+    <h3>Storyline CRUD</h3>
+    <div class="row">
+      <input id="slId" placeholder="storyline id" />
+      <input id="slNovelId" placeholder="novelId" value="1" />
+      <input id="slName" placeholder="name" />
+      <input id="slVersion" placeholder="version" value="1" />
+      <input id="slStatus" placeholder="status" value="draft" />
+    </div>
+    <div class="row"><input id="slTheme" placeholder="theme" class="w-full" /></div>
+    <div class="row"><textarea id="slDesc" placeholder="description"></textarea></div>
+    <div class="row">
+      <button id="slCreate">创建</button><button id="slGet" class="secondary">查询</button><button id="slUpdate" class="secondary">更新</button>
+      <button id="slDelete" class="secondary">删除</button><button id="slRestore" class="secondary">恢复</button><button id="slList">列表</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Node/Edge/Fact 快速创建</h3>
+    <div class="row">
+      <button id="quickNode">创建示例Node</button>
+      <button id="quickEdge">创建示例Edge</button>
+      <button id="quickFact">创建示例Fact</button>
+    </div>
+    <div class="row">
+      <button id="listNodes" class="secondary">列Node</button>
+      <button id="listEdges" class="secondary">列Edge</button>
+      <button id="listFacts" class="secondary">列Fact</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>AI 生成/纠正故事线</h3>
+    <div class="row">
+      <input id="aiUserId" value="1" placeholder="userId" />
+      <input id="aiModel" placeholder="model" />
+      <input id="aiMaxTokens" value="2600" placeholder="maxTokens" />
+      <input id="aiTemperature" value="0.7" placeholder="temperature" />
+    </div>
+    <div class="row">
+      <input id="aiDetailLevel" value="lite" placeholder="detailLevel: lite/standard/full" />
+      <input id="aiNodeLimit" value="6" placeholder="nodeLimit" />
+      <input id="aiEdgeLimit" value="6" placeholder="edgeLimit" />
+      <input id="aiFactLimit" value="3" placeholder="factLimit" />
+    </div>
+    <div class="row"><textarea id="aiMessage" placeholder="输入故事线需求"></textarea></div>
+    <div class="row"><textarea id="aiFeedback" placeholder="纠正意见（可选）"></textarea></div>
+    <div class="row"><input id="aiLocked" class="w-full" placeholder="锁定字段: storyline,nodes,edges,facts" /></div>
+    <div class="row">
+      <button id="aiGenerate">AI生成</button>
+      <button id="aiRefine" class="secondary">基于草稿纠正</button>
+      <button id="applyDraft">草稿写入数据库</button>
+    </div>
+    <pre id="draftOutput">等待 AI 输出...</pre>
+  </div>
+
+  <div class="card">
+    <h3>持续推进（Advance / Commit）</h3>
+    <div class="row">
+      <input id="advUserId" value="1" placeholder="userId" />
+      <input id="advCurrentNodeId" placeholder="currentNodeId" />
+      <input id="advTargetAnchorId" placeholder="targetAnchorId(可选)" />
+      <input id="advStepNodes" value="3" placeholder="stepNodes" />
+    </div>
+    <div class="row">
+      <input id="advMaxNewNodesPerBranch" value="3" placeholder="branchBudget.maxNewNodesPerBranch" />
+      <input id="advMaxChapterSpan" value="3" placeholder="branchBudget.maxChapterSpan" />
+      <input id="advModel" placeholder="model(可选)" />
+      <input id="advMaxTokens" value="1800" placeholder="maxTokens" />
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="advStrictMainline" checked /> strictMainline</label>
+      <input id="advMinProgressHops" value="1" placeholder="minProgressHops" />
+      <input id="commitNextCurrentNodeId" placeholder="commit nextCurrentNodeId(可选)" />
+    </div>
+    <div class="row"><input id="advUnresolved" class="w-full" placeholder="unresolvedBranchNodeIds: n12,n18" /></div>
+    <div class="row"><textarea id="advFeedback" placeholder="推进补充意见（可选）"></textarea></div>
+    <div class="row">
+      <button id="loadState">读取 state</button>
+      <button id="advanceStep">推进一步（AI）</button>
+      <button id="commitIncrement" class="secondary">提交增量</button>
+    </div>
+    <pre id="incrementOutput">等待增量结果...</pre>
+  </div>
+
+  <div class="card">
+    <h3>图可视化</h3>
+    <div class="stats">
+      <div class="stat"><div class="num" id="s-total-nodes">0</div><div>节点</div></div>
+      <div class="stat"><div class="num" id="s-total-edges">0</div><div>关系</div></div>
+      <div class="stat"><div class="num" id="s-events">0</div><div>事件</div></div>
+      <div class="stat"><div class="num" id="s-clues">0</div><div>伏笔</div></div>
+      <div class="stat"><div class="num" id="s-twists">0</div><div>反转</div></div>
+      <div class="stat"><div class="num" id="s-facts">0</div><div>事实</div></div>
+    </div>
+    <div class="tools" id="typeFilters"></div>
+    <div class="tools">
+      <button id="refreshGraph">刷新图</button>
+      <button id="seedGraph" class="secondary">插入案例图数据</button>
+      <button id="resetView" class="secondary">重置视图</button>
+      <button id="zoomIn" class="secondary">放大</button>
+      <button id="zoomOut" class="secondary">缩小</button>
+    </div>
+    <div id="graph"></div>
+    <div class="detail" id="nodeDetail">点击节点查看详情</div>
+  </div>
+
+  <div class="card"><h3>响应</h3><pre id="output">等待请求...</pre></div>
+
+  <script>
+    const apiBaseInput = document.getElementById("apiBase");
+    const out = document.getElementById("output");
+    const draftOut = document.getElementById("draftOutput");
+    const incrementOut = document.getElementById("incrementOutput");
+    let latestDraft = null;
+    let latestIncrement = null;
+    let latestGraph = { nodes: [], edges: [], stats: {} };
+    let hiddenTypes = new Set();
+    apiBaseInput.value = `${window.location.origin}/api`;
+    const apiBase = () => apiBaseInput.value.trim().replace(/\/+$/, "");
+    const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+    const rid = (p) => `${p}-${Date.now()}`;
+    async function req(path, options = {}) {
+      const url = `${apiBase()}${path}`;
+      const resp = await fetch(url, { headers: { "Content-Type": "application/json" }, ...options });
+      const text = await resp.text(); let json; try { json = JSON.parse(text); } catch { json = { raw: text }; }
+      out.textContent = JSON.stringify({ status: resp.status, url, body: json }, null, 2);
+      return json;
+    }
+    function slPayload() {
+      return {
+        novelId: num(document.getElementById("slNovelId").value),
+        name: document.getElementById("slName").value,
+        version: num(document.getElementById("slVersion").value || "1"),
+        status: document.getElementById("slStatus").value,
+        theme: document.getElementById("slTheme").value,
+        description: document.getElementById("slDesc").value
+      };
+    }
+    document.getElementById("slCreate").onclick = () => req("/storylines", { method: "POST", body: JSON.stringify(slPayload()) });
+    document.getElementById("slGet").onclick = () => req(`/storylines/${encodeURIComponent(document.getElementById("slId").value.trim())}`);
+    document.getElementById("slUpdate").onclick = () => req(`/storylines/${encodeURIComponent(document.getElementById("slId").value.trim())}`, { method: "PUT", body: JSON.stringify(slPayload()) });
+    document.getElementById("slDelete").onclick = () => req(`/storylines/${encodeURIComponent(document.getElementById("slId").value.trim())}`, { method: "DELETE" });
+    document.getElementById("slRestore").onclick = () => req(`/storylines/${encodeURIComponent(document.getElementById("slId").value.trim())}/restore`, { method: "POST", body: "{}" });
+    document.getElementById("slList").onclick = () => req(`/storylines?novelId=${encodeURIComponent(document.getElementById("slNovelId").value || "1")}`);
+
+    document.getElementById("quickNode").onclick = () => req("/storylines/nodes", { method: "POST", body: JSON.stringify({
+      storylineId: num(document.getElementById("slId").value || "1"), nodeId: rid("node"), novelId: num(document.getElementById("slNovelId").value || "1"),
+      type: "event", title: "主线冲突爆发", summary: "第一阶段冲突升级", status: "draft", chapterNo: 1, volumeNo: 1, priority: 10, props: "{}"
+    })});
+    document.getElementById("quickEdge").onclick = () => req("/storylines/edges", { method: "POST", body: JSON.stringify({
+      storylineId: num(document.getElementById("slId").value || "1"), edgeId: rid("edge"), novelId: num(document.getElementById("slNovelId").value || "1"),
+      fromNodeId: "node-a", toNodeId: "node-b", relation: "cause", weight: 1, status: "active", props: "{}"
+    })});
+    document.getElementById("quickFact").onclick = () => req("/storylines/facts", { method: "POST", body: JSON.stringify({
+      storylineId: num(document.getElementById("slId").value || "1"), novelId: num(document.getElementById("slNovelId").value || "1"),
+      factKey: `character.hero.age`, factValue: "26", sourceNodeId: "node-a", validFromChap: 1, validToChap: 0, confidence: 100
+    })});
+    document.getElementById("listNodes").onclick = () => req(`/storylines/nodes?storylineId=${encodeURIComponent(document.getElementById("slId").value || "1")}`);
+    document.getElementById("listEdges").onclick = () => req(`/storylines/edges?storylineId=${encodeURIComponent(document.getElementById("slId").value || "1")}`);
+    document.getElementById("listFacts").onclick = () => req(`/storylines/facts?storylineId=${encodeURIComponent(document.getElementById("slId").value || "1")}`);
+
+    async function aiGenerate(withBase) {
+      const payload = {
+        userId: num(document.getElementById("aiUserId").value || "1"),
+        message: document.getElementById("aiMessage").value.trim(),
+        model: document.getElementById("aiModel").value.trim(),
+        maxTokens: num(document.getElementById("aiMaxTokens").value || "2600"),
+        temperature: Number(document.getElementById("aiTemperature").value || "0.7"),
+        detailLevel: document.getElementById("aiDetailLevel").value.trim() || "lite",
+        nodeLimit: num(document.getElementById("aiNodeLimit").value || "6"),
+        edgeLimit: num(document.getElementById("aiEdgeLimit").value || "6"),
+        factLimit: num(document.getElementById("aiFactLimit").value || "3"),
+        feedback: document.getElementById("aiFeedback").value.trim()
+      };
+      const lk = document.getElementById("aiLocked").value.trim();
+      if (lk) payload.lockedFields = lk.split(",").map(s => s.trim()).filter(Boolean);
+      if (withBase && latestDraft) payload.baseDraft = latestDraft;
+      const json = await req("/storylines/ai/generate", { method: "POST", body: JSON.stringify(payload) });
+      latestDraft = json && json.data && json.data.draft ? json.data.draft : null;
+      draftOut.textContent = JSON.stringify(json, null, 2);
+    }
+    document.getElementById("aiGenerate").onclick = () => aiGenerate(false);
+    document.getElementById("aiRefine").onclick = () => aiGenerate(true);
+    document.getElementById("applyDraft").onclick = async () => {
+      if (!latestDraft) return;
+      const s = latestDraft.storyline || {};
+      const sRes = await req("/storylines", { method: "POST", body: JSON.stringify(s) });
+      const storyline = sRes && sRes.data ? sRes.data : null;
+      if (!storyline || !storyline.id) return;
+      document.getElementById("slId").value = String(storyline.id);
+      const sid = storyline.id;
+      for (const n of (latestDraft.nodes || [])) { n.storylineId = sid; await req("/storylines/nodes", { method: "POST", body: JSON.stringify(n) }); }
+      for (const e of (latestDraft.edges || [])) { e.storylineId = sid; await req("/storylines/edges", { method: "POST", body: JSON.stringify(e) }); }
+      for (const f of (latestDraft.facts || [])) { f.storylineId = sid; await req("/storylines/facts", { method: "POST", body: JSON.stringify(f) }); }
+    };
+
+    function collectAdvancePayload() {
+      const unresolved = document.getElementById("advUnresolved").value.trim();
+      return {
+        userId: num(document.getElementById("advUserId").value || "1"),
+        currentNodeId: document.getElementById("advCurrentNodeId").value.trim(),
+        targetAnchorId: document.getElementById("advTargetAnchorId").value.trim(),
+        stepNodes: num(document.getElementById("advStepNodes").value || "3"),
+        model: document.getElementById("advModel").value.trim(),
+        maxTokens: num(document.getElementById("advMaxTokens").value || "1800"),
+        feedback: document.getElementById("advFeedback").value.trim(),
+        strictMainline: document.getElementById("advStrictMainline").checked,
+        minProgressHops: num(document.getElementById("advMinProgressHops").value || "1"),
+        unresolvedBranchNodeIds: unresolved ? unresolved.split(",").map(s => s.trim()).filter(Boolean) : [],
+        branchBudget: {
+          maxNewNodesPerBranch: num(document.getElementById("advMaxNewNodesPerBranch").value || "3"),
+          maxChapterSpan: num(document.getElementById("advMaxChapterSpan").value || "3")
+        }
+      };
+    }
+
+    document.getElementById("loadState").onclick = async () => {
+      const sid = document.getElementById("slId").value.trim();
+      if (!sid) return;
+      const json = await req(`/storylines/${encodeURIComponent(sid)}/state`);
+      incrementOut.textContent = JSON.stringify(json, null, 2);
+      const data = json && json.data ? json.data : null;
+      if (!data) return;
+      if (!document.getElementById("advCurrentNodeId").value.trim() && data.currentNodeId) {
+        document.getElementById("advCurrentNodeId").value = data.currentNodeId;
+      }
+      if ((!document.getElementById("advUnresolved").value.trim()) && Array.isArray(data.unresolvedBranchNodes)) {
+        document.getElementById("advUnresolved").value = data.unresolvedBranchNodes.join(",");
+      }
+    };
+
+    document.getElementById("advanceStep").onclick = async () => {
+      const sid = document.getElementById("slId").value.trim();
+      if (!sid) return;
+      const payload = collectAdvancePayload();
+      const json = await req(`/storylines/${encodeURIComponent(sid)}/advance`, { method: "POST", body: JSON.stringify(payload) });
+      incrementOut.textContent = JSON.stringify(json, null, 2);
+      latestIncrement = json && json.data && json.data.draftIncrement ? json.data.draftIncrement : null;
+    };
+
+    document.getElementById("commitIncrement").onclick = async () => {
+      const sid = document.getElementById("slId").value.trim();
+      if (!sid || !latestIncrement) return;
+      const payload = { ...latestIncrement };
+      const nextCurrent = document.getElementById("commitNextCurrentNodeId").value.trim();
+      if (nextCurrent) payload.nextCurrentNodeId = nextCurrent;
+      const json = await req(`/storylines/${encodeURIComponent(sid)}/commit-increment`, { method: "POST", body: JSON.stringify(payload) });
+      incrementOut.textContent = JSON.stringify(json, null, 2);
+      if (json && json.data && json.data.currentNodeId) {
+        document.getElementById("advCurrentNodeId").value = String(json.data.currentNodeId);
+      }
+      await loadGraph();
+    };
+
+    // Graph visualization
+    const nodeColors = {
+      event: "#10b981", clue: "#f59e0b", twist: "#ef4444", payoff: "#6366f1", Fact: "#06b6d4", default: "#6b7280"
+    };
+    const graphEl = document.getElementById("graph");
+    const nodesDS = new vis.DataSet([]);
+    const edgesDS = new vis.DataSet([]);
+    const network = new vis.Network(graphEl, { nodes: nodesDS, edges: edgesDS }, {
+      physics: {
+        enabled: true,
+        stabilization: { enabled: true, iterations: 300, fit: true },
+        barnesHut: { gravitationalConstant: -4000, centralGravity: 0.1, springLength: 280, springConstant: 0.02, damping: 0.15, avoidOverlap: 1 }
+      },
+      nodes: { borderWidth: 2, shadow: true, font: { size: 12, color: "#000" } },
+      edges: { arrows: { to: { enabled: true, scaleFactor: 1.1 } }, smooth: { enabled: true, type: "continuous", roundness: 0.3 }, shadow: true },
+      interaction: { hover: true, tooltipDelay: 200, zoomView: true, dragView: true, selectConnectedEdges: true },
+      layout: { improvedLayout: true, hierarchical: { enabled: false } }
+    });
+
+    function setStats(s) {
+      document.getElementById("s-total-nodes").textContent = String(s.totalNodes || 0);
+      document.getElementById("s-total-edges").textContent = String(s.totalEdges || 0);
+      document.getElementById("s-events").textContent = String(s.eventCount || 0);
+      document.getElementById("s-clues").textContent = String(s.clueCount || 0);
+      document.getElementById("s-twists").textContent = String(s.twistCount || 0);
+      document.getElementById("s-facts").textContent = String(s.factCount || 0);
+    }
+
+    function renderFilters(nodes) {
+      const box = document.getElementById("typeFilters");
+      const types = [...new Set((nodes || []).map(n => n.type || "default"))].sort();
+      box.innerHTML = "";
+      for (const t of types) {
+        const b = document.createElement("button");
+        b.className = "chip";
+        if (hiddenTypes.has(t)) b.classList.add("off");
+        b.style.background = nodeColors[t] || nodeColors.default;
+        b.textContent = t;
+        b.onclick = () => {
+          if (hiddenTypes.has(t)) hiddenTypes.delete(t); else hiddenTypes.add(t);
+          renderGraph(latestGraph);
+        };
+        box.appendChild(b);
+      }
+    }
+
+    function renderGraph(graph) {
+      latestGraph = graph || { nodes: [], edges: [], stats: {} };
+      const nodes = (latestGraph.nodes || []).filter(n => !hiddenTypes.has(n.type)).map(n => ({
+        id: n.id,
+        label: (n.label || n.id).length > 16 ? (n.label || n.id).slice(0, 16) + "..." : (n.label || n.id),
+        title: `${n.type}: ${n.label}\n${JSON.stringify(n.props || {}, null, 2)}`,
+        color: { background: nodeColors[n.type] || nodeColors.default, border: "#1f2937", highlight: { background: nodeColors[n.type] || nodeColors.default, border: "#fff" } },
+        shape: n.type === "Fact" ? "box" : "dot",
+        size: n.type === "event" ? 28 : n.type === "twist" ? 24 : 20,
+        mass: n.type === "event" ? 4 : 1
+      }));
+      const nodeIds = new Set(nodes.map(n => n.id));
+      const edges = (latestGraph.edges || []).filter(e => nodeIds.has(e.source) && nodeIds.has(e.target)).map(e => ({
+        id: e.id, from: e.source, to: e.target, label: "", title: `${e.type}\n${JSON.stringify(e.props || {}, null, 2)}`,
+        color: { color: "#6b7280", highlight: "#111827", hover: "#111827" }, width: e.type === "payoff" ? 3 : 2, selectionWidth: 3
+      }));
+      nodesDS.clear(); edgesDS.clear(); nodesDS.add(nodes); edgesDS.add(edges);
+      setStats(latestGraph.stats || {});
+      renderFilters(latestGraph.nodes || []);
+      setTimeout(() => network.fit({ animation: { duration: 800, easingFunction: "easeInOutQuad" } }), 300);
+    }
+
+    network.on("click", (params) => {
+      const box = document.getElementById("nodeDetail");
+      if (!params.nodes || params.nodes.length === 0) { box.textContent = "点击节点查看详情"; return; }
+      const id = params.nodes[0];
+      const n = (latestGraph.nodes || []).find(x => x.id === id);
+      if (!n) { box.textContent = "未找到节点"; return; }
+      box.textContent = `${n.type} | ${n.label}\n${JSON.stringify(n.props || {}, null, 2)}`;
+    });
+
+    async function loadGraph() {
+      const sid = document.getElementById("slId").value.trim();
+      if (!sid) return;
+      const json = await req(`/storylines/${encodeURIComponent(sid)}/graph`);
+      if (json && json.data) renderGraph(json.data);
+    }
+    document.getElementById("refreshGraph").onclick = loadGraph;
+    document.getElementById("seedGraph").onclick = async () => {
+      const sid = document.getElementById("slId").value.trim();
+      if (!sid) return;
+      await req(`/storylines/${encodeURIComponent(sid)}/seed-demo`, { method: "POST", body: "{}" });
+      await loadGraph();
+    };
+    document.getElementById("resetView").onclick = () => network.fit({ animation: { duration: 500, easingFunction: "easeInOutQuad" } });
+    document.getElementById("zoomIn").onclick = () => network.moveTo({ scale: network.getScale() * 1.2, animation: true });
+    document.getElementById("zoomOut").onclick = () => network.moveTo({ scale: network.getScale() * 0.8, animation: true });
+  </script>
+</body>
+</html>

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/LingByte/CinyuVerse/internal/graph"
 	"github.com/LingByte/CinyuVerse/internal/handlers"
 	"github.com/LingByte/CinyuVerse/internal/models"
 	"github.com/LingByte/CinyuVerse/pkg/config"
@@ -64,7 +66,13 @@ func main() {
 		MigrationsDir: "migrations",
 		Models: []any{
 			&models.Novel{},
+			&models.Volume{},
+			&models.Chapter{},
 			&models.Character{},
+			&models.Storyline{},
+			&models.StorylineNode{},
+			&models.StorylineEdge{},
+			&models.StorylineFact{},
 			&models.ChatSession{},
 			&models.ChatMessage{},
 		},
@@ -72,6 +80,26 @@ func main() {
 	db, err := bs.SetupDatabase()
 	if err != nil {
 		logger.Lg.Fatal("database bootstrap", zap.Error(err))
+	}
+
+	if config.GlobalConfig.Services.Neo4j.Enabled {
+		neoStore, err := graph.NewNeo4jStore(config.GlobalConfig.Services.Neo4j)
+		if err != nil {
+			logger.Lg.Fatal("neo4j init failed", zap.Error(err))
+		}
+		if err := neoStore.Ping(context.Background()); err != nil {
+			logger.Lg.Fatal("neo4j ping failed", zap.Error(err))
+		}
+		if err := neoStore.InitSchema(context.Background()); err != nil {
+			logger.Lg.Fatal("neo4j schema init failed", zap.Error(err))
+		}
+		graph.SetGlobalStore(neoStore)
+		defer func() {
+			_ = neoStore.Close(context.Background())
+		}()
+		logger.Lg.Info("neo4j initialized",
+			zap.String("uri", config.GlobalConfig.Services.Neo4j.URI),
+			zap.String("database", config.GlobalConfig.Services.Neo4j.Database))
 	}
 
 	if config.GlobalConfig.Server.Mode == "production" || config.GlobalConfig.Server.Mode == "prod" {
@@ -83,8 +111,7 @@ func main() {
 	r.Use(gin.Recovery())
 	r.Use(middleware.InjectDB(db))
 	r.Use(middleware.CorsMiddleware())
-	r.StaticFile("/novel-crud-demo", "web/novel-crud-demo.html")
-	r.StaticFile("/character-crud-demo", "web/character-crud-demo.html")
+	r.StaticFile("/storyline-demo", "web/storyline-demo.html")
 	app := NewCinyuVerseApp(db)
 	app.RegisterRoutes(r)
 	addr := config.GlobalConfig.Server.Addr

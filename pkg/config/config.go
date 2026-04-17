@@ -40,6 +40,7 @@ type DatabaseConfig struct {
 type ServicesConfig struct {
 	LLM     LLMConfig     `mapstructure:"llm"`
 	Storage StorageConfig `mapstructure:"storage"`
+	Neo4j   Neo4jConfig   `mapstructure:"neo4j"`
 }
 
 // LLMConfig 大模型调用（供后续引擎使用）。
@@ -56,6 +57,15 @@ type StorageConfig struct {
 	APIKey    string `env:"LINGSTORAGE_API_KEY"`
 	APISecret string `env:"LINGSTORAGE_API_SECRET"`
 	Bucket    string `env:"LINGSTORAGE_BUCKET"`
+}
+
+// Neo4jConfig graph storage configuration
+type Neo4jConfig struct {
+	Enabled  bool   `env:"NEO4J_ENABLED"`
+	URI      string `env:"NEO4J_URI"`
+	Username string `env:"NEO4J_USERNAME"`
+	Password string `env:"NEO4J_PASSWORD"`
+	Database string `env:"NEO4J_DATABASE"`
 }
 
 // GlobalConfig 进程级单例，在 Load 成功后可用。
@@ -100,6 +110,13 @@ func Load() error {
 				APIKey:    getStringOrDefault("LINGSTORAGE_API_KEY", ""),
 				APISecret: getStringOrDefault("LINGSTORAGE_API_SECRET", ""),
 				Bucket:    getStringOrDefault("LINGSTORAGE_BUCKET", "default"),
+			},
+			Neo4j: Neo4jConfig{
+				Enabled:  getBoolOrDefault("NEO4J_ENABLED", false),
+				URI:      getStringOrDefault("NEO4J_URI", "neo4j://localhost:7687"),
+				Username: getStringOrDefault("NEO4J_USERNAME", "neo4j"),
+				Password: getStringOrDefault("NEO4J_PASSWORD", ""),
+				Database: getStringOrDefault("NEO4J_DATABASE", "neo4j"),
 			},
 		},
 	}

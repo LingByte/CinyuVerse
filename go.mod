@@ -6,6 +6,7 @@ require (
 	github.com/LingByte/lingoroutine v0.1.1
 	github.com/LingByte/lingstorage-sdk-go v0.0.0-20260113030255-ff9d0501909c
 	github.com/gin-gonic/gin v1.12.0
+	github.com/neo4j/neo4j-go-driver/v5 v5.28.3
 	go.uber.org/zap v1.27.1
 	gorm.io/gorm v1.31.1
 )
