@@ -17,11 +17,14 @@ import (
 )
 
 type GenerateNovelByAIRequest struct {
-	UserID      uint     `json:"userId" binding:"required"`
-	Message     string   `json:"message" binding:"required"`
-	Model       string   `json:"model"`
-	Temperature *float32 `json:"temperature"`
-	MaxTokens   int      `json:"maxTokens"`
+	UserID       uint                 `json:"userId" binding:"required"`
+	Message      string               `json:"message" binding:"required"`
+	Model        string               `json:"model"`
+	Temperature  *float32             `json:"temperature"`
+	MaxTokens    int                  `json:"maxTokens"`
+	BaseDraft    *GeneratedNovelDraft `json:"baseDraft"`
+	LockedFields []string             `json:"lockedFields"`
+	Feedback     string               `json:"feedback"`
 }
 
 type GeneratedNovelDraft struct {
@@ -55,11 +58,11 @@ func (ch *CinyuHandlers) GenerateNovelByAI(c *gin.Context) {
 		return
 	}
 
-	prompt := strings.TrimSpace(req.Message)
-	if prompt == "" {
+	if strings.TrimSpace(req.Message) == "" {
 		response.Fail(c, "message is required", nil)
 		return
 	}
+	prompt := buildGenerateNovelPrompt(req)
 	modelName := pickChatModel(req.Model)
 	if modelName == "" {
 		modelName = "gpt-4o-mini"
@@ -83,8 +86,10 @@ func (ch *CinyuHandlers) GenerateNovelByAI(c *gin.Context) {
 	handler.ResetMemory()
 
 	qopts := &llm.QueryOptions{
-		Model:     modelName,
-		MaxTokens: req.MaxTokens,
+		Model:            modelName,
+		MaxTokens:        req.MaxTokens,
+		EnableJSONOutput: true,
+		OutputFormat:     "json_object",
 	}
 	if qopts.MaxTokens <= 0 {
 		qopts.MaxTokens = 1800
@@ -116,11 +121,69 @@ func (ch *CinyuHandlers) GenerateNovelByAI(c *gin.Context) {
 		response.FailWithCode(c, 422, "AI输出缺少必填字段: title", gin.H{"raw": raw})
 		return
 	}
+	applyLockedFields(&draft, req.BaseDraft, req.LockedFields)
 
 	response.Success(c, "OK", GenerateNovelByAIResponse{
 		Draft: draft,
 		Raw:   raw,
 	})
+}
+
+func buildGenerateNovelPrompt(req GenerateNovelByAIRequest) string {
+	var b strings.Builder
+	b.WriteString("用户需求：\n")
+	b.WriteString(strings.TrimSpace(req.Message))
+	b.WriteString("\n")
+	if strings.TrimSpace(req.Feedback) != "" {
+		b.WriteString("\n修改意见：\n")
+		b.WriteString(strings.TrimSpace(req.Feedback))
+		b.WriteString("\n")
+	}
+	if req.BaseDraft != nil {
+		if raw, err := json.Marshal(req.BaseDraft); err == nil {
+			b.WriteString("\n当前草稿（请在此基础上优化）：\n")
+			b.Write(raw)
+			b.WriteString("\n")
+		}
+	}
+	if len(req.LockedFields) > 0 {
+		b.WriteString("\n锁定字段（这些字段必须原样保留，不可改动）：\n")
+		b.WriteString(strings.Join(req.LockedFields, ","))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func applyLockedFields(draft *GeneratedNovelDraft, base *GeneratedNovelDraft, lockedFields []string) {
+	if draft == nil || base == nil || len(lockedFields) == 0 {
+		return
+	}
+	for _, field := range lockedFields {
+		switch strings.TrimSpace(field) {
+		case "title":
+			draft.Title = base.Title
+		case "status":
+			draft.Status = base.Status
+		case "genre":
+			draft.Genre = base.Genre
+		case "audience":
+			draft.Audience = base.Audience
+		case "theme":
+			draft.Theme = base.Theme
+		case "description":
+			draft.Description = base.Description
+		case "worldSetting":
+			draft.WorldSetting = base.WorldSetting
+		case "tags":
+			draft.Tags = base.Tags
+		case "coverImage":
+			draft.CoverImage = base.CoverImage
+		case "styleGuide":
+			draft.StyleGuide = base.StyleGuide
+		case "referenceNovel":
+			draft.ReferenceNovel = base.ReferenceNovel
+		}
+	}
 }
 
 func parseGeneratedNovelDraft(raw string) (GeneratedNovelDraft, error) {
@@ -138,8 +201,26 @@ func parseGeneratedNovelDraft(raw string) (GeneratedNovelDraft, error) {
 		}
 		candidate = candidate[start : end+1]
 	}
-	if err := json.Unmarshal([]byte(candidate), &draft); err != nil {
+	if err := json.Unmarshal([]byte(candidate), &draft); err == nil {
+		return draft, nil
+	}
+	// 兜底：兼容模型把 string 字段返回成 number/bool 的情况
+	var m map[string]any
+	if err := json.Unmarshal([]byte(candidate), &m); err != nil {
 		return draft, fmt.Errorf("invalid json: %w", err)
+	}
+	draft = GeneratedNovelDraft{
+		Title:          anyToString(m["title"]),
+		Status:         anyToString(m["status"]),
+		Genre:          anyToString(m["genre"]),
+		Audience:       anyToString(m["audience"]),
+		Theme:          anyToString(m["theme"]),
+		Description:    anyToString(m["description"]),
+		WorldSetting:   anyToString(m["worldSetting"]),
+		Tags:           anyToString(m["tags"]),
+		CoverImage:     anyToString(m["coverImage"]),
+		StyleGuide:     anyToString(m["styleGuide"]),
+		ReferenceNovel: anyToString(m["referenceNovel"]),
 	}
 	return draft, nil
 }
@@ -155,6 +236,7 @@ title,status,genre,audience,theme,description,worldSetting,tags,coverImage,style
 2) tags 使用逗号分隔，如 "热血,成长,系统"。
 3) audience 仅可为 "male" 或 "female" 或 ""。
 4) 如果用户未提供某字段信息，可填空字符串。
-5) 输出必须是可被标准 JSON.parse 直接解析的合法 JSON。
+5) 若请求里有“锁定字段”，这些字段值必须与输入草稿保持完全一致。
+6) 输出必须是可被标准 JSON.parse 直接解析的合法 JSON。
 `)
 }

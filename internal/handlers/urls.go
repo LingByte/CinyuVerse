@@ -28,6 +28,7 @@ func (ch *CinyuHandlers) RegisterHandlers(engine *gin.Engine) {
 
 	// Novel routes
 	ch.registerNovelRoutes(r)
+	ch.registerCharacterRoutes(r)
 	ch.registerChatRoutes(r)
 	ch.registerRecognizeRoutes(r)
 }

@@ -64,6 +64,7 @@ func main() {
 		MigrationsDir: "migrations",
 		Models: []any{
 			&models.Novel{},
+			&models.Character{},
 			&models.ChatSession{},
 			&models.ChatMessage{},
 		},
@@ -83,6 +84,7 @@ func main() {
 	r.Use(middleware.InjectDB(db))
 	r.Use(middleware.CorsMiddleware())
 	r.StaticFile("/novel-crud-demo", "web/novel-crud-demo.html")
+	r.StaticFile("/character-crud-demo", "web/character-crud-demo.html")
 	app := NewCinyuVerseApp(db)
 	app.RegisterRoutes(r)
 	addr := config.GlobalConfig.Server.Addr

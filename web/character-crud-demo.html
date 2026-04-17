@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Character CRUD Demo</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 24px; color: #1f2937; }
+    .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    input, textarea, button { font-size: 14px; padding: 8px; }
+    input, textarea { border: 1px solid #d1d5db; border-radius: 6px; }
+    textarea { width: 100%; min-height: 72px; }
+    button { border: none; border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer; }
+    button.secondary { background: #4b5563; }
+    pre { background: #0b1020; color: #e5e7eb; padding: 12px; border-radius: 8px; overflow: auto; white-space: pre-wrap; }
+    .w-full { width: 100%; }
+  </style>
+</head>
+<body>
+  <h1>Character CRUD + AI Demo</h1>
+  <div class="card">
+    <div class="row">
+      <label for="apiBase">API Base：</label>
+      <input id="apiBase" class="w-full" />
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>创建角色</h3>
+    <div class="row">
+      <input id="novelId" placeholder="novelId(可选)" />
+      <input id="name" placeholder="name(必填)" />
+      <input id="roleType" placeholder="roleType" />
+      <input id="gender" placeholder="gender" />
+      <input id="age" placeholder="age" />
+    </div>
+    <div class="row"><textarea id="personality" placeholder="personality"></textarea></div>
+    <div class="row"><textarea id="background" placeholder="background"></textarea></div>
+    <div class="row"><textarea id="goal" placeholder="goal"></textarea></div>
+    <div class="row"><textarea id="relationship" placeholder="relationship"></textarea></div>
+    <div class="row"><textarea id="appearance" placeholder="appearance"></textarea></div>
+    <div class="row"><textarea id="abilities" placeholder="abilities"></textarea></div>
+    <div class="row"><textarea id="notes" placeholder="notes"></textarea></div>
+    <button id="createBtn">创建角色</button>
+  </div>
+
+  <div class="card">
+    <h3>CRUD 操作</h3>
+    <div class="row">
+      <input id="characterId" placeholder="characterId" />
+      <button id="getBtn" class="secondary">按 ID 查询</button>
+      <button id="deleteBtn" class="secondary">删除</button>
+      <button id="restoreBtn" class="secondary">恢复</button>
+    </div>
+    <div class="row">
+      <button id="listBtn">分页列表</button>
+      <input id="page" value="1" />
+      <input id="size" value="10" />
+      <input id="filterNovelId" placeholder="novelId过滤(可选)" />
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>AI 生成/纠正角色</h3>
+    <div class="row">
+      <input id="aiUserId" value="1" placeholder="userId" />
+      <input id="aiModel" placeholder="model(可选)" />
+      <input id="aiMaxTokens" value="1200" placeholder="maxTokens" />
+      <input id="aiTemperature" value="0.7" placeholder="temperature" />
+    </div>
+    <div class="row"><textarea id="aiMessage" placeholder="角色需求：例如女主闺蜜，前期白月光后期黑化"></textarea></div>
+    <div class="row"><textarea id="aiFeedback" placeholder="纠正意见：例如保留名字和性别，强化反差感"></textarea></div>
+    <div class="row"><input id="aiLockedFields" class="w-full" placeholder="锁定字段，逗号分隔：name,gender,novelId" /></div>
+    <div class="row">
+      <button id="aiGenerateBtn">AI 生成</button>
+      <button id="aiCorrectBtn" class="secondary">基于当前草稿纠正</button>
+      <button id="applyDraftBtn" class="secondary">草稿填入表单</button>
+      <button id="createFromDraftBtn" class="secondary">草稿直接创建</button>
+    </div>
+    <pre id="draftOutput">等待 AI 结果...</pre>
+  </div>
+
+  <div class="card">
+    <h3>响应结果</h3>
+    <pre id="output">等待请求...</pre>
+  </div>
+
+  <script>
+    const apiBaseInput = document.getElementById("apiBase");
+    const output = document.getElementById("output");
+    const draftOutput = document.getElementById("draftOutput");
+    let latestDraft = null;
+    apiBaseInput.value = `${window.location.origin}/api`;
+
+    function getApiBase() { return apiBaseInput.value.trim().replace(/\/+$/, ""); }
+    function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+
+    async function request(path, options = {}) {
+      const url = `${getApiBase()}${path}`;
+      const resp = await fetch(url, { headers: { "Content-Type": "application/json" }, ...options });
+      const text = await resp.text();
+      let json;
+      try { json = JSON.parse(text); } catch { json = { raw: text }; }
+      output.textContent = JSON.stringify({ status: resp.status, url, body: json }, null, 2);
+      return json;
+    }
+
+    function formPayload() {
+      return {
+        novelId: num(document.getElementById("novelId").value),
+        name: document.getElementById("name").value,
+        roleType: document.getElementById("roleType").value,
+        gender: document.getElementById("gender").value,
+        age: document.getElementById("age").value,
+        personality: document.getElementById("personality").value,
+        background: document.getElementById("background").value,
+        goal: document.getElementById("goal").value,
+        relationship: document.getElementById("relationship").value,
+        appearance: document.getElementById("appearance").value,
+        abilities: document.getElementById("abilities").value,
+        notes: document.getElementById("notes").value
+      };
+    }
+
+    function applyDraft(d) {
+      if (!d) return;
+      const keys = ["novelId","name","roleType","gender","age","personality","background","goal","relationship","appearance","abilities","notes"];
+      for (const k of keys) {
+        const el = document.getElementById(k);
+        if (el) el.value = d[k] ?? "";
+      }
+    }
+
+    async function aiGenerate(withBase) {
+      const payload = {
+        userId: num(document.getElementById("aiUserId").value),
+        message: document.getElementById("aiMessage").value.trim(),
+        model: document.getElementById("aiModel").value.trim(),
+        maxTokens: num(document.getElementById("aiMaxTokens").value || "1200"),
+        temperature: Number(document.getElementById("aiTemperature").value || "0.7"),
+        feedback: document.getElementById("aiFeedback").value.trim()
+      };
+      const locks = document.getElementById("aiLockedFields").value.trim();
+      if (locks) payload.lockedFields = locks.split(",").map(x => x.trim()).filter(Boolean);
+      if (withBase && latestDraft) payload.baseDraft = latestDraft;
+      const json = await request("/characters/generate", { method: "POST", body: JSON.stringify(payload) });
+      latestDraft = json && json.data && json.data.draft ? json.data.draft : null;
+      draftOutput.textContent = JSON.stringify(json, null, 2);
+    }
+
+    document.getElementById("createBtn").addEventListener("click", () => request("/characters", { method: "POST", body: JSON.stringify(formPayload()) }));
+    document.getElementById("getBtn").addEventListener("click", () => {
+      const id = document.getElementById("characterId").value.trim(); if (!id) return;
+      request(`/characters/${id}`);
+    });
+    document.getElementById("deleteBtn").addEventListener("click", () => {
+      const id = document.getElementById("characterId").value.trim(); if (!id) return;
+      request(`/characters/${id}`, { method: "DELETE" });
+    });
+    document.getElementById("restoreBtn").addEventListener("click", () => {
+      const id = document.getElementById("characterId").value.trim(); if (!id) return;
+      request(`/characters/${id}/restore`, { method: "POST", body: "{}" });
+    });
+    document.getElementById("listBtn").addEventListener("click", () => {
+      const page = document.getElementById("page").value.trim() || "1";
+      const size = document.getElementById("size").value.trim() || "10";
+      const novelId = document.getElementById("filterNovelId").value.trim();
+      const q = novelId ? `?page=${encodeURIComponent(page)}&size=${encodeURIComponent(size)}&novelId=${encodeURIComponent(novelId)}`
+                        : `?page=${encodeURIComponent(page)}&size=${encodeURIComponent(size)}`;
+      request(`/characters${q}`);
+    });
+    document.getElementById("aiGenerateBtn").addEventListener("click", () => aiGenerate(false));
+    document.getElementById("aiCorrectBtn").addEventListener("click", () => aiGenerate(true));
+    document.getElementById("applyDraftBtn").addEventListener("click", () => applyDraft(latestDraft));
+    document.getElementById("createFromDraftBtn").addEventListener("click", () => {
+      applyDraft(latestDraft);
+      document.getElementById("createBtn").click();
+    });
+  </script>
+</body>
+</html>
