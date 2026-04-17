@@ -30,10 +30,11 @@ const rootStyle = computed<Record<string, string>>(() => {
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
+  min-height: 40px;
 }
 
 .cv-card__footer.is-divider {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid color-mix(in oklab, var(--border) 92%, #fff);
   padding-top: 12px;
 }
 </style>

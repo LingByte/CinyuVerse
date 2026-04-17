@@ -25,5 +25,8 @@ const rootStyle = computed<Record<string, string>>(() => {
 <style scoped>
 .cv-card__body {
   color: var(--text);
+  font-size: 0.875rem;
+  line-height: 1.65;
+  min-width: 0;
 }
 </style>

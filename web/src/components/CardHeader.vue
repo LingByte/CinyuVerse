@@ -36,6 +36,7 @@ const rootStyle = computed<Record<string, string>>(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  border-bottom: 1px solid transparent;
 }
 
 .cv-card__headerText {
@@ -46,11 +47,19 @@ const rootStyle = computed<Record<string, string>>(() => {
   font-size: 0.95rem;
   font-weight: 800;
   color: var(--text);
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cv-card__subtitle {
   margin-top: 4px;
   font-size: 0.85rem;
   color: var(--text-muted);
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

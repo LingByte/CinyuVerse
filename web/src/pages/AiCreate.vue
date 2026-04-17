@@ -1,10 +1,19 @@
 <script setup lang="ts">
 import chatApi, { type ChatSession, type ChatTurnResponse } from '@/api/chat'
+import recognizeApi from '@/api/recognize'
 import Avatar from '@/components/Avatar.vue'
+import Button from '@/components/Button.vue'
+import Empty from '@/components/base/Empty.vue'
+import Input from '@/components/Input.vue'
+import Modal from '@/components/feedback/Modal.vue'
+import Select from '@/components/Select.vue'
+import Textarea from '@/components/Textarea.vue'
+import novelsApi, { type Novel } from '@/api/novels'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const emit = defineEmits<{
   (e: 'back'): void
+  (e: 'goHotTemplate'): void
 }>()
 
 type Role = 'user' | 'ai'
@@ -17,10 +26,163 @@ interface ChatMessage {
   speaking?: boolean
 }
 
+type SidebarFeatureKey = 'work' | 'outline' | 'characters' | 'ideas'
+const featureModal = ref<SidebarFeatureKey | null>(null)
+
+const workName = ref<string>(window.localStorage.getItem('aiCreate_workName') || '未选择作品')
+const outlineText = ref<string>(window.localStorage.getItem('aiCreate_outlineText') || '')
+const characterText = ref<string>(window.localStorage.getItem('aiCreate_characterText') || '')
+const ideasText = ref<string>(window.localStorage.getItem('aiCreate_ideasText') || '')
+const outlineTheme = ref<string>(window.localStorage.getItem('aiCreate_outlineTheme') || '')
+const outlineHook = ref<string>(window.localStorage.getItem('aiCreate_outlineHook') || '')
+const outlineTone = ref<string>(window.localStorage.getItem('aiCreate_outlineTone') || '热血成长')
+const selectedNovelId = ref<string>(window.localStorage.getItem('aiCreate_selectedNovelId') || '')
+const createdNovels = ref<Novel[]>([])
+const characterName = ref<string>(window.localStorage.getItem('aiCreate_characterName') || '')
+const characterIdentity = ref<string>(window.localStorage.getItem('aiCreate_characterIdentity') || '')
+const characterGoal = ref<string>(window.localStorage.getItem('aiCreate_characterGoal') || '')
+const characterWeakness = ref<string>(window.localStorage.getItem('aiCreate_characterWeakness') || '')
+const ideaInput = ref<string>('')
+const ideaLibrary = ref<string[]>(
+  (() => {
+    const raw = window.localStorage.getItem('aiCreate_ideaLibrary')
+    if (!raw) return []
+    try {
+      const parsed = JSON.parse(raw) as string[]
+      return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : []
+    } catch {
+      return []
+    }
+  })(),
+)
+
 const chatContainerRef = ref<HTMLDivElement | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const attachedFileName = ref<string | null>(null)
+const recognizeText = ref<string>('')
+const isRecognizing = ref(false)
 const inputValue = ref('')
 const messages = ref<ChatMessage[]>([])
 const isTyping = ref(false)
+const activeRequestToken = ref<number>(0)
+const activeAnimationTimer = ref<number | null>(null)
+const activeAnimatingMsgId = ref<string | null>(null)
+
+watch(workName, (v) => window.localStorage.setItem('aiCreate_workName', v))
+watch(outlineText, (v) => window.localStorage.setItem('aiCreate_outlineText', v))
+watch(characterText, (v) => window.localStorage.setItem('aiCreate_characterText', v))
+watch(ideasText, (v) => window.localStorage.setItem('aiCreate_ideasText', v))
+watch(outlineTheme, (v) => window.localStorage.setItem('aiCreate_outlineTheme', v))
+watch(outlineHook, (v) => window.localStorage.setItem('aiCreate_outlineHook', v))
+watch(outlineTone, (v) => window.localStorage.setItem('aiCreate_outlineTone', v))
+watch(selectedNovelId, (v) => window.localStorage.setItem('aiCreate_selectedNovelId', v))
+watch(characterName, (v) => window.localStorage.setItem('aiCreate_characterName', v))
+watch(characterIdentity, (v) => window.localStorage.setItem('aiCreate_characterIdentity', v))
+watch(characterGoal, (v) => window.localStorage.setItem('aiCreate_characterGoal', v))
+watch(characterWeakness, (v) => window.localStorage.setItem('aiCreate_characterWeakness', v))
+watch(
+  ideaLibrary,
+  (v) => window.localStorage.setItem('aiCreate_ideaLibrary', JSON.stringify(v)),
+  { deep: true },
+)
+
+const closeFeature = () => {
+  featureModal.value = null
+}
+
+const insertToInput = (text: string) => {
+  if (!text.trim()) return
+  inputValue.value = `${inputValue.value}${inputValue.value ? '\n\n' : ''}${text.trim()}`
+}
+
+const sendFeatureText = async (text: string) => {
+  const t = text.trim()
+  if (!t) return
+  await sendMessage(t)
+  closeFeature()
+}
+
+const fetchCreatedNovels = async () => {
+  try {
+    const res = await novelsApi.list({ page: 1, size: 100 })
+    const data = res.data as { novels?: Novel[] }
+    createdNovels.value = data.novels ?? []
+  } catch {
+    createdNovels.value = []
+  }
+}
+
+const selectedNovel = computed(() =>
+  createdNovels.value.find((n) => String(n.id) === selectedNovelId.value),
+)
+
+const novelOptions = computed(() => [
+  { label: '不选择小说（手动输入）', value: '' },
+  ...createdNovels.value.map((n) => ({ label: `#${n.id} ${n.title}`, value: String(n.id) })),
+])
+
+const generateOutlineDraft = () => {
+  const fromNovel = selectedNovel.value
+  const theme = outlineTheme.value.trim() || fromNovel?.theme?.trim() || '未命名主题'
+  const hook = outlineHook.value.trim() || '主角在平静生活中遭遇突发危机'
+  const genre = fromNovel?.genre?.trim() || '待定类型'
+  const tags = fromNovel?.tags?.trim() || '待补充标签'
+  const sourceTitle = fromNovel?.title?.trim() || workName.value || '当前作品'
+  outlineText.value = `【故事线草案｜${outlineTone.value}】
+项目：${sourceTitle}
+类型：${genre}
+标签：${tags}
+1. 开端：围绕“${theme}”建立世界观与人物关系。
+2. 引爆点：${hook}。
+3. 推进：主角为达成阶段目标，连续面对三次升级阻碍。
+4. 反转：关键盟友立场变化，主角被迫重构策略。
+5. 高潮：主角在核心冲突中做出代价性选择。
+6. 收束：主线阶段性完成，并埋下下一卷悬念。`
+}
+
+const buildCharacterCard = () => {
+  const name = characterName.value.trim() || '未命名角色'
+  const identity = characterIdentity.value.trim() || '身份待补充'
+  const goal = characterGoal.value.trim() || '目标待补充'
+  const weakness = characterWeakness.value.trim() || '弱点待补充'
+  characterText.value = `【人物设定卡】
+姓名：${name}
+身份：${identity}
+核心目标：${goal}
+性格弱点：${weakness}
+成长弧线：在关键事件中从“逃避”走向“承担”。`
+}
+
+const addIdea = () => {
+  const value = ideaInput.value.trim()
+  if (!value) return
+  if (!ideaLibrary.value.includes(value)) {
+    ideaLibrary.value.unshift(value)
+  }
+  ideaInput.value = ''
+}
+
+const removeIdea = (item: string) => {
+  ideaLibrary.value = ideaLibrary.value.filter((x) => x !== item)
+}
+
+const useIdea = (item: string) => {
+  ideasText.value = item
+  insertToInput(item)
+}
+
+const stopReply = () => {
+  if (!isTyping.value) return
+  activeRequestToken.value += 1
+  isTyping.value = false
+  if (activeAnimationTimer.value != null) {
+    window.clearTimeout(activeAnimationTimer.value)
+    activeAnimationTimer.value = null
+    activeAnimatingMsgId.value = null
+  }
+  const idx = messages.value.findIndex((m) => m.loading)
+  if (idx >= 0) messages.value.splice(idx, 1)
+}
 
 const canSend = ref(false)
 
@@ -71,6 +233,43 @@ const appendAssistantMessage = async (text: string) => {
   await scrollToBottom()
 }
 
+const animateAssistantMessage = async (fullText: string, token: number) => {
+  const aiMsg: ChatMessage = {
+    id: `ai-${Date.now()}`,
+    role: 'ai',
+    text: '',
+    loading: false,
+    speaking: false,
+  }
+  messages.value.push(aiMsg)
+  activeAnimatingMsgId.value = aiMsg.id
+  await scrollToBottom()
+
+  let index = 0
+  const step = async () => {
+    if (activeRequestToken.value !== token) {
+      activeAnimationTimer.value = null
+      activeAnimatingMsgId.value = null
+      return
+    }
+
+    if (index >= fullText.length) {
+      activeAnimationTimer.value = null
+      activeAnimatingMsgId.value = null
+      isTyping.value = false
+      await scrollToBottom()
+      return
+    }
+
+    aiMsg.text += fullText[index]
+    index += 1
+    await scrollToBottom()
+    activeAnimationTimer.value = window.setTimeout(() => void step(), 14)
+  }
+
+  await step()
+}
+
 const toggleSpeak = (msg: ChatMessage) => {
   if (msg.role !== 'ai' || msg.loading) return
   const next = activeSpeakingId.value === msg.id ? null : msg.id
@@ -93,6 +292,37 @@ const regenerateLast = async () => {
   await appendAssistantMessage('我已经准备好重新生成回答。')
 }
 
+const triggerFilePick = () => {
+  fileInputRef.value?.click()
+}
+
+const onFilesPicked = async (e: Event) => {
+  const input = e.target as HTMLInputElement | null
+  const file = input?.files?.[0]
+  if (!file) return
+
+  try {
+    attachedFileName.value = file.name
+    isRecognizing.value = true
+    const res = await recognizeApi.recognize(file)
+    recognizeText.value = (res.data.text ?? '').trim()
+  } finally {
+    isRecognizing.value = false
+    if (input) input.value = ''
+  }
+}
+
+const clearAttachment = () => {
+  attachedFileName.value = null
+  recognizeText.value = ''
+  isRecognizing.value = false
+}
+
+const attachmentLabel = computed(() => {
+  if (!attachedFileName.value) return ''
+  return isRecognizing.value ? `识别中：${attachedFileName.value}` : `已识别：${attachedFileName.value}`
+})
+
 const sendMessage = async (text: string) => {
   const content = (text ?? '').trim()
   if (!content) return
@@ -108,6 +338,10 @@ const sendMessage = async (text: string) => {
     }
   }
 
+  const composed = recognizeText.value
+    ? `以下是用户上传附件解析出的文本内容：\n\n${recognizeText.value}\n\n用户问题：${content}`
+    : content
+
   messages.value.push({ id: `u-${Date.now()}`, role: 'user', text: content })
   inputValue.value = ''
   await scrollToBottom()
@@ -117,25 +351,31 @@ const sendMessage = async (text: string) => {
   messages.value.push(loadingMsg)
   await scrollToBottom()
 
+  const myToken = activeRequestToken.value + 1
+  activeRequestToken.value = myToken
   isTyping.value = true
   try {
-    const res = await chatApi.chatTurn(String(activeSessionId.value), { message: content })
+    const res = await chatApi.chatTurn(String(activeSessionId.value), { message: composed })
+    if (activeRequestToken.value !== myToken) return
     const data = res.data as ChatTurnResponse
     const assistantText = data.assistantMessage?.content ?? ''
     const idx = messages.value.findIndex((m) => m.id === loadingId)
     if (idx >= 0) {
       messages.value.splice(idx, 1)
     }
-    await appendAssistantMessage(assistantText)
+    await animateAssistantMessage(assistantText, myToken)
     const refreshed = await chatApi.listSessions({ userId: USER_ID, page: 1, size: 20 })
     sessions.value = refreshed.data.sessions
+    clearAttachment()
   } catch {
     const idx = messages.value.findIndex((m) => m.id === loadingId)
     if (idx >= 0) {
       messages.value.splice(idx, 1)
     }
   } finally {
-    isTyping.value = false
+    if (activeRequestToken.value === myToken && activeAnimationTimer.value == null) {
+      isTyping.value = false
+    }
   }
 }
 
@@ -146,6 +386,7 @@ const onNewChat = async () => {
   activeSpeakingId.value = null
   inputValue.value = ''
   activeSessionId.value = null
+  clearAttachment()
   await scrollToBottom()
 }
 
@@ -154,6 +395,7 @@ const openConversation = async (id: number) => {
   activeSessionId.value = id
   activeSpeakingId.value = null
   inputValue.value = ''
+  clearAttachment()
 
   try {
     const res = await chatApi.listMessages(String(id))
@@ -196,6 +438,7 @@ const clearHistory = async () => {
   isTyping.value = false
   inputValue.value = ''
   activeSessionId.value = null
+  clearAttachment()
   await scrollToBottom()
 }
 
@@ -226,9 +469,19 @@ watch(
   { immediate: true },
 )
 
+const onKeydown = (e: KeyboardEvent) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault()
+    toggleHidden()
+  }
+}
+
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+
 onMounted(async () => {
   loadSidebarState()
   await scrollToBottom()
+  await fetchCreatedNovels()
 
   try {
     const res = await chatApi.listSessions({ userId: USER_ID, page: 1, size: 20 })
@@ -237,15 +490,7 @@ onMounted(async () => {
     sessions.value = []
   }
 
-  const onKeydown = (e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-      e.preventDefault()
-      toggleHidden()
-    }
-  }
-
   window.addEventListener('keydown', onKeydown)
-  onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 })
 </script>
 
@@ -293,6 +538,16 @@ onMounted(async () => {
         </button>
       </div>
 
+      <div class="chat__sidebar-features" aria-label="写作功能">
+        <div class="chat__sidebar-features-head">
+          <div class="chat__sidebar-features-title">写作工具</div>
+        </div>
+
+        <button type="button" class="chat__feature" @click="emit('goHotTemplate')">
+          <span class="chat__feature-text">创建小说</span>
+        </button>
+      </div>
+
       <div class="chat__history">
         <div class="chat__history-head">
           <div class="chat__history-title">历史对话</div>
@@ -324,9 +579,10 @@ onMounted(async () => {
     <section class="chat__main">
       <header class="chat__topbar">
         <button
+          v-if="!sidebarHidden"
           type="button"
           class="chat__sidebar-toggle"
-          :aria-label="sidebarHidden ? '显示侧边栏' : '收起侧边栏'"
+          aria-label="收起侧边栏"
           :aria-expanded="!sidebarHidden"
           @click="toggleHidden"
         >
@@ -341,7 +597,7 @@ onMounted(async () => {
         <div class="chat__topbar-subtitle">开始一个 AI 对话</div>
       </header>
 
-      <div class="chat__center">
+      <div class="chat__center" :class="{ 'has-messages': messages.length > 0, 'is-empty': messages.length === 0 }">
         <div
           ref="chatContainerRef"
           class="chat-container"
@@ -411,7 +667,7 @@ onMounted(async () => {
           </template>
 
           <div v-if="messages.length === 0" class="chat__empty">
-            <h2 class="chat__headline">有什么我能帮你的吗？</h2>
+            <Empty title="有什么我能帮你的吗？" description="试试下方快捷提示，或直接输入你的创作需求。" />
             <div class="chat__prompt-grid">
               <button
                 v-for="p in quickPrompts"
@@ -441,13 +697,25 @@ onMounted(async () => {
             />
 
             <div class="chat__composer-footer">
-              <button type="button" class="chat__attach" aria-label="附件">
+              <button type="button" class="chat__attach" aria-label="附件" @click="triggerFilePick">
                 <svg viewBox="0 0 24 24" class="chat__tool-svg" aria-hidden="true">
                   <path
                     d="M16.5 6.5v9a4.5 4.5 0 0 1-9 0v-10a3 3 0 0 1 6 0v9a1.5 1.5 0 0 1-3 0V7H9v7.5a3 3 0 0 0 6 0v-9a4.5 4.5 0 0 0-9 0v10a6 6 0 0 0 12 0v-9h-1.5z"
                     fill="currentColor"
                   />
                 </svg>
+              </button>
+
+              <input ref="fileInputRef" type="file" class="chat__file-input" @change="onFilesPicked" />
+
+              <button
+                v-if="attachedFileName"
+                type="button"
+                class="chat__attach-status"
+                :aria-label="attachmentLabel"
+                @click="clearAttachment"
+              >
+                {{ attachmentLabel }}
               </button>
 
               <div class="chat__attach-divider" aria-hidden="true" />
@@ -487,11 +755,13 @@ onMounted(async () => {
               <button
                 type="button"
                 class="chat__mic"
-                :aria-label="canSend ? '发送' : '语音'"
-                :disabled="isTyping"
-                @click="canSend ? sendMessage(inputValue) : undefined"
+                :aria-label="isTyping ? '终止' : canSend ? '发送' : '语音'"
+                @click="isTyping ? stopReply() : canSend ? sendMessage(inputValue) : undefined"
               >
-                <svg v-if="canSend" viewBox="0 0 24 24" class="chat__mic-icon" aria-hidden="true">
+                <svg v-if="isTyping" viewBox="0 0 24 24" class="chat__mic-icon" aria-hidden="true">
+                  <path d="M6 6h12v12H6V6z" fill="currentColor" />
+                </svg>
+                <svg v-else-if="canSend" viewBox="0 0 24 24" class="chat__mic-icon" aria-hidden="true">
                   <path d="M12 5l7 7h-4v7H9v-7H5l7-7z" fill="currentColor" />
                 </svg>
                 <svg v-else viewBox="0 0 24 24" class="chat__mic-icon" aria-hidden="true">
@@ -508,9 +778,117 @@ onMounted(async () => {
       </footer>
     </section>
   </main>
+
+  <Modal :open="!!featureModal" :title="
+    featureModal === 'work'
+      ? '小说管理'
+      : featureModal === 'outline'
+        ? '故事线生成'
+        : featureModal === 'characters'
+          ? '人物设定'
+          : '素材库、灵感'
+  " @close="closeFeature">
+    <div class="chat__modal-panel">
+      <div class="chat__modal-head">
+        <div class="chat__modal-title">
+          {{
+            featureModal === 'work'
+              ? '小说管理'
+              : featureModal === 'outline'
+                ? '故事线生成'
+                : featureModal === 'characters'
+                  ? '人物设定'
+                  : '素材库、灵感'
+          }}
+        </div>
+        <button type="button" class="chat__modal-close" aria-label="关闭" @click="closeFeature">×</button>
+      </div>
+
+      <div class="chat__modal-body">
+        <template v-if="featureModal === 'work'">
+          <div class="chat__modal-field">
+            <div class="chat__modal-label">当前作品</div>
+            <Input v-model="workName" placeholder="输入作品名" />
+          </div>
+          <div class="chat__modal-actions">
+            <Button variant="solid" size="sm" @click="closeFeature">完成</Button>
+          </div>
+        </template>
+
+        <template v-else-if="featureModal === 'outline'">
+          <div class="chat__modal-field">
+            <div class="chat__modal-label">选择已创建小说</div>
+            <Select v-model="selectedNovelId" :options="novelOptions" placeholder="从小说管理中选择一部小说" />
+          </div>
+          <div class="chat__modal-grid">
+            <Input v-model="outlineTheme" placeholder="故事主题（例：废土复仇）" />
+            <Input v-model="outlineHook" placeholder="开篇钩子（例：主角被通缉）" />
+          </div>
+          <div class="chat__modal-actions chat__modal-actions--start">
+            <Button variant="soft" size="sm" @click="outlineTone = '热血成长'">热血成长</Button>
+            <Button variant="soft" size="sm" @click="outlineTone = '悬疑反转'">悬疑反转</Button>
+            <Button variant="soft" size="sm" @click="outlineTone = '群像史诗'">群像史诗</Button>
+            <Button variant="outline" size="sm" @click="generateOutlineDraft">生成故事线草案</Button>
+          </div>
+          <Textarea v-model="outlineText" :rows="8" placeholder="粘贴或整理你的小说大纲…" />
+          <div class="chat__modal-actions">
+            <Button variant="outline" size="sm" @click="insertToInput(outlineText)">插入到输入框</Button>
+            <Button variant="solid" size="sm" @click="sendFeatureText(outlineText)">发送给 AI</Button>
+          </div>
+        </template>
+
+        <template v-else-if="featureModal === 'characters'">
+          <div class="chat__modal-grid">
+            <Input v-model="characterName" placeholder="角色姓名" />
+            <Input v-model="characterIdentity" placeholder="身份（例：落魄皇子）" />
+            <Input v-model="characterGoal" placeholder="核心目标" />
+            <Input v-model="characterWeakness" placeholder="性格弱点" />
+          </div>
+          <div class="chat__modal-actions chat__modal-actions--start">
+            <Button variant="outline" size="sm" @click="buildCharacterCard">一键生成人设卡</Button>
+          </div>
+          <Textarea v-model="characterText" :rows="8" placeholder="人物设定（姓名/性格/背景/关系）…" />
+          <div class="chat__modal-actions">
+            <Button variant="outline" size="sm" @click="insertToInput(characterText)">插入到输入框</Button>
+            <Button variant="solid" size="sm" @click="sendFeatureText(characterText)">发送给 AI</Button>
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="chat__modal-grid chat__modal-grid--ideas">
+            <Input v-model="ideaInput" placeholder="记录一条灵感（场景/台词/反转）" />
+            <Button variant="outline" size="sm" @click="addIdea">加入素材库</Button>
+          </div>
+          <div v-if="ideaLibrary.length" class="chat__idea-list">
+            <button
+              v-for="item in ideaLibrary"
+              :key="item"
+              type="button"
+              class="chat__idea-item"
+              @click="useIdea(item)"
+            >
+              <span class="chat__idea-text">{{ item }}</span>
+              <span class="chat__idea-remove" @click.stop="removeIdea(item)">删除</span>
+            </button>
+          </div>
+          <Textarea v-model="ideasText" :rows="8" placeholder="灵感碎片、场景片段、金句…" />
+          <div class="chat__modal-actions">
+            <Button variant="outline" size="sm" @click="insertToInput(ideasText)">插入到输入框</Button>
+            <Button variant="solid" size="sm" @click="sendFeatureText(ideasText)">发送给 AI</Button>
+          </div>
+        </template>
+      </div>
+    </div>
+  </Modal>
 </template>
 
 <style scoped>
+:global(html),
+:global(body) {
+  height: 100%;
+  overflow: hidden;
+}
+
 .chat {
   min-height: 100vh;
   background: #ffffff;
@@ -523,8 +901,8 @@ onMounted(async () => {
   top: 0;
   width: 280px;
   height: 100vh;
-  border-right: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
-  padding: 18px 14px;
+  border-right: 0;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -532,7 +910,10 @@ onMounted(async () => {
   transition: width 260ms ease, transform 260ms ease;
   will-change: transform;
   background: #ffffff;
-  z-index: 60;
+  z-index: 95;
+  border-top-right-radius: 18px;
+  border-bottom-right-radius: 18px;
+  box-shadow: 12px 0 28px -24px rgba(2, 6, 23, 0.35);
 }
 
 
@@ -560,12 +941,6 @@ onMounted(async () => {
   color: var(--text-muted);
 }
 
-.chat__sidebar-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
 .chat__nav {
   width: 100%;
   border: 0;
@@ -580,6 +955,234 @@ onMounted(async () => {
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
+}
+
+.chat__sidebar-features {
+  padding: 8px 6px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat__sidebar-features-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chat__sidebar-features-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.chat__sidebar-features-sub {
+  font-size: 11px;
+  color: color-mix(in oklab, #0b1220 42%, #ffffff);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat__feature {
+  width: 100%;
+  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  background: color-mix(in oklab, var(--surface) 96%, transparent);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  color: color-mix(in oklab, #0b1220 62%, #ffffff);
+  text-align: left;
+}
+
+.chat__feature:hover {
+  border-color: color-mix(in oklab, var(--theme) 30%, transparent);
+  background: color-mix(in oklab, var(--surface-strong) 65%, transparent);
+}
+
+.chat__feature-text {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.chat__modal {
+  position: fixed;
+  inset: 0;
+  z-index: 160;
+}
+
+.chat__modal-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(2, 6, 23, 0.28);
+}
+
+.chat__modal-panel {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(720px, calc(100vw - 32px));
+  background: #ffffff;
+  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  border-radius: 16px;
+  box-shadow: 0 30px 90px -60px rgba(2, 6, 23, 0.55);
+  overflow: hidden;
+}
+
+.chat__modal-head {
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+}
+
+.chat__modal-title {
+  font-size: 14px;
+  font-weight: 850;
+  color: #0b1220;
+}
+
+.chat__modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  background: #ffffff;
+  cursor: pointer;
+  color: color-mix(in oklab, #0b1220 60%, #ffffff);
+}
+
+.chat__modal-close:hover {
+  background: color-mix(in oklab, var(--surface-strong) 65%, transparent);
+  color: #0b1220;
+}
+
+.chat__modal-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat__modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat__modal-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.chat__modal-input {
+  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+}
+
+.chat__modal-textarea {
+  width: 100%;
+  min-height: 220px;
+  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  outline: none;
+  resize: vertical;
+}
+
+.chat__modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.chat__modal-actions--start {
+  justify-content: flex-start;
+}
+
+.chat__modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.chat__modal-grid--ideas {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.chat__idea-list {
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  border-radius: 12px;
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.chat__idea-item {
+  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  background: color-mix(in oklab, var(--surface) 96%, transparent);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.chat__idea-item:hover {
+  border-color: color-mix(in oklab, var(--theme) 40%, transparent);
+}
+
+.chat__idea-text {
+  font-size: 13px;
+  color: color-mix(in oklab, #0b1220 62%, #ffffff);
+}
+
+.chat__idea-remove {
+  font-size: 12px;
+  color: #ef4444;
+}
+
+.chat__modal-btn {
+  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 750;
+  color: color-mix(in oklab, #0b1220 62%, #ffffff);
+}
+
+.chat__modal-btn:hover {
+  border-color: color-mix(in oklab, var(--theme) 35%, transparent);
+  background: color-mix(in oklab, var(--theme-soft) 40%, transparent);
+  color: #0b1220;
+}
+
+.chat__modal-btn.is-primary {
+  border-color: color-mix(in oklab, var(--theme) 35%, transparent);
+  background: color-mix(in oklab, var(--theme-soft) 55%, transparent);
+  color: #0b1220;
 }
 
 .chat__nav:hover {
@@ -605,7 +1208,8 @@ onMounted(async () => {
   padding: 6px 4px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
+  margin-top: 20px;
 }
 
 .chat__history-head {
@@ -683,17 +1287,21 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .chat__topbar {
   height: 56px;
   border-bottom: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  background: transparent;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2px;
   position: relative;
+  z-index: 90;
 }
 
 .chat__floating-toggle {
@@ -720,12 +1328,12 @@ onMounted(async () => {
 }
 
 .chat__sidebar-toggle {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
   width: 34px;
   height: 34px;
+  position: fixed;
+  left: calc(280px + 12px);
+  top: 12px;
+  transform: none;
   border-radius: 10px;
   border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
   background: #ffffff;
@@ -735,7 +1343,7 @@ onMounted(async () => {
   cursor: pointer;
   color: color-mix(in oklab, #0b1220 58%, #ffffff);
   transition: background 160ms ease, color 160ms ease;
-  z-index: 70;
+  z-index: 110;
 }
 
 .chat__sidebar-toggle:hover {
@@ -797,9 +1405,20 @@ onMounted(async () => {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 14px 18px 86px;
+  padding: 14px 18px 170px;
   min-width: 0;
   position: relative;
+  min-height: 0;
+  width: 100%;
+  overflow: auto;
+}
+
+.chat__center.is-empty {
+  overflow: hidden;
+}
+
+.chat__center.has-messages {
+  justify-content: flex-start;
 }
 
 .chat.is-hidden .chat__center {
@@ -816,10 +1435,10 @@ onMounted(async () => {
 
 .chat-container {
   width: 100%;
-  max-width: 900px;
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
+  max-width: 840px;
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
   padding: 14px 10px;
   display: flex;
   flex-direction: column;
@@ -829,6 +1448,7 @@ onMounted(async () => {
 .chat-container.is-empty {
   justify-content: center;
   min-height: calc(100vh - 180px);
+  overflow: hidden;
 }
 
 .chat__empty {
@@ -1065,10 +1685,13 @@ onMounted(async () => {
 }
 
 .chat__composer {
-  position: sticky;
+  position: fixed;
+  left: 0;
+  right: 0;
   bottom: 0;
   padding: 14px 18px 22px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 1) 35%);
+  z-index: 80;
 }
 
 .chat__composer-inner {
@@ -1110,6 +1733,31 @@ onMounted(async () => {
 
 .chat__attach:hover {
   background: color-mix(in oklab, var(--surface-strong) 65%, transparent);
+  color: #0b1220;
+}
+
+.chat__file-input {
+  display: none;
+}
+
+.chat__attach-status {
+  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  background: color-mix(in oklab, var(--surface) 96%, transparent);
+  font-size: 12px;
+  font-weight: 650;
+  color: color-mix(in oklab, #0b1220 58%, #ffffff);
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat__attach-status:hover {
+  border-color: color-mix(in oklab, var(--theme) 35%, transparent);
+  background: color-mix(in oklab, var(--theme-soft) 40%, transparent);
   color: #0b1220;
 }
 

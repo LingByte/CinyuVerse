@@ -13,6 +13,8 @@ type Novel struct {
 	AuthorID       uint   `json:"authorId" gorm:"comment:作者ID"`
 	Status         string `json:"status" gorm:"size:50;comment:小说状态"`
 	Genre          string `json:"genre" gorm:"size:100;comment:小说类型(玄幻/都市/科幻/武侠等)"`
+	Audience       string `json:"audience" gorm:"size:50;comment:小说受众(male/female)"`
+	Theme          string `json:"theme" gorm:"size:255;comment:小说主题"`
 	Description    string `json:"description" gorm:"type:text;comment:小说简介"`
 	WorldSetting   string `json:"worldSetting" gorm:"type:text;comment:世界观设定"`
 	Tags           string `json:"tags" gorm:"size:500;comment:标签(逗号分隔)"`

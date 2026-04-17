@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Button from '@/components/Button.vue'
+import ParallaxFloatingPreview from '@/components/fancy/image/ParallaxFloatingPreview.vue'
 
 const emit = defineEmits<{
   (e: 'goChat'): void
@@ -8,6 +9,9 @@ const emit = defineEmits<{
 
 <template>
   <main class="landing">
+    <div class="landing__bg">
+      <ParallaxFloatingPreview as-background :show-overlay="false" />
+    </div>
     <div class="landing__container">
       <section class="hero">
         <h1 class="hero__title">
@@ -20,7 +24,7 @@ const emit = defineEmits<{
         </p>
 
         <div class="hero__cta">
-          <Button size="lg" @click="emit('goChat')">Go to Chat</Button>
+          <Button variant="soft" shape="square" size="lg" radius="14px" @click="emit('goChat')">Go to Chat</Button>
         </div>
 
         <div class="hero__hint">
@@ -42,13 +46,25 @@ const emit = defineEmits<{
 
 <style scoped>
 .landing {
+  position: relative;
   min-height: 100vh;
   background: #ffffff;
   color: var(--text);
-  padding: 28px 18px;
+  padding: clamp(18px, 3.2vw, 28px) clamp(14px, 2.2vw, 18px);
+  overflow: hidden;
+}
+
+.landing__bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 1;
 }
 
 .landing__container {
+  position: relative;
+  z-index: 1;
   min-height: calc(100vh - 56px);
   max-width: 980px;
   margin: 0 auto;
@@ -56,7 +72,7 @@ const emit = defineEmits<{
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 42px;
+  gap: clamp(26px, 4.8vh, 42px);
   text-align: center;
 }
 
@@ -84,20 +100,20 @@ const emit = defineEmits<{
 }
 
 .hero__subtitle {
-  margin: 18px 0 0;
+  margin: clamp(12px, 2.2vh, 18px) 0 0;
   max-width: 560px;
-  font-size: 14px;
+  font-size: clamp(13px, 1.35vw, 14px);
   line-height: 1.7;
   color: color-mix(in oklab, #0b1220 48%, #ffffff);
 }
 
 .hero__cta {
-  margin-top: 22px;
+  margin-top: clamp(14px, 2.6vh, 22px);
 }
 
 .hero__hint {
-  margin-top: 14px;
-  font-size: 12px;
+  margin-top: clamp(10px, 1.8vh, 14px);
+  font-size: clamp(11px, 1.15vw, 12px);
   color: color-mix(in oklab, #0b1220 38%, #ffffff);
 }
 
@@ -113,14 +129,27 @@ const emit = defineEmits<{
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: 22px;
+  gap: clamp(12px, 2.6vw, 22px);
   opacity: 0.55;
 }
 
 .brands__item {
-  font-size: 22px;
+  font-size: clamp(16px, 2.2vw, 22px);
   font-weight: 750;
   letter-spacing: -0.02em;
   color: color-mix(in oklab, #0b1220 30%, #ffffff);
+}
+
+@media (max-width: 520px) {
+  .landing__container {
+    min-height: calc(100vh - 40px);
+  }
+  .hero__title {
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+  }
+  .brands {
+    opacity: 0.5;
+  }
 }
 </style>
