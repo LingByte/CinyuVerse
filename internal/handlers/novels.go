@@ -18,6 +18,8 @@ type CreateNovelRequest struct {
 	AuthorID       uint   `json:"authorId" binding:"required"`
 	Status         string `json:"status"`
 	Genre          string `json:"genre"`
+	Audience       string `json:"audience"`
+	Theme          string `json:"theme"`
 	Description    string `json:"description"`
 	WorldSetting   string `json:"worldSetting"`
 	Tags           string `json:"tags"`
@@ -31,6 +33,8 @@ type UpdateNovelRequest struct {
 	Title          string `json:"title"`
 	Status         string `json:"status"`
 	Genre          string `json:"genre"`
+	Audience       string `json:"audience"`
+	Theme          string `json:"theme"`
 	Description    string `json:"description"`
 	WorldSetting   string `json:"worldSetting"`
 	Tags           string `json:"tags"`
@@ -46,6 +50,8 @@ type NovelResponse struct {
 	AuthorID       uint   `json:"authorId"`
 	Status         string `json:"status"`
 	Genre          string `json:"genre"`
+	Audience       string `json:"audience"`
+	Theme          string `json:"theme"`
 	Description    string `json:"description"`
 	WorldSetting   string `json:"worldSetting"`
 	Tags           string `json:"tags"`
@@ -95,6 +101,8 @@ func (ch *CinyuHandlers) CreateNovel(c *gin.Context) {
 		AuthorID:       req.AuthorID,
 		Status:         req.Status,
 		Genre:          req.Genre,
+		Audience:       req.Audience,
+		Theme:          req.Theme,
 		Description:    req.Description,
 		WorldSetting:   req.WorldSetting,
 		Tags:           req.Tags,
@@ -170,6 +178,12 @@ func (ch *CinyuHandlers) UpdateNovel(c *gin.Context) {
 	}
 	if req.Genre != "" {
 		novel.Genre = req.Genre
+	}
+	if req.Audience != "" {
+		novel.Audience = req.Audience
+	}
+	if req.Theme != "" {
+		novel.Theme = req.Theme
 	}
 	if req.Description != "" {
 		novel.Description = req.Description
@@ -374,6 +388,8 @@ func novelToResponse(novel *models.Novel) *NovelResponse {
 		AuthorID:       novel.AuthorID,
 		Status:         novel.Status,
 		Genre:          novel.Genre,
+		Audience:       novel.Audience,
+		Theme:          novel.Theme,
 		Description:    novel.Description,
 		WorldSetting:   novel.WorldSetting,
 		Tags:           novel.Tags,

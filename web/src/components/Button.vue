@@ -4,8 +4,12 @@ import { computed, ref } from 'vue'
 interface Props {
   variant?: 'solid' | 'soft' | 'outline'
   size?: 'sm' | 'md' | 'lg'
+  status?: 'default' | 'success' | 'warning' | 'danger'
   shape?: 'rounded' | 'pill' | 'square' | 'circle'
   color?: string
+  disabled?: boolean
+  loading?: boolean
+  block?: boolean
   radius?: string
   width?: string
   height?: string
@@ -18,6 +22,10 @@ const props = withDefaults(defineProps<Props>(), {
   size: 'md',
   shape: 'rounded',
   color: 'purple',
+  status: 'default',
+  disabled: false,
+  loading: false,
+  block: false,
 })
 
 const buttonClass = computed(() => [
@@ -29,6 +37,8 @@ const buttonClass = computed(() => [
   props.shape === 'pill' ? 'rounded-full' : '',
   props.shape === 'square' ? 'rounded-lg' : '',
   props.shape === 'circle' ? 'rounded-full px-0 aspect-square' : '',
+  props.block ? 'w-full' : '',
+  props.disabled || props.loading ? 'cursor-not-allowed opacity-60 hover:translate-y-0' : '',
   props.variant === 'solid'
     ? 'text-white border-transparent bg-[linear-gradient(145deg,var(--btn),var(--btn-strong))] shadow-[0_12px_24px_-14px_var(--btn-strong)] hover:-translate-y-0.5 hover:shadow-[0_18px_30px_-16px_var(--btn-strong)]'
     : '',
@@ -42,6 +52,22 @@ const buttonClass = computed(() => [
 
 const buttonStyle = computed<Record<string, string>>(() => {
   const style: Record<string, string> = {}
+
+  if (props.status === 'success') {
+    style['--btn'] = '#34d399'
+    style['--btn-strong'] = '#10b981'
+    style['--btn-soft'] = 'rgba(52, 211, 153, 0.2)'
+  }
+  if (props.status === 'warning') {
+    style['--btn'] = '#f59e0b'
+    style['--btn-strong'] = '#d97706'
+    style['--btn-soft'] = 'rgba(245, 158, 11, 0.2)'
+  }
+  if (props.status === 'danger') {
+    style['--btn'] = '#f87171'
+    style['--btn-strong'] = '#ef4444'
+    style['--btn-soft'] = 'rgba(248, 113, 113, 0.2)'
+  }
 
   if (props.color && !['orange', 'green', 'purple', 'blue'].includes(props.color)) {
     style['--btn'] = props.color
@@ -83,10 +109,12 @@ const triggerWave = () => {
 }
 
 const onPointerDown = () => {
+  if (props.disabled || props.loading) return
   triggerWave()
 }
 
 const onMouseDown = () => {
+  if (props.disabled || props.loading) return
   triggerWave()
 }
 </script>
@@ -96,6 +124,8 @@ const onMouseDown = () => {
     type="button"
     :class="buttonClass"
     :style="buttonStyle"
+    :disabled="disabled || loading"
+    :aria-busy="loading"
     @pointerdown="onPointerDown"
     @mousedown="onMouseDown"
   >
@@ -104,6 +134,7 @@ const onMouseDown = () => {
       class="cv-btn__diffuse pointer-events-none absolute inset-0 rounded-[inherit]"
       aria-hidden="true"
     />
+    <span v-if="loading" aria-hidden="true">⏳</span>
     <slot />
   </button>
 </template>
