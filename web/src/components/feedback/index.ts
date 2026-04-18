@@ -1,7 +1,0 @@
-export { default as Modal } from '@/components/feedback/Modal.vue'
-export { default as Drawer } from '@/components/feedback/Drawer.vue'
-export { default as Notification } from '@/components/feedback/Notification.vue'
-export { default as Popconfirm } from '@/components/feedback/Popconfirm.vue'
-export { default as Popover } from '@/components/feedback/Popover.vue'
-export { default as Alert } from '@/components/feedback/Alert.vue'
-export { message } from '@/components/feedback/message'

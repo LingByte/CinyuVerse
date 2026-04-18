@@ -80,7 +80,6 @@ type PaginatedChapterResponse struct {
 }
 
 type GenerateChapterByAIRequest struct {
-	UserID       uint             `json:"userId" binding:"required"`
 	Message      string           `json:"message" binding:"required"`
 	Model        string           `json:"model"`
 	Temperature  *float32         `json:"temperature"`
@@ -103,7 +102,6 @@ func (ch *CinyuHandlers) registerChapterRoutes(r *gin.RouterGroup) {
 		g.GET("/:id", ch.GetChapter)
 		g.PUT("/:id", ch.UpdateChapter)
 		g.DELETE("/:id", ch.DeleteChapter)
-		g.POST("/:id/restore", ch.RestoreChapter)
 		g.POST("/generate-content", ch.GenerateChapterContentByAI)
 	}
 }

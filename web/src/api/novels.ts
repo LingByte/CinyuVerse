@@ -1,89 +1,59 @@
-import { del, get, post, put } from '@/utils/request'
+import request from '@/utils/request'
+import type {
+  CreateNovelBody,
+  GenerateNovelBody,
+  GenerateNovelByAIResponse,
+  Novel,
+  PaginatedNovels,
+  UpdateNovelBody,
+  UploadNovelCoverResult,
+} from '@/types/novel'
 
-export interface Novel {
-  id: number
-  title: string
-  authorId: number
-  status: string
-  genre: string
-  audience: string
-  theme: string
-  description: string
-  worldSetting: string
-  tags: string
-  coverImage: string
-  styleGuide: string
-  referenceNovel: string
-  createdAt: string
-  updatedAt: string
-  createBy: string
-  updateBy: string
+export interface ListNovelsParams {
+  page?: number
+  size?: number
 }
 
-export interface PaginatedNovels {
-  novels: Novel[]
-  total: number
-  page: number
-  size: number
+export interface SearchNovelsParams {
+  keyword: string
+  page?: number
+  size?: number
 }
 
-export interface CreateNovelBody {
-  title: string
-  authorId: number
-  status?: string
-  genre?: string
-  audience?: string
-  theme?: string
-  description?: string
-  worldSetting?: string
-  tags?: string
-  coverImage?: string
-  styleGuide?: string
-  referenceNovel?: string
+export function listNovels(params?: ListNovelsParams) {
+  return request.get<PaginatedNovels>('/novels', { params }).then((res) => res.data)
 }
 
-export interface UpdateNovelBody {
-  title?: string
-  status?: string
-  genre?: string
-  audience?: string
-  theme?: string
-  description?: string
-  worldSetting?: string
-  tags?: string
-  coverImage?: string
-  styleGuide?: string
-  referenceNovel?: string
+export function searchNovels(params: SearchNovelsParams) {
+  return request.get<PaginatedNovels>('/novels/search', { params }).then((res) => res.data)
 }
 
-export const novelsApi = {
-  create<T = Novel>(data: CreateNovelBody) {
-    return post<T>('/novels', data)
-  },
-
-  list<T = PaginatedNovels>(params: { page?: number; size?: number }) {
-    return get<T>('/novels', { params })
-  },
-
-  search<T = PaginatedNovels>(params: { keyword: string; page?: number; size?: number }) {
-    return get<T>('/novels/search', { params })
-  },
-
-  getOne<T = Novel>(id: number | string) {
-    return get<T>(`/novels/${encodeURIComponent(String(id))}`)
-  },
-
-  update<T = Novel>(id: number | string, data: UpdateNovelBody) {
-    return put<T>(`/novels/${encodeURIComponent(String(id))}`, data)
-  },
-
-  remove<T = unknown>(id: number | string) {
-    return del<T>(`/novels/${encodeURIComponent(String(id))}`)
-  },
-
-  restore<T = unknown>(id: number | string) {
-    return post<T>(`/novels/${encodeURIComponent(String(id))}/restore`, {})
-  },
+export function getNovel(id: number) {
+  return request.get<Novel>(`/novels/${id}`).then((res) => res.data)
 }
 
-export default novelsApi
+export function createNovel(body: CreateNovelBody) {
+  return request.post<Novel>('/novels', body).then((res) => res.data)
+}
+
+export function updateNovel(id: number, body: UpdateNovelBody) {
+  return request.put<Novel>(`/novels/${id}`, body).then((res) => res.data)
+}
+
+export function deleteNovel(id: number) {
+  return request.delete(`/novels/${id}`).then((res) => res.data)
+}
+
+export function generateNovelByAI(body: GenerateNovelBody) {
+  return request.post<GenerateNovelByAIResponse>('/novels/generate', body).then((res) => res.data)
+}
+
+export function uploadNovelCover(file: File) {
+  const body = new FormData()
+  body.append('file', file)
+  return request
+    .post<UploadNovelCoverResult>('/novels/cover/upload', body, {
+      timeout: 120_000,
+    })
+    .then((res) => res.data)
+}

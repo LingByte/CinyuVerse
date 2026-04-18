@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -156,12 +157,30 @@ func GetStorylineNodeByID(db *gorm.DB, id uint) (*StorylineNode, error) {
 	return &row, nil
 }
 
-func ListStorylineNodes(db *gorm.DB, storylineID uint, page, size int) ([]*StorylineNode, int64, error) {
+func ListStorylineNodes(db *gorm.DB, storylineID, novelID uint, keyword, typesCSV string, page, size int) ([]*StorylineNode, int64, error) {
 	rows := make([]*StorylineNode, 0)
 	var total int64
 	q := db.Model(&StorylineNode{}).Where("is_deleted = ?", SoftDeleteStatusActive)
 	if storylineID > 0 {
 		q = q.Where("storyline_id = ?", storylineID)
+	} else if novelID > 0 {
+		q = q.Where("novel_id = ?", novelID)
+	}
+	if kw := strings.TrimSpace(keyword); kw != "" {
+		like := "%" + kw + "%"
+		q = q.Where("(title LIKE ? OR node_id LIKE ? OR summary LIKE ?)", like, like, like)
+	}
+	if typesCSV != "" {
+		parts := strings.Split(typesCSV, ",")
+		keep := make([]string, 0, len(parts))
+		for _, p := range parts {
+			if t := strings.TrimSpace(p); t != "" {
+				keep = append(keep, t)
+			}
+		}
+		if len(keep) > 0 {
+			q = q.Where("type IN ?", keep)
+		}
 	}
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err

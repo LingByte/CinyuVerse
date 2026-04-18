@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/LingByte/CinyuVerse/internal/models"
 	"github.com/LingByte/CinyuVerse/pkg/config"
@@ -35,7 +36,6 @@ type aiStorylineGraphDraft struct {
 }
 
 type generateStorylineAIReq struct {
-	UserID       uint                   `json:"userId" binding:"required"`
 	Message      string                 `json:"message" binding:"required"`
 	Model        string                 `json:"model"`
 	Temperature  *float32               `json:"temperature"`
@@ -55,7 +55,6 @@ type advanceBranchBudget struct {
 }
 
 type advanceStorylineReq struct {
-	UserID                  uint                 `json:"userId" binding:"required"`
 	CurrentNodeID           string               `json:"currentNodeId" binding:"required"`
 	TargetAnchorID          string               `json:"targetAnchorId"`
 	StepNodes               int                  `json:"stepNodes"` // 建议 2~4
@@ -91,28 +90,24 @@ func (ch *CinyuHandlers) registerStorylineRoutes(r *gin.RouterGroup) {
 		g.GET("/:id", ch.GetStoryline)
 		g.PUT("/:id", ch.UpdateStoryline)
 		g.DELETE("/:id", ch.DeleteStoryline)
-		g.POST("/:id/restore", ch.RestoreStoryline)
 
 		g.POST("/nodes", ch.CreateStorylineNode)
 		g.GET("/nodes", ch.ListStorylineNodes)
 		g.GET("/nodes/:id", ch.GetStorylineNode)
 		g.PUT("/nodes/:id", ch.UpdateStorylineNode)
 		g.DELETE("/nodes/:id", ch.DeleteStorylineNode)
-		g.POST("/nodes/:id/restore", ch.RestoreStorylineNode)
 
 		g.POST("/edges", ch.CreateStorylineEdge)
 		g.GET("/edges", ch.ListStorylineEdges)
 		g.GET("/edges/:id", ch.GetStorylineEdge)
 		g.PUT("/edges/:id", ch.UpdateStorylineEdge)
 		g.DELETE("/edges/:id", ch.DeleteStorylineEdge)
-		g.POST("/edges/:id/restore", ch.RestoreStorylineEdge)
 
 		g.POST("/facts", ch.CreateStorylineFact)
 		g.GET("/facts", ch.ListStorylineFacts)
 		g.GET("/facts/:id", ch.GetStorylineFact)
 		g.PUT("/facts/:id", ch.UpdateStorylineFact)
 		g.DELETE("/facts/:id", ch.DeleteStorylineFact)
-		g.POST("/facts/:id/restore", ch.RestoreStorylineFact)
 
 		g.POST("/ai/generate", ch.GenerateStorylineByAI)
 		g.GET("/:id/graph", ch.GetStorylineGraph)
@@ -352,9 +347,17 @@ func (ch *CinyuHandlers) listNodeLike(c *gin.Context, kind string) {
 			storylineID = uint(n)
 		}
 	}
+	var novelID uint
+	if raw := strings.TrimSpace(c.Query("novelId")); raw != "" {
+		if n, err := strconv.ParseUint(raw, 10, 32); err == nil {
+			novelID = uint(n)
+		}
+	}
+	keyword := strings.TrimSpace(c.Query("keyword"))
+	typesCSV := strings.TrimSpace(c.Query("types"))
 	switch kind {
 	case "node":
-		rows, total, err := models.ListStorylineNodes(ch.db, storylineID, page, size)
+		rows, total, err := models.ListStorylineNodes(ch.db, storylineID, novelID, keyword, typesCSV, page, size)
 		if err != nil {
 			response.Fail(c, "list nodes failed", nil)
 			return
@@ -622,22 +625,6 @@ func (ch *CinyuHandlers) GenerateStorylineByAI(c *gin.Context) {
 		response.Fail(c, err.Error(), nil)
 		return
 	}
-	prompt := buildStorylineAIPrompt(req)
-	llmOpts := &llm.LLMOptions{
-		Provider:     pickChatProvider(""),
-		ApiKey:       strings.TrimSpace(config.GlobalConfig.Services.LLM.APIKey),
-		BaseURL:      strings.TrimSpace(config.GlobalConfig.Services.LLM.BaseURL),
-		SystemPrompt: buildStorylineAISystemPrompt(req),
-		Logger:       logger.Lg,
-	}
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 120*time.Second)
-	defer cancel()
-	h, err := llm.NewProviderHandler(ctx, llmOpts.Provider, llmOpts)
-	if err != nil {
-		response.Fail(c, "llm handler init failed: "+err.Error(), nil)
-		return
-	}
-	h.ResetMemory()
 	qopts := &llm.QueryOptions{Model: pickChatModel(req.Model), MaxTokens: req.MaxTokens, EnableJSONOutput: true, OutputFormat: "json_object"}
 	if qopts.Model == "" {
 		qopts.Model = "gpt-4o-mini"
@@ -648,7 +635,24 @@ func (ch *CinyuHandlers) GenerateStorylineByAI(c *gin.Context) {
 	if req.Temperature != nil {
 		qopts.Temperature = *req.Temperature
 	}
-	raw, draft, err := ch.runStorylineGenerationOnce(c.Request.Context(), h, prompt, qopts, req.BaseDraft, req.LockedFields)
+	prompt := buildStorylineAIPrompt(req)
+	llmOpts := &llm.LLMOptions{
+		Provider:     pickChatProvider(""),
+		ApiKey:       strings.TrimSpace(config.GlobalConfig.Services.LLM.APIKey),
+		BaseURL:      strings.TrimSpace(config.GlobalConfig.Services.LLM.BaseURL),
+		SystemPrompt: buildStorylineAISystemPrompt(req, qopts.MaxTokens),
+		Logger:       logger.Lg,
+	}
+	// 故事线 JSON 体积大、海外/兼容网关（如 DashScope）首包慢；lingoroutine 将本 ctx 绑定到 OpenAI 兼容请求的 reqCtx，过短易 deadline exceeded；客户端断开仍会取消 c.Request.Context() 子树。
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 360*time.Second)
+	defer cancel()
+	h, err := llm.NewProviderHandler(ctx, llmOpts.Provider, llmOpts)
+	if err != nil {
+		response.Fail(c, "llm handler init failed: "+err.Error(), nil)
+		return
+	}
+	h.ResetMemory()
+	raw, draft, err := ch.runStorylineGenerationOnce(h, prompt, qopts, req.BaseDraft, req.LockedFields)
 	if err != nil {
 		retryPrompt := prompt + "\n\n上一次输出不是完整合法JSON。请重新输出完整且可解析的单个 JSON 对象，不要省略结尾，不要 markdown。"
 		retryQopts := *qopts
@@ -656,11 +660,11 @@ func (ch *CinyuHandlers) GenerateStorylineByAI(c *gin.Context) {
 		if retryQopts.MaxTokens < qopts.MaxTokens+600 {
 			retryQopts.MaxTokens = qopts.MaxTokens + 600
 		}
-		if retryQopts.MaxTokens > 8192 {
-			retryQopts.MaxTokens = 8192
+		if retryQopts.MaxTokens > 6000 {
+			retryQopts.MaxTokens = 6000
 		}
 		retryQopts.Temperature = 0.2
-		raw2, draft2, err2 := ch.runStorylineGenerationOnce(c.Request.Context(), h, retryPrompt, &retryQopts, req.BaseDraft, req.LockedFields)
+		raw2, draft2, err2 := ch.runStorylineGenerationOnce(h, retryPrompt, &retryQopts, req.BaseDraft, req.LockedFields)
 		if err2 != nil {
 			response.FailWithCode(c, 422, "AI输出不是合法故事线JSON: "+err2.Error(), gin.H{"raw": raw})
 			return
@@ -677,11 +681,11 @@ func (ch *CinyuHandlers) GenerateStorylineByAI(c *gin.Context) {
 		if retryQopts.MaxTokens < qopts.MaxTokens+600 {
 			retryQopts.MaxTokens = qopts.MaxTokens + 600
 		}
-		if retryQopts.MaxTokens > 8192 {
-			retryQopts.MaxTokens = 8192
+		if retryQopts.MaxTokens > 6000 {
+			retryQopts.MaxTokens = 6000
 		}
 		retryQopts.Temperature = 0.2
-		raw2, draft2, err2 := ch.runStorylineGenerationOnce(c.Request.Context(), h, retryPrompt, &retryQopts, req.BaseDraft, req.LockedFields)
+		raw2, draft2, err2 := ch.runStorylineGenerationOnce(h, retryPrompt, &retryQopts, req.BaseDraft, req.LockedFields)
 		if err2 != nil {
 			response.FailWithCode(c, 422, "AI重生失败: "+err2.Error(), gin.H{"raw": raw, "validationErrors": verr})
 			return
@@ -700,7 +704,6 @@ func (ch *CinyuHandlers) GenerateStorylineByAI(c *gin.Context) {
 }
 
 func (ch *CinyuHandlers) runStorylineGenerationOnce(
-	ctx context.Context,
 	h interface {
 		QueryWithOptions(prompt string, options *llm.QueryOptions) (*llm.QueryResponse, error)
 	},
@@ -741,7 +744,7 @@ func (ch *CinyuHandlers) GetStorylineGraph(c *gin.Context) {
 		response.Fail(c, "Storyline not found", nil)
 		return
 	}
-	nodes, _, err := models.ListStorylineNodes(ch.db, id, 1, 500)
+	nodes, _, err := models.ListStorylineNodes(ch.db, id, 0, "", "", 1, 500)
 	if err != nil {
 		response.Fail(c, "list nodes failed", nil)
 		return
@@ -898,7 +901,7 @@ func (ch *CinyuHandlers) GetStorylineState(c *gin.Context) {
 		response.Fail(c, "Storyline not found", nil)
 		return
 	}
-	nodes, _, err := models.ListStorylineNodes(ch.db, id, 1, 1000)
+	nodes, _, err := models.ListStorylineNodes(ch.db, id, 0, "", "", 1, 1000)
 	if err != nil {
 		response.Fail(c, "list nodes failed", nil)
 		return
@@ -969,7 +972,7 @@ func (ch *CinyuHandlers) AdvanceStorylineByAI(c *gin.Context) {
 	if stepNodes > 6 {
 		stepNodes = 6
 	}
-	nodes, _, err := models.ListStorylineNodes(ch.db, id, 1, 1000)
+	nodes, _, err := models.ListStorylineNodes(ch.db, id, 0, "", "", 1, 1000)
 	if err != nil {
 		response.Fail(c, "list nodes failed", nil)
 		return
@@ -1065,7 +1068,7 @@ func (ch *CinyuHandlers) CommitStorylineIncrement(c *gin.Context) {
 		response.Fail(c, err.Error(), nil)
 		return
 	}
-	existNodes, _, err := models.ListStorylineNodes(ch.db, id, 1, 1000)
+	existNodes, _, err := models.ListStorylineNodes(ch.db, id, 0, "", "", 1, 1000)
 	if err != nil {
 		response.Fail(c, "list existing nodes failed", nil)
 		return
@@ -1146,7 +1149,21 @@ func buildStorylineAIPrompt(req generateStorylineAIReq) string {
 		b.WriteString("\n")
 	}
 	if req.BaseDraft != nil {
-		if raw, err := json.Marshal(req.BaseDraft); err == nil {
+		raw, err := json.Marshal(req.BaseDraft)
+		if err == nil {
+			const maxStorylineBaseDraftJSON = 96 * 1024
+			if len(raw) > maxStorylineBaseDraftJSON {
+				slim := map[string]any{
+					"storyline": req.BaseDraft.Storyline,
+					"_omitted": fmt.Sprintf(
+						"完整基座 JSON 约 %d 字节，已超过 %d 字节上限，已省略全部 nodes/edges/facts 正文。原图规模：nodes=%d edges=%d facts=%d。请结合「用户需求」「锁定字段」与「输出规模约束」生成；若必须严格保留既有节点/边/事实，请缩小草稿后重试或先清空基座。",
+						len(raw), maxStorylineBaseDraftJSON, len(req.BaseDraft.Nodes), len(req.BaseDraft.Edges), len(req.BaseDraft.Facts),
+					),
+				}
+				raw, err = json.Marshal(slim)
+			}
+		}
+		if err == nil {
 			b.WriteString("当前草稿：\n")
 			b.Write(raw)
 			b.WriteString("\n")
@@ -1164,13 +1181,14 @@ func buildStorylineAIPrompt(req generateStorylineAIReq) string {
 	return b.String()
 }
 
-func buildStorylineAISystemPrompt(req generateStorylineAIReq) string {
+func buildStorylineAISystemPrompt(req generateStorylineAIReq, maxTokens int) string {
 	nl, el, fl := normalizeStorylineLimits(req)
 	detail := normalizeDetailLevel(req.DetailLevel)
 	propsRule := `props 请保持精简，仅包含 1-3 个关键键值。`
 	if detail == "lite" {
 		propsRule = `props 请尽量短小，每个节点/边 props 建议不超过 80 字。`
 	}
+	tokenRule := buildStorylineTokenBudgetRule(maxTokens, detail)
 	return strings.TrimSpace(`
 你是小说故事线规划助手。只输出一个 JSON 对象，不要 markdown。
 输出结构必须为：
@@ -1183,7 +1201,24 @@ func buildStorylineAISystemPrompt(req generateStorylineAIReq) string {
 必须保证 nodes 与 edges 引用的 nodeId 可以互相对应。
 输出规模约束：nodes <= ` + strconv.Itoa(nl) + `，edges <= ` + strconv.Itoa(el) + `，facts <= ` + strconv.Itoa(fl) + `。
 detailLevel = ` + detail + `。
+输出长度预算：` + tokenRule + `。
 ` + propsRule)
+}
+
+func buildStorylineTokenBudgetRule(maxTokens int, detail string) string {
+	if maxTokens <= 0 {
+		maxTokens = defaultStorylineMaxTokens(detail)
+	}
+	switch {
+	case maxTokens <= 1200:
+		return "maxTokens 偏小：storyline.description <= 120字；每个 node.summary <= 70字；每个 edge.props <= 50字；每个 factValue <= 50字；严禁解释性文本"
+	case maxTokens <= 2000:
+		return "中等预算：storyline.description <= 180字；每个 node.summary <= 110字；每个 edge.props <= 80字；每个 factValue <= 80字；只保留关键剧情"
+	case maxTokens <= 3200:
+		return "较高预算：storyline.description <= 260字；每个 node.summary <= 150字；每个 edge.props <= 120字；每个 factValue <= 120字；仍避免冗长修辞"
+	default:
+		return "高预算但必须克制：storyline.description <= 320字；每个 node.summary <= 180字；每个 edge.props <= 140字；每个 factValue <= 140字；禁止输出重复语义"
+	}
 }
 
 func normalizeDetailLevel(v string) string {
@@ -1247,11 +1282,11 @@ func normalizeStorylineLimits(req generateStorylineAIReq) (int, int, int) {
 func defaultStorylineMaxTokens(detailLevel string) int {
 	switch normalizeDetailLevel(detailLevel) {
 	case "full":
-		return 3200
+		return 2800
 	case "standard":
-		return 2200
+		return 1800
 	default:
-		return 1400
+		return 1200
 	}
 }
 
@@ -1263,6 +1298,7 @@ func parseStorylineAIDraft(raw string) (aiStorylineGraphDraft, error) {
 	}
 	candidate := extractJSONObjectCandidate(raw)
 	candidate = tryFixTruncatedJSON(candidate)
+	candidate = stripDanglingJSONCommas(candidate)
 	if err := json.Unmarshal([]byte(candidate), &out); err == nil {
 		return out, nil
 	}
@@ -1275,6 +1311,7 @@ func parseStorylineAIDraft(raw string) (aiStorylineGraphDraft, error) {
 		Facts     []map[string]any `json:"facts"`
 	}
 	var rd rawDraft
+	candidate = stripDanglingJSONCommas(candidate)
 	if err := json.Unmarshal([]byte(candidate), &rd); err != nil {
 		return out, err
 	}
@@ -1428,7 +1465,48 @@ func tryFixTruncatedJSON(s string) string {
 	if objOpen > objClose {
 		candidate += strings.Repeat("}", objOpen-objClose)
 	}
-	return candidate
+	return stripDanglingJSONCommas(candidate)
+}
+
+// stripDanglingJSONCommas removes commas right before ']' or '}' outside strings.
+func stripDanglingJSONCommas(s string) string {
+	if s == "" {
+		return s
+	}
+	out := make([]byte, 0, len(s))
+	inStr, esc := false, false
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if inStr {
+			out = append(out, ch)
+			if esc {
+				esc = false
+				continue
+			}
+			if ch == '\\' {
+				esc = true
+			} else if ch == '"' {
+				inStr = false
+			}
+			continue
+		}
+		if ch == '"' {
+			inStr = true
+			out = append(out, ch)
+			continue
+		}
+		if ch == ',' {
+			j := i + 1
+			for j < len(s) && unicode.IsSpace(rune(s[j])) {
+				j++
+			}
+			if j < len(s) && (s[j] == ']' || s[j] == '}') {
+				continue
+			}
+		}
+		out = append(out, ch)
+	}
+	return string(out)
 }
 
 func applyLockedStorylineFields(draft *aiStorylineGraphDraft, base *aiStorylineGraphDraft, locked []string) {

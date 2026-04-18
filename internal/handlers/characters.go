@@ -75,7 +75,6 @@ type PaginatedCharacterResponse struct {
 }
 
 type GenerateCharacterByAIRequest struct {
-	UserID       uint               `json:"userId" binding:"required"`
 	Message      string             `json:"message" binding:"required"`
 	Model        string             `json:"model"`
 	Temperature  *float32           `json:"temperature"`
@@ -98,7 +97,6 @@ func (ch *CinyuHandlers) registerCharacterRoutes(r *gin.RouterGroup) {
 		characters.GET("/:id", ch.GetCharacter)
 		characters.PUT("/:id", ch.UpdateCharacter)
 		characters.DELETE("/:id", ch.DeleteCharacter)
-		characters.POST("/:id/restore", ch.RestoreCharacter)
 		characters.POST("/generate", ch.GenerateCharacterByAI)
 	}
 }
@@ -255,7 +253,8 @@ func (ch *CinyuHandlers) GetAllCharacters(c *gin.Context) {
 			novelID = uint(n)
 		}
 	}
-	rows, total, err := models.GetAllCharacters(ch.db, novelID, page, size)
+	keyword := strings.TrimSpace(c.Query("keyword"))
+	rows, total, err := models.GetAllCharacters(ch.db, novelID, keyword, page, size)
 	if err != nil {
 		response.Fail(c, "Failed to list characters", nil)
 		return

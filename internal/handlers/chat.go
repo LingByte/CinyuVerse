@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -25,7 +27,6 @@ const maxSystemPromptContextBytes = 28000
 // CreateChatSessionRequest 创建会话
 type CreateChatSessionRequest struct {
 	Title        string `json:"title"`
-	UserID       uint   `json:"userId" binding:"required"`
 	NovelID      uint   `json:"novelId"`
 	SystemPrompt string `json:"systemPrompt"`
 	Provider     string `json:"provider"`
@@ -45,7 +46,6 @@ type ChatSessionResponse struct {
 	ID            uint   `json:"id"`
 	Title         string `json:"title"`
 	Status        string `json:"status"`
-	UserID        uint   `json:"userId"`
 	NovelID       uint   `json:"novelId"`
 	Provider      string `json:"provider"`
 	Model         string `json:"model"`
@@ -93,7 +93,6 @@ type paginatedChatSessionsResponse struct {
 // ChatCompletionRequest POST /api/ai/chat — 统一对话入口：sessionId 为 0 时先建会话再生成回复；否则在已有会话中续聊。
 type ChatCompletionRequest struct {
 	SessionID    uint     `json:"sessionId"`
-	UserID       uint     `json:"userId" binding:"required"`
 	NovelID      uint     `json:"novelId"`
 	Title        string   `json:"title"`
 	SystemPrompt string   `json:"systemPrompt"`
@@ -114,12 +113,14 @@ type ChatCompletionResponse struct {
 
 func (ch *CinyuHandlers) registerChatRoutes(r *gin.RouterGroup) {
 	ai := r.Group("/ai")
+	ai.POST("/chat/stream", ch.ChatCompletionStream)
 	ai.POST("/chat", ch.ChatCompletion)
 	sessions := ai.Group("/sessions")
 	{
 		sessions.POST("", ch.CreateChatSession)
 		sessions.GET("", ch.ListChatSessions)
 		sessions.GET("/:id/messages", ch.ListChatMessages)
+		sessions.POST("/:id/chat/stream", ch.ChatTurnStream)
 		sessions.POST("/:id/chat", ch.ChatTurn)
 		sessions.GET("/:id", ch.GetChatSession)
 		sessions.DELETE("/:id", ch.DeleteChatSession)
@@ -134,7 +135,6 @@ func chatSessionToResponse(s *models.ChatSession) *ChatSessionResponse {
 		ID:            s.ID,
 		Title:         s.Title,
 		Status:        s.Status,
-		UserID:        s.UserID,
 		NovelID:       s.NovelID,
 		Provider:      s.Provider,
 		Model:         s.Model,
@@ -185,7 +185,6 @@ func (ch *CinyuHandlers) CreateChatSession(c *gin.Context) {
 	s := &models.ChatSession{
 		Title:        strings.TrimSpace(req.Title),
 		Status:       models.ChatSessionStatusActive,
-		UserID:       req.UserID,
 		NovelID:      req.NovelID,
 		Provider:     provider,
 		Model:        model,
@@ -199,9 +198,8 @@ func (ch *CinyuHandlers) CreateChatSession(c *gin.Context) {
 	response.Success(c, "Chat session created", chatSessionToResponse(s))
 }
 
-// ListChatSessions GET /api/ai/sessions?userId=&novelId=&page=&size=
+// ListChatSessions GET /api/ai/sessions?novelId=&page=&size= — 无 novelId 时列出全部会话。
 func (ch *CinyuHandlers) ListChatSessions(c *gin.Context) {
-	userIDStr := c.Query("userId")
 	novelIDStr := c.Query("novelId")
 	pageStr := c.DefaultQuery("page", "1")
 	sizeStr := c.DefaultQuery("size", "20")
@@ -226,16 +224,8 @@ func (ch *CinyuHandlers) ListChatSessions(c *gin.Context) {
 			return
 		}
 		rows, total, err = models.ListChatSessionsByNovelID(ch.db, uint(nid), page, size)
-	} else if userIDStr != "" {
-		uid, err := strconv.ParseUint(userIDStr, 10, 32)
-		if err != nil {
-			response.Fail(c, "Invalid userId", nil)
-			return
-		}
-		rows, total, err = models.ListChatSessionsByUserID(ch.db, uint(uid), page, size)
 	} else {
-		response.Fail(c, "Query userId or novelId is required", nil)
-		return
+		rows, total, err = models.ListAllChatSessions(ch.db, page, size)
 	}
 	if err != nil {
 		response.Fail(c, "Failed to list sessions", nil)
@@ -337,7 +327,6 @@ func (ch *CinyuHandlers) ChatCompletion(c *gin.Context) {
 		s := &models.ChatSession{
 			Title:        strings.TrimSpace(body.Title),
 			Status:       models.ChatSessionStatusActive,
-			UserID:       body.UserID,
 			NovelID:      body.NovelID,
 			Provider:     pickChatProvider(body.Provider),
 			Model:        pickChatModel(body.Model),
@@ -357,10 +346,6 @@ func (ch *CinyuHandlers) ChatCompletion(c *gin.Context) {
 				return
 			}
 			response.Fail(c, "Failed to load session", nil)
-			return
-		}
-		if s.UserID != body.UserID {
-			response.FailWithCode(c, 403, "Session does not belong to this user", nil)
 			return
 		}
 		if s.Status != models.ChatSessionStatusActive {
@@ -424,6 +409,301 @@ func (ch *CinyuHandlers) ChatTurn(c *gin.Context) {
 		return
 	}
 	response.Success(c, "OK", resp)
+}
+
+// ChatTurnStream POST /api/ai/sessions/:id/chat/stream — SSE：meta → delta → done（与 ChatTurn 同请求体）。
+func (ch *CinyuHandlers) ChatTurnStream(c *gin.Context) {
+	if strings.TrimSpace(config.GlobalConfig.Services.LLM.APIKey) == "" {
+		response.FailWithCode(c, 503, "LLM is not configured (LLM_API_KEY)", nil)
+		return
+	}
+	sid, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		response.Fail(c, "Invalid session id", nil)
+		return
+	}
+	var req ChatTurnRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, err.Error(), nil)
+		return
+	}
+
+	session, err := models.GetChatSessionByID(ch.db, uint(sid))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.FailWithCode(c, 404, "Session not found", nil)
+			return
+		}
+		response.Fail(c, "Failed to load session", nil)
+		return
+	}
+	if session.Status != models.ChatSessionStatusActive {
+		response.FailWithCode(c, 400, "Session is not active", nil)
+		return
+	}
+
+	ch.runChatTurnStream(c.Request.Context(), c, session, &req, false)
+}
+
+// ChatCompletionStream POST /api/ai/chat/stream — 与 ChatCompletion 相同 JSON 体，响应为 text/event-stream。
+func (ch *CinyuHandlers) ChatCompletionStream(c *gin.Context) {
+	if strings.TrimSpace(config.GlobalConfig.Services.LLM.APIKey) == "" {
+		response.FailWithCode(c, 503, "LLM is not configured (LLM_API_KEY)", nil)
+		return
+	}
+	var body ChatCompletionRequest
+	if err := c.ShouldBindJSON(&body); err != nil {
+		response.Fail(c, err.Error(), nil)
+		return
+	}
+
+	turn := ChatTurnRequest{
+		Message:     body.Message,
+		Model:       body.Model,
+		Temperature: body.Temperature,
+		MaxTokens:   body.MaxTokens,
+	}
+
+	var session *models.ChatSession
+	if body.SessionID == 0 {
+		s := &models.ChatSession{
+			Title:        strings.TrimSpace(body.Title),
+			Status:       models.ChatSessionStatusActive,
+			NovelID:      body.NovelID,
+			Provider:     pickChatProvider(body.Provider),
+			Model:        pickChatModel(body.Model),
+			SystemPrompt: body.SystemPrompt,
+		}
+		s.SetCreateInfo("system")
+		if err := models.CreateChatSession(ch.db, s); err != nil {
+			response.Fail(c, "Failed to create chat session", nil)
+			return
+		}
+		session = s
+	} else {
+		s, err := models.GetChatSessionByID(ch.db, body.SessionID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				response.FailWithCode(c, 404, "Session not found", nil)
+				return
+			}
+			response.Fail(c, "Failed to load session", nil)
+			return
+		}
+		if s.Status != models.ChatSessionStatusActive {
+			response.FailWithCode(c, 400, "Session is not active", nil)
+			return
+		}
+		session = s
+	}
+
+	ch.runChatTurnStream(c.Request.Context(), c, session, &turn, true)
+}
+
+func writeChatSSEJSON(c *gin.Context, v any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", b); err != nil {
+		return err
+	}
+	if f, ok := c.Writer.(http.Flusher); ok {
+		f.Flush()
+	}
+	return nil
+}
+
+func beginChatSSE(c *gin.Context) {
+	h := c.Writer.Header()
+	h.Set("Content-Type", "text/event-stream")
+	h.Set("Cache-Control", "no-cache")
+	h.Set("Connection", "keep-alive")
+	h.Set("X-Accel-Buffering", "no")
+	c.Status(http.StatusOK)
+}
+
+// runChatTurnStream 先落库 user 消息，再以 SSE 推送 delta，最后写入 assistant 并发送 done。
+// includeSessionInMeta 为 true 时首包 meta 携带 session（供 /ai/chat/stream 首次建会话）。
+func (ch *CinyuHandlers) runChatTurnStream(ctx context.Context, c *gin.Context, session *models.ChatSession, req *ChatTurnRequest, includeSessionInMeta bool) {
+	if session == nil || req == nil {
+		response.Fail(c, "invalid session or request", nil)
+		return
+	}
+	sid := session.ID
+
+	history, err := models.ListChatMessagesBySessionID(ch.db, sid)
+	if err != nil {
+		response.Fail(c, "failed to load history", nil)
+		return
+	}
+	if len(history) > maxPersistedHistoryMessages {
+		history = history[len(history)-maxPersistedHistoryMessages:]
+	}
+
+	modelName := strings.TrimSpace(req.Model)
+	if modelName == "" {
+		modelName = strings.TrimSpace(config.GlobalConfig.Services.LLM.Model)
+	}
+	if modelName == "" {
+		modelName = strings.TrimSpace(session.Model)
+	}
+
+	maxTok := req.MaxTokens
+	if maxTok <= 0 {
+		maxTok = 2048
+	}
+
+	log := logger.Lg
+	if log == nil {
+		log = zap.NewNop()
+	}
+	llmOpts := &llm.LLMOptions{
+		Provider:     strings.TrimSpace(session.Provider),
+		ApiKey:       strings.TrimSpace(config.GlobalConfig.Services.LLM.APIKey),
+		BaseURL:      strings.TrimSpace(config.GlobalConfig.Services.LLM.BaseURL),
+		SystemPrompt: buildLingoroutineContextSystemPrompt(session, history),
+		Logger:       log,
+	}
+
+	llmCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
+	defer cancel()
+
+	handler, err := llm.NewProviderHandler(llmCtx, session.Provider, llmOpts)
+	if err != nil {
+		response.Fail(c, fmt.Sprintf("llm handler: %v", err), nil)
+		return
+	}
+	handler.ResetMemory()
+
+	qopts := &llm.QueryOptions{
+		Model:     modelName,
+		MaxTokens: maxTok,
+	}
+	if req.Temperature != nil {
+		qopts.Temperature = *req.Temperature
+	}
+
+	seqUser, err := models.NextChatMessageSeq(ch.db, sid)
+	if err != nil {
+		response.Fail(c, "failed to allocate message seq", nil)
+		return
+	}
+
+	userRow := &models.ChatMessage{
+		SessionID: sid,
+		Seq:       seqUser,
+		Role:      models.ChatMessageRoleUser,
+		Content:   strings.TrimSpace(req.Message),
+	}
+	userRow.SetCreateInfo("system")
+	if err := ch.db.Create(userRow).Error; err != nil {
+		response.Fail(c, "failed to save user message", nil)
+		return
+	}
+
+	beginChatSSE(c)
+
+	meta := gin.H{
+		"type":        "meta",
+		"userMessage": chatMessageToResponse(userRow),
+	}
+	if includeSessionInMeta {
+		fresh, err := models.GetChatSessionByID(ch.db, sid)
+		if err != nil || fresh == nil {
+			fresh = session
+		}
+		meta["session"] = chatSessionToResponse(fresh)
+	}
+	if err := writeChatSSEJSON(c, meta); err != nil {
+		return
+	}
+
+	var full strings.Builder
+	qresp, err := handler.QueryStream(strings.TrimSpace(req.Message), qopts, func(segment string, isComplete bool) error {
+		if isComplete || segment == "" {
+			return nil
+		}
+		full.WriteString(segment)
+		return writeChatSSEJSON(c, gin.H{"type": "delta", "text": segment})
+	})
+	if err != nil {
+		_ = writeChatSSEJSON(c, gin.H{"type": "error", "msg": err.Error()})
+		return
+	}
+
+	assistantText := strings.TrimSpace(full.String())
+	if assistantText == "" && qresp != nil && len(qresp.Choices) > 0 {
+		assistantText = strings.TrimSpace(qresp.Choices[0].Content)
+	}
+	if assistantText == "" {
+		_ = writeChatSSEJSON(c, gin.H{"type": "error", "msg": "empty assistant output"})
+		return
+	}
+
+	reqID := llm.GenerateLingRequestID()
+	var promptTok, completionTok, totalTok int
+	if qresp != nil && qresp.Usage != nil {
+		promptTok = qresp.Usage.PromptTokens
+		completionTok = qresp.Usage.CompletionTokens
+		totalTok = qresp.Usage.TotalTokens
+	}
+	finishReason := "stop"
+	if qresp != nil && len(qresp.Choices) > 0 && strings.TrimSpace(qresp.Choices[0].FinishReason) != "" {
+		finishReason = qresp.Choices[0].FinishReason
+	}
+
+	asstRow := &models.ChatMessage{
+		SessionID:        sid,
+		Seq:              seqUser + 1,
+		Role:             models.ChatMessageRoleAssistant,
+		Content:          assistantText,
+		FinishReason:     finishReason,
+		RequestID:        reqID,
+		PromptTokens:     promptTok,
+		CompletionTokens: completionTok,
+		TotalTokens:      totalTok,
+	}
+	asstRow.SetCreateInfo("system")
+
+	tx := ch.db.Begin()
+	if err := tx.Create(asstRow).Error; err != nil {
+		tx.Rollback()
+		_ = writeChatSSEJSON(c, gin.H{"type": "error", "msg": "failed to save assistant message"})
+		return
+	}
+	updates := map[string]interface{}{
+		"last_message_at": time.Now().Unix(),
+		"updated_at":      time.Now(),
+		"model":           modelName,
+	}
+	if strings.TrimSpace(session.Title) == "" {
+		title := strings.TrimSpace(req.Message)
+		if len(title) > 80 {
+			title = title[:80] + "…"
+		}
+		updates["title"] = title
+	}
+	if err := tx.Model(&models.ChatSession{}).Where("id = ?", sid).Updates(updates).Error; err != nil {
+		tx.Rollback()
+		_ = writeChatSSEJSON(c, gin.H{"type": "error", "msg": "failed to update session"})
+		return
+	}
+	if err := tx.Commit().Error; err != nil {
+		_ = writeChatSSEJSON(c, gin.H{"type": "error", "msg": "failed to commit"})
+		return
+	}
+
+	usage := &chatUsageResponse{
+		PromptTokens:     promptTok,
+		CompletionTokens: completionTok,
+		TotalTokens:      totalTok,
+	}
+	_ = writeChatSSEJSON(c, gin.H{
+		"type":               "done",
+		"assistantMessage":   chatMessageToResponse(asstRow),
+		"usage":              usage,
+	})
 }
 
 // runChatTurn 执行一轮持久化对话：读历史 → 调 LLM → 写入 user/assistant 消息并更新会话。

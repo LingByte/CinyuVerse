@@ -1,0 +1,9 @@
+/* 保证整页 flex 链能拿到确定高度，避免主区域高度为 0「啥都不显示」 */
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+#app {
+  height: 100%;
+}

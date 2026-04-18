@@ -17,7 +17,6 @@ import (
 )
 
 type GenerateNovelByAIRequest struct {
-	UserID       uint                 `json:"userId" binding:"required"`
 	Message      string               `json:"message" binding:"required"`
 	Model        string               `json:"model"`
 	Temperature  *float32             `json:"temperature"`

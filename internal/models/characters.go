@@ -1,6 +1,10 @@
 package models
 
-import "gorm.io/gorm"
+import (
+	"strings"
+
+	"gorm.io/gorm"
+)
 
 const TABLE_CHARACTER = "ci_characters"
 
@@ -56,13 +60,17 @@ func RestoreCharacter(db *gorm.DB, id uint, operator string) error {
 	}).Error
 }
 
-func GetAllCharacters(db *gorm.DB, novelID uint, page, pageSize int) ([]*Character, int64, error) {
+func GetAllCharacters(db *gorm.DB, novelID uint, keyword string, page, pageSize int) ([]*Character, int64, error) {
 	var rows []*Character
 	var total int64
 	offset := (page - 1) * pageSize
 	q := db.Model(&Character{}).Where("is_deleted = ?", SoftDeleteStatusActive)
 	if novelID > 0 {
 		q = q.Where("novel_id = ?", novelID)
+	}
+	if kw := strings.TrimSpace(keyword); kw != "" {
+		like := "%" + kw + "%"
+		q = q.Where("name LIKE ?", like)
 	}
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err

@@ -73,6 +73,8 @@ func main() {
 			&models.StorylineNode{},
 			&models.StorylineEdge{},
 			&models.StorylineFact{},
+			&models.StyleProfile{},
+			&models.StyleSample{},
 			&models.ChatSession{},
 			&models.ChatMessage{},
 		},
@@ -111,7 +113,6 @@ func main() {
 	r.Use(gin.Recovery())
 	r.Use(middleware.InjectDB(db))
 	r.Use(middleware.CorsMiddleware())
-	r.StaticFile("/storyline-demo", "web/storyline-demo.html")
 	app := NewCinyuVerseApp(db)
 	app.RegisterRoutes(r)
 	addr := config.GlobalConfig.Server.Addr

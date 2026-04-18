@@ -92,7 +92,6 @@ type PaginatedVolumeResponse struct {
 }
 
 type GenerateVolumeByAIRequest struct {
-	UserID       uint            `json:"userId" binding:"required"`
 	Message      string          `json:"message" binding:"required"`
 	Model        string          `json:"model"`
 	Temperature  *float32        `json:"temperature"`
@@ -115,7 +114,6 @@ func (ch *CinyuHandlers) registerVolumeRoutes(r *gin.RouterGroup) {
 		g.GET("/:id", ch.GetVolume)
 		g.PUT("/:id", ch.UpdateVolume)
 		g.DELETE("/:id", ch.DeleteVolume)
-		g.POST("/:id/restore", ch.RestoreVolume)
 		g.POST("/generate", ch.GenerateVolumeByAI)
 	}
 }

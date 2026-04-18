@@ -81,7 +81,6 @@ func (ch *CinyuHandlers) registerNovelRoutes(r *gin.RouterGroup) {
 		novels.GET("/:id", ch.GetNovel)                     // 获取单个小说
 		novels.PUT("/:id", ch.UpdateNovel)                  // 更新小说
 		novels.DELETE("/:id", ch.DeleteNovel)               // 删除小说
-		novels.POST("/:id/restore", ch.RestoreNovel)        // 恢复小说
 		novels.GET("/genre/:genre", ch.GetNovelsByGenre)    // 根据类型获取小说
 		novels.GET("/status/:status", ch.GetNovelsByStatus) // 根据状态获取小说
 	}

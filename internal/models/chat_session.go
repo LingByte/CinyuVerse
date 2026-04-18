@@ -26,7 +26,6 @@ type ChatSession struct {
 	BaseModel
 	Title         string        `json:"title" gorm:"size:255;comment:会话标题或摘要"`
 	Status        string        `json:"status" gorm:"size:32;default:active;index;comment:会话状态"`
-	UserID        uint          `json:"userId" gorm:"index;comment:业务用户ID"`
 	NovelID       uint          `json:"novelId" gorm:"index;comment:关联小说ID(可选)"`
 	Provider      string        `json:"provider" gorm:"size:32;index;comment:LLM 提供方(openai/ollama/...)"`
 	Model         string        `json:"model" gorm:"size:128;comment:默认或最近使用的模型名"`
@@ -64,11 +63,11 @@ func DeleteChatSession(db *gorm.DB, id uint, operator string) error {
 	}).Error
 }
 
-func ListChatSessionsByUserID(db *gorm.DB, userID uint, page, pageSize int) ([]*ChatSession, int64, error) {
+func ListChatSessionsByNovelID(db *gorm.DB, novelID uint, page, pageSize int) ([]*ChatSession, int64, error) {
 	var rows []*ChatSession
 	var total int64
 	offset := (page - 1) * pageSize
-	q := db.Model(&ChatSession{}).Where("user_id = ? AND is_deleted = ?", userID, SoftDeleteStatusActive)
+	q := db.Model(&ChatSession{}).Where("novel_id = ? AND is_deleted = ?", novelID, SoftDeleteStatusActive)
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -76,11 +75,12 @@ func ListChatSessionsByUserID(db *gorm.DB, userID uint, page, pageSize int) ([]*
 	return rows, total, err
 }
 
-func ListChatSessionsByNovelID(db *gorm.DB, novelID uint, page, pageSize int) ([]*ChatSession, int64, error) {
+// ListAllChatSessions 分页列出全部未删除会话（不按用户/小说过滤）。
+func ListAllChatSessions(db *gorm.DB, page, pageSize int) ([]*ChatSession, int64, error) {
 	var rows []*ChatSession
 	var total int64
 	offset := (page - 1) * pageSize
-	q := db.Model(&ChatSession{}).Where("novel_id = ? AND is_deleted = ?", novelID, SoftDeleteStatusActive)
+	q := db.Model(&ChatSession{}).Where("is_deleted = ?", SoftDeleteStatusActive)
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
