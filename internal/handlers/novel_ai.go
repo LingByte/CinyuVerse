@@ -37,7 +37,6 @@ type GeneratedNovelDraft struct {
 	Tags           string `json:"tags"`
 	CoverImage     string `json:"coverImage"`
 	StyleGuide     string `json:"styleGuide"`
-	ReferenceNovel string `json:"referenceNovel"`
 }
 
 type GenerateNovelByAIResponse struct {
@@ -179,8 +178,6 @@ func applyLockedFields(draft *GeneratedNovelDraft, base *GeneratedNovelDraft, lo
 			draft.CoverImage = base.CoverImage
 		case "styleGuide":
 			draft.StyleGuide = base.StyleGuide
-		case "referenceNovel":
-			draft.ReferenceNovel = base.ReferenceNovel
 		}
 	}
 }
@@ -219,7 +216,6 @@ func parseGeneratedNovelDraft(raw string) (GeneratedNovelDraft, error) {
 		Tags:           anyToString(m["tags"]),
 		CoverImage:     anyToString(m["coverImage"]),
 		StyleGuide:     anyToString(m["styleGuide"]),
-		ReferenceNovel: anyToString(m["referenceNovel"]),
 	}
 	return draft, nil
 }
@@ -228,7 +224,7 @@ func buildGenerateNovelSystemPrompt() string {
 	return strings.TrimSpace(`
 你是小说策划助手。你必须只输出一个 JSON 对象，不能输出任何额外解释、Markdown、代码块标记。
 输出字段必须严格是以下键名（全部为 string）：
-title,status,genre,audience,theme,description,worldSetting,tags,coverImage,styleGuide,referenceNovel
+title,status,genre,audience,theme,description,worldSetting,tags,coverImage,styleGuide
 
 规则：
 1) title 必填，长度建议 <= 40 字。

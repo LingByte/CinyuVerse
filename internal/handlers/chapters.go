@@ -28,11 +28,11 @@ type CreateChapterRequest struct {
 	Summary         string `json:"summary"`
 	CharacterIDs    string `json:"characterIds"`
 	PlotPointIDs    string `json:"plotPointIds"`
-	PreviousSummary string `json:"previousSummary"`
-	Outline         string `json:"outline"`
-	RelatedNodeIDs  string `json:"relatedNodeIds"`
-	PromptMemo      string `json:"promptMemo"`
-	Status          string `json:"status"`
+	PreviousChapterID uint   `json:"previousChapterId"`
+	Outline           string `json:"outline"`
+	RelatedNodeIDs    string `json:"relatedNodeIds"`
+	PromptMemo        string `json:"promptMemo"`
+	Status            string `json:"status"`
 }
 
 type UpdateChapterRequest struct {
@@ -45,11 +45,11 @@ type UpdateChapterRequest struct {
 	Summary         string `json:"summary"`
 	CharacterIDs    string `json:"characterIds"`
 	PlotPointIDs    string `json:"plotPointIds"`
-	PreviousSummary string `json:"previousSummary"`
-	Outline         string `json:"outline"`
-	RelatedNodeIDs  string `json:"relatedNodeIds"`
-	PromptMemo      string `json:"promptMemo"`
-	Status          string `json:"status"`
+	PreviousChapterID uint   `json:"previousChapterId"`
+	Outline           string `json:"outline"`
+	RelatedNodeIDs    string `json:"relatedNodeIds"`
+	PromptMemo        string `json:"promptMemo"`
+	Status            string `json:"status"`
 }
 
 type ChapterResponse struct {
@@ -63,12 +63,12 @@ type ChapterResponse struct {
 	Summary         string `json:"summary"`
 	CharacterIDs    string `json:"characterIds"`
 	PlotPointIDs    string `json:"plotPointIds"`
-	PreviousSummary string `json:"previousSummary"`
-	Outline         string `json:"outline"`
-	RelatedNodeIDs  string `json:"relatedNodeIds"`
-	PromptMemo      string `json:"promptMemo"`
-	Status          string `json:"status"`
-	CreatedAt       string `json:"createdAt"`
+	PreviousChapterID uint   `json:"previousChapterId"`
+	Outline           string `json:"outline"`
+	RelatedNodeIDs    string `json:"relatedNodeIds"`
+	PromptMemo        string `json:"promptMemo"`
+	Status            string `json:"status"`
+	CreatedAt         string `json:"createdAt"`
 	UpdatedAt       string `json:"updatedAt"`
 }
 
@@ -122,8 +122,8 @@ func (ch *CinyuHandlers) CreateChapter(c *gin.Context) {
 		Summary:         req.Summary,
 		CharacterIDs:    req.CharacterIDs,
 		PlotPointIDs:    req.PlotPointIDs,
-		PreviousSummary: req.PreviousSummary,
-		Outline:         req.Outline,
+		PreviousChapterID: req.PreviousChapterID,
+		Outline:           req.Outline,
 		RelatedNodeIDs:  req.RelatedNodeIDs,
 		PromptMemo:      req.PromptMemo,
 		Status:          req.Status,
@@ -210,8 +210,8 @@ func (ch *CinyuHandlers) UpdateChapter(c *gin.Context) {
 	if req.PlotPointIDs != "" {
 		row.PlotPointIDs = req.PlotPointIDs
 	}
-	if req.PreviousSummary != "" {
-		row.PreviousSummary = req.PreviousSummary
+	if req.PreviousChapterID > 0 {
+		row.PreviousChapterID = req.PreviousChapterID
 	}
 	if req.Outline != "" {
 		row.Outline = req.Outline
@@ -317,6 +317,7 @@ func (ch *CinyuHandlers) GenerateChapterContentByAI(c *gin.Context) {
 		return
 	}
 	prompt := buildGenerateChapterPrompt(req)
+	prompt = ch.enrichChapterPromptWithPreviousChapter(prompt, req.BaseDraft)
 	llmOpts := &llm.LLMOptions{
 		Provider:     pickChatProvider(""),
 		ApiKey:       strings.TrimSpace(config.GlobalConfig.Services.LLM.APIKey),
@@ -410,11 +411,47 @@ func buildGenerateChapterPrompt(req GenerateChapterByAIRequest) string {
 	return b.String()
 }
 
+// enrichChapterPromptWithPreviousChapter 查找 previousChapterId 对应的章节，将其摘要注入 prompt。
+func (ch *CinyuHandlers) enrichChapterPromptWithPreviousChapter(prompt string, baseDraft *ChapterResponse) string {
+	if baseDraft == nil || baseDraft.PreviousChapterID == 0 {
+		return prompt
+	}
+	prev, err := models.GetChapterByID(ch.db, baseDraft.PreviousChapterID)
+	if err != nil || prev == nil {
+		return prompt
+	}
+	var b strings.Builder
+	b.WriteString(prompt)
+	b.WriteString("\n前序章节信息（ID=")
+	b.WriteString(strconv.FormatUint(uint64(prev.ID), 10))
+	b.WriteString("，标题=")
+	b.WriteString(prev.Title)
+	b.WriteString("）：\n")
+	if strings.TrimSpace(prev.Summary) != "" {
+		b.WriteString("摘要：")
+		b.WriteString(prev.Summary)
+		b.WriteString("\n")
+	}
+	if strings.TrimSpace(prev.Content) != "" {
+		runes := []rune(prev.Content)
+		tail := runes
+		if len(runes) > 800 {
+			tail = runes[len(runes)-800:]
+			b.WriteString("正文末尾片段：")
+		} else {
+			b.WriteString("正文：")
+		}
+		b.WriteString(string(tail))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
 func buildGenerateChapterSystemPrompt() string {
 	return strings.TrimSpace(`
 你是小说章节写作助手。只输出一个 JSON 对象，不要 markdown 或解释。
 输出字段严格如下：
-id,novelId,volumeId,title,content,orderNo,wordCount,summary,characterIds,plotPointIds,previousSummary,outline,relatedNodeIds,promptMemo,status
+id,novelId,volumeId,title,content,orderNo,wordCount,summary,characterIds,plotPointIds,previousChapterId,outline,relatedNodeIds,promptMemo,status
 规则：
 1) title 与 content 必填。
 2) content 必须是可直接发布的正文，不要“以下是正文”这类说明。
@@ -459,7 +496,7 @@ func parseChapterDraft(raw string) (ChapterResponse, error) {
 		Summary:         anyToString(m["summary"]),
 		CharacterIDs:    anyToString(m["characterIds"]),
 		PlotPointIDs:    anyToString(m["plotPointIds"]),
-		PreviousSummary: anyToString(m["previousSummary"]),
+		PreviousChapterID: anyToUint(m["previousChapterId"]),
 		Outline:         anyToString(m["outline"]),
 		RelatedNodeIDs:  anyToString(m["relatedNodeIds"]),
 		PromptMemo:      anyToString(m["promptMemo"]),
@@ -496,8 +533,8 @@ func applyLockedChapterFields(draft *ChapterResponse, base *ChapterResponse, loc
 			draft.CharacterIDs = base.CharacterIDs
 		case "plotPointIds":
 			draft.PlotPointIDs = base.PlotPointIDs
-		case "previousSummary":
-			draft.PreviousSummary = base.PreviousSummary
+		case "previousChapterId":
+			draft.PreviousChapterID = base.PreviousChapterID
 		case "outline":
 			draft.Outline = base.Outline
 		case "relatedNodeIds":
@@ -522,8 +559,8 @@ func chapterToResponse(row *models.Chapter) *ChapterResponse {
 		Summary:         row.Summary,
 		CharacterIDs:    row.CharacterIDs,
 		PlotPointIDs:    row.PlotPointIDs,
-		PreviousSummary: row.PreviousSummary,
-		Outline:         row.Outline,
+		PreviousChapterID: row.PreviousChapterID,
+		Outline:           row.Outline,
 		RelatedNodeIDs:  row.RelatedNodeIDs,
 		PromptMemo:      row.PromptMemo,
 		Status:          row.Status,

@@ -16,7 +16,7 @@ type Chapter struct {
 	Summary         string `json:"summary" gorm:"type:text;comment:章节摘要"`
 	CharacterIDs    string `json:"characterIds" gorm:"type:text;comment:参与角色ID列表(逗号分隔)"`
 	PlotPointIDs    string `json:"plotPointIds" gorm:"type:text;comment:涉及情节ID列表(逗号分隔)"`
-	PreviousSummary string `json:"previousSummary" gorm:"type:text;comment:前文摘要"`
+	PreviousChapterID uint   `json:"previousChapterId" gorm:"index;default:0;comment:前序章节ID"`
 	Outline         string `json:"outline" gorm:"type:text;comment:章节大纲"`
 	RelatedNodeIDs  string `json:"relatedNodeIds" gorm:"type:text;comment:关联故事线节点ID(逗号分隔)"`
 	PromptMemo      string `json:"promptMemo" gorm:"type:text;comment:生成提示词备注"`

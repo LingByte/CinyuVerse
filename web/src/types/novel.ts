@@ -12,7 +12,6 @@ export interface Novel {
   tags: string
   coverImage: string
   styleGuide: string
-  referenceNovel: string
   createdAt: string
   updatedAt: string
   createBy: string
@@ -38,7 +37,6 @@ export interface CreateNovelBody {
   tags?: string
   coverImage?: string
   styleGuide?: string
-  referenceNovel?: string
 }
 
 /** PUT /novels/:id — 与 UpdateNovelRequest 一致，空串不传则后端不更新该字段 */
@@ -53,7 +51,6 @@ export interface UpdateNovelBody {
   tags?: string
   coverImage?: string
   styleGuide?: string
-  referenceNovel?: string
 }
 
 export interface GeneratedNovelDraft {
@@ -67,7 +64,6 @@ export interface GeneratedNovelDraft {
   tags: string
   coverImage: string
   styleGuide: string
-  referenceNovel: string
 }
 
 export interface GenerateNovelByAIResponse {

@@ -10,6 +10,7 @@ import { listChapters } from '@/api/chapters'
 import type { Novel } from '@/types/novel'
 import type { Volume, GenerateVolumeBody } from '@/types/volume'
 import type { Chapter } from '@/types/chapter'
+import type { TableColumnData, TableData } from '@arco-design/web-vue/es/table/interface'
 
 const route = useRoute()
 const router = useRouter()
@@ -29,6 +30,20 @@ type ChapterPageState = {
   loading: boolean
 }
 const chapterStateByVolume = ref<Record<number, ChapterPageState>>({})
+
+const chapterColumns: TableColumnData[] = [
+  { title: '章节', dataIndex: 'title' },
+  { title: '序号', dataIndex: 'orderNo', width: 80 },
+  { title: '状态', dataIndex: 'status', width: 120 },
+  { title: '摘要', dataIndex: 'summary', ellipsis: true, tooltip: true },
+]
+
+function goEditChapter(chapter: Chapter) {
+  router.push({
+    name: 'chapter-edit',
+    params: { id: String(novelId.value), volumeId: String(chapter.volumeId), chapterId: String(chapter.id) },
+  })
+}
 
 const volumeVisible = ref(false)
 const volumeMode = ref<'create' | 'edit'>('create')
@@ -361,16 +376,14 @@ function goStorylines() {
             <a-spin :loading="ensureChapterState(v.id).loading" style="width: 100%">
               <a-table
                 :data="ensureChapterState(v.id).items"
+                :columns="chapterColumns"
                 :pagination="false"
                 :bordered="false"
                 row-key="id"
                 size="small"
-              >
-                <a-table-column title="章节" data-index="title" />
-                <a-table-column title="序号" data-index="orderNo" :width="80" />
-                <a-table-column title="状态" data-index="status" :width="90" />
-                <a-table-column title="摘要" data-index="summary" :ellipsis="true" tooltip />
-              </a-table>
+                class="novel-volumes__chapter-table"
+                @row-click="(record: TableData) => goEditChapter(record as unknown as Chapter)"
+              />
               <div class="novel-volumes__chapters-pager">
                 <a-pagination
                   :total="ensureChapterState(v.id).total"
@@ -507,5 +520,8 @@ function goStorylines() {
   width: 100%;
   display: flex;
   justify-content: center;
+}
+.novel-volumes__chapter-table :deep(tbody tr) {
+  cursor: pointer;
 }
 </style>

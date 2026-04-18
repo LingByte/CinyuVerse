@@ -27,3 +27,38 @@ export interface PaginatedStyleItems<T> {
   page: number
   size: number
 }
+
+/** LLM 深度分析结果 */
+export interface StyleAnalysis {
+  narrativeVoice: string
+  proseRhythm: string
+  vocabularyLevel: string
+  rhetoricTendency: string
+  dialogueStyle: string
+  emotionalPalette: string
+  structuralHabits: string
+  imageryDomains: string[]
+  signatureTraits: string[]
+  stylePrompt: string
+  summary: string
+}
+
+/** 统计指标 */
+export interface StyleStats {
+  sampleCount: number
+  totalChars: number
+  avgSentenceChars: number
+  dialogueRatio: number
+  firstPersonRatio: number
+  tone: string
+  topKeywords: string[]
+  paragraphAvgLen: number
+  exclamRatio: number
+  questionRatio: number
+}
+
+/** 完整的学习结果 spec = { stats, analysis } */
+export interface StyleLearnedSpec {
+  stats: StyleStats
+  analysis: StyleAnalysis
+}

@@ -24,7 +24,6 @@ type CreateNovelRequest struct {
 	Tags           string `json:"tags"`
 	CoverImage     string `json:"coverImage"`
 	StyleGuide     string `json:"styleGuide"`
-	ReferenceNovel string `json:"referenceNovel"`
 }
 
 // UpdateNovelRequest 更新小说请求结构
@@ -39,7 +38,6 @@ type UpdateNovelRequest struct {
 	Tags           string `json:"tags"`
 	CoverImage     string `json:"coverImage"`
 	StyleGuide     string `json:"styleGuide"`
-	ReferenceNovel string `json:"referenceNovel"`
 }
 
 // NovelResponse 小说响应结构
@@ -55,7 +53,6 @@ type NovelResponse struct {
 	Tags           string `json:"tags"`
 	CoverImage     string `json:"coverImage"`
 	StyleGuide     string `json:"styleGuide"`
-	ReferenceNovel string `json:"referenceNovel"`
 	CreatedAt      string `json:"createdAt"`
 	UpdatedAt      string `json:"updatedAt"`
 	CreateBy       string `json:"createBy"`
@@ -105,7 +102,6 @@ func (ch *CinyuHandlers) CreateNovel(c *gin.Context) {
 		Tags:           req.Tags,
 		CoverImage:     req.CoverImage,
 		StyleGuide:     req.StyleGuide,
-		ReferenceNovel: req.ReferenceNovel,
 	}
 
 	// 设置创建信息
@@ -196,9 +192,6 @@ func (ch *CinyuHandlers) UpdateNovel(c *gin.Context) {
 	}
 	if req.StyleGuide != "" {
 		novel.StyleGuide = req.StyleGuide
-	}
-	if req.ReferenceNovel != "" {
-		novel.ReferenceNovel = req.ReferenceNovel
 	}
 
 	// 设置更新信息
@@ -364,7 +357,6 @@ func novelToResponse(novel *models.Novel) *NovelResponse {
 		Tags:           novel.Tags,
 		CoverImage:     novel.CoverImage,
 		StyleGuide:     novel.StyleGuide,
-		ReferenceNovel: novel.ReferenceNovel,
 		CreatedAt:      novel.GetCreatedAtString(),
 		UpdatedAt:      novel.GetUpdatedAtString(),
 		CreateBy:       novel.CreateBy,

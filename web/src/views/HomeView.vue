@@ -44,7 +44,6 @@ const form = reactive({
   tags: '',
   coverImage: '',
   styleGuide: '',
-  referenceNovel: '',
 })
 
 const aiMessage = ref('请生成一部长篇小说策划草案，给出标题、题材、受众、主题、简介、世界观与标签。')
@@ -63,7 +62,6 @@ const AI_LOCKABLE_FIELDS = [
   { label: '世界观', value: 'worldSetting' },
   { label: '标签', value: 'tags' },
   { label: '风格指南', value: 'styleGuide' },
-  { label: '参考内容', value: 'referenceNovel' },
 ]
 
 const COVER_PLACEHOLDER =
@@ -80,7 +78,6 @@ function resetForm() {
   form.tags = ''
   form.coverImage = ''
   form.styleGuide = ''
-  form.referenceNovel = ''
 }
 
 function fillFromNovel(n: Novel) {
@@ -94,7 +91,6 @@ function fillFromNovel(n: Novel) {
   form.tags = n.tags || ''
   form.coverImage = n.coverImage || ''
   form.styleGuide = n.styleGuide || ''
-  form.referenceNovel = n.referenceNovel || ''
 }
 
 function fillFromDraft(d: GeneratedNovelDraft) {
@@ -107,7 +103,6 @@ function fillFromDraft(d: GeneratedNovelDraft) {
   form.worldSetting = d.worldSetting || ''
   form.tags = d.tags || ''
   form.styleGuide = d.styleGuide || ''
-  form.referenceNovel = d.referenceNovel || ''
 }
 
 function currentFormToDraft(): GeneratedNovelDraft {
@@ -122,7 +117,6 @@ function currentFormToDraft(): GeneratedNovelDraft {
     tags: form.tags,
     coverImage: '',
     styleGuide: form.styleGuide,
-    referenceNovel: form.referenceNovel,
   }
 }
 
@@ -138,7 +132,6 @@ function formToCreateBody() {
     tags: form.tags.trim() || undefined,
     coverImage: form.coverImage.trim() || undefined,
     styleGuide: form.styleGuide.trim() || undefined,
-    referenceNovel: form.referenceNovel.trim() || undefined,
   }
 }
 
@@ -154,7 +147,6 @@ function formToUpdateBody() {
     tags: form.tags.trim(),
     coverImage: form.coverImage.trim(),
     styleGuide: form.styleGuide.trim(),
-    referenceNovel: form.referenceNovel.trim(),
   }
 }
 
@@ -521,9 +513,6 @@ async function onCoverFileChange(ev: Event) {
         </a-form-item>
         <a-form-item label="写作风格指南">
           <a-textarea v-model="form.styleGuide" :auto-size="{ minRows: 2, maxRows: 6 }" allow-clear />
-        </a-form-item>
-        <a-form-item label="参考内容">
-          <a-textarea v-model="form.referenceNovel" :auto-size="{ minRows: 2, maxRows: 6 }" allow-clear />
         </a-form-item>
       </a-form>
     </a-drawer>

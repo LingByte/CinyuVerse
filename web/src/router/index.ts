@@ -7,6 +7,7 @@ import NovelCharactersView from '@/views/NovelCharactersView.vue'
 import NovelStorylinesView from '@/views/NovelStorylinesView.vue'
 import StyleLearningView from '@/views/StyleLearningView.vue'
 import ChapterCreateView from '@/views/ChapterCreateView.vue'
+import ChapterEditView from '@/views/ChapterEditView.vue'
 import InspirationChatView from '@/views/inspiration/InspirationChatView.vue'
 import InspirationGateView from '@/views/inspiration/InspirationGateView.vue'
 
@@ -80,6 +81,20 @@ const router = createRouter({
             const nid = Array.isArray(to.params.id) ? to.params.id[0] : to.params.id
             const vid = Array.isArray(to.params.volumeId) ? to.params.volumeId[0] : to.params.volumeId
             if (!nid || !vid || !/^\d+$/.test(String(nid)) || !/^\d+$/.test(String(vid))) {
+              return { name: 'home' }
+            }
+          },
+        },
+        {
+          path: 'novels/:id/volumes/:volumeId/chapters/:chapterId',
+          name: 'chapter-edit',
+          component: ChapterEditView,
+          meta: { title: '编辑章节' },
+          beforeEnter: (to) => {
+            const nid = Array.isArray(to.params.id) ? to.params.id[0] : to.params.id
+            const vid = Array.isArray(to.params.volumeId) ? to.params.volumeId[0] : to.params.volumeId
+            const cid = Array.isArray(to.params.chapterId) ? to.params.chapterId[0] : to.params.chapterId
+            if (!nid || !vid || !cid || !/^\d+$/.test(String(nid)) || !/^\d+$/.test(String(vid)) || !/^\d+$/.test(String(cid))) {
               return { name: 'home' }
             }
           },

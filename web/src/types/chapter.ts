@@ -9,7 +9,7 @@ export interface Chapter {
   summary: string
   characterIds: string
   plotPointIds: string
-  previousSummary: string
+  previousChapterId: number
   outline: string
   relatedNodeIds: string
   promptMemo: string
@@ -35,7 +35,22 @@ export interface CreateChapterBody {
   summary?: string
   characterIds?: string
   plotPointIds?: string
-  previousSummary?: string
+  previousChapterId?: number
+  outline?: string
+  relatedNodeIds?: string
+  promptMemo?: string
+  status?: string
+}
+
+export interface UpdateChapterBody {
+  title?: string
+  content?: string
+  orderNo?: number
+  wordCount?: number
+  summary?: string
+  characterIds?: string
+  plotPointIds?: string
+  previousChapterId?: number
   outline?: string
   relatedNodeIds?: string
   promptMemo?: string

@@ -19,7 +19,6 @@ type Novel struct {
 	Tags           string `json:"tags" gorm:"size:500;comment:标签(逗号分隔)"`
 	CoverImage     string `json:"coverImage" gorm:"size:500;comment:封面图片URL"`
 	StyleGuide     string `json:"styleGuide" gorm:"type:text;comment:写作风格指南"`
-	ReferenceNovel string `json:"referenceNovel" gorm:"type:text;comment:参考小说内容"`
 }
 
 func (Novel) TableName() string {

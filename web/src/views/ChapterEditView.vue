@@ -9,7 +9,7 @@ import StorylineNodeMultiSelect from '@/components/select/StorylineNodeMultiSele
 import { getNovel } from '@/api/novels'
 import { listVolumes } from '@/api/volumes'
 import { listStorylines } from '@/api/storylines'
-import { createChapter, generateChapterContentByAI, listChapters } from '@/api/chapters'
+import { getChapter, updateChapter, generateChapterContentByAI, listChapters } from '@/api/chapters'
 import type { Novel } from '@/types/novel'
 import type { Volume } from '@/types/volume'
 import type { Storyline } from '@/types/storyline'
@@ -19,9 +19,11 @@ const route = useRoute()
 const router = useRouter()
 const novelId = computed(() => Number(route.params.id))
 const volumeId = computed(() => Number(route.params.volumeId))
+const chapterId = computed(() => Number(route.params.chapterId))
 
 const novel = ref<Novel | null>(null)
 const volume = ref<Volume | null>(null)
+const chapter = ref<Chapter | null>(null)
 const storylines = ref<Storyline[]>([])
 const siblingChapters = ref<Chapter[]>([])
 const selectedStorylineId = ref<number | undefined>(undefined)
@@ -45,7 +47,7 @@ const form = reactive({
 
 const PLOT_NODE_TYPES = 'event,twist,clue,payoff'
 
-const aiMessage = ref('请生成本卷下一章，要求情节推进明显，文风与已有设定一致。')
+const aiMessage = ref('请重写本章节，保持情节连贯，文风一致。')
 const aiFeedback = ref('')
 const aiModel = ref('')
 const aiMaxTokens = ref<number | undefined>(undefined)
@@ -60,6 +62,9 @@ const AI_LOCK_FIELDS = [
 
 function currentDraft(): Partial<Chapter> {
   return {
+    id: chapterId.value,
+    novelId: novelId.value,
+    volumeId: volumeId.value,
     title: form.title,
     content: form.content,
     orderNo: form.orderNo,
@@ -98,26 +103,24 @@ watch(selectedStorylineId, (id, prev) => {
 async function loadContext() {
   loading.value = true
   try {
-    const [n, vres, sl] = await Promise.all([
+    const [n, vres, sl, ch] = await Promise.all([
       getNovel(novelId.value),
       listVolumes({ novelId: novelId.value, page: 1, size: 200 }),
       listStorylines({ novelId: novelId.value, page: 1, size: 50 }),
+      getChapter(chapterId.value),
     ])
     novel.value = n
     volume.value = vres.volumes.find((v) => v.id === volumeId.value) || null
     storylines.value = sl.items || []
+    chapter.value = ch
     if (storylines.value.length && selectedStorylineId.value == null) {
       selectedStorylineId.value = storylines.value[0]!.id
     }
-    if (!volume.value) {
-      Message.error('未找到对应卷')
-      await router.replace({ name: 'novel-detail', params: { id: String(novelId.value) } })
-      return
-    }
-    form.orderNo = (volume.value.chapterStart || 0) + 1
+    applyDraft(ch)
+
     // load sibling chapters for previousChapterId selector
     const chRes = await listChapters({ novelId: novelId.value, volumeId: volumeId.value, page: 1, size: 200 })
-    siblingChapters.value = chRes.chapters
+    siblingChapters.value = chRes.chapters.filter((c) => c.id !== chapterId.value)
   } catch (e) {
     Message.error(String((e as Error)?.message || e))
   } finally {
@@ -126,7 +129,7 @@ async function loadContext() {
 }
 
 onMounted(async () => {
-  if (!Number.isFinite(novelId.value) || !Number.isFinite(volumeId.value) || novelId.value <= 0 || volumeId.value <= 0) {
+  if (!Number.isFinite(novelId.value) || !Number.isFinite(volumeId.value) || !Number.isFinite(chapterId.value) || novelId.value <= 0 || volumeId.value <= 0 || chapterId.value <= 0) {
     Message.error('无效的路由参数')
     return
   }
@@ -171,11 +174,7 @@ async function runChapterAI() {
       maxTokens: aiMaxTokens.value,
       feedback: aiFeedback.value.trim() || undefined,
       lockedFields: aiLockedFields.value,
-      baseDraft: {
-        ...currentDraft(),
-        novelId: novelId.value,
-        volumeId: volumeId.value,
-      },
+      baseDraft: currentDraft(),
     }
     const { draft } = await generateChapterContentByAI(body)
     applyDraft(draft)
@@ -194,9 +193,7 @@ async function saveChapter() {
   }
   saving.value = true
   try {
-    await createChapter({
-      novelId: novelId.value,
-      volumeId: volumeId.value,
+    await updateChapter(chapterId.value, {
       title: form.title.trim(),
       content: form.content,
       orderNo: form.orderNo > 0 ? form.orderNo : 1,
@@ -209,7 +206,7 @@ async function saveChapter() {
       relatedNodeIds: form.relatedNodeIds || undefined,
       promptMemo: form.promptMemo || undefined,
     })
-    Message.success('章节已创建')
+    Message.success('章节已保存')
     await router.replace({ name: 'novel-detail', params: { id: String(novelId.value) } })
   } catch (e) {
     Message.error(String((e as Error)?.message || e))
@@ -222,20 +219,20 @@ const storylineIdForNodes = computed(() => selectedStorylineId.value ?? 0)
 </script>
 
 <template>
-  <div class="chapter-create" v-if="novel && volume">
+  <div class="chapter-edit" v-if="novel && volume && chapter">
     <WorkspaceBreadcrumb
       :trail="[
         { label: '小说管理', to: { name: 'home' } },
         { label: novel.title || '卷管理', to: { name: 'novel-detail', params: { id: String(novelId) } } },
-        { label: '新增章节' },
+        { label: chapter.title || '编辑章节' },
       ]"
     />
 
-    <a-card :bordered="false" class="chapter-create__card">
-      <template #title>新增章节（{{ volume.title || '未命名卷' }}）</template>
+    <a-card :bordered="false" class="chapter-edit__card">
+      <template #title>编辑章节（{{ volume.title || '未命名卷' }}）</template>
 
-      <a-form :model="form" layout="vertical" class="chapter-create__form">
-        <a-card :bordered="false" class="chapter-create__ai-card">
+      <a-form :model="form" layout="vertical" class="chapter-edit__form">
+        <a-card :bordered="false" class="chapter-edit__ai-card">
           <template #title>AI 章节草稿</template>
           <a-form-item label="需求说明" required>
             <a-textarea v-model="aiMessage" :auto-size="{ minRows: 3, maxRows: 8 }" />
@@ -294,6 +291,18 @@ const storylineIdForNodes = computed(() => selectedStorylineId.value ?? 0)
           </a-col>
         </a-row>
 
+        <a-form-item label="关联前序章节">
+          <a-select
+            v-model="form.previousChapterId"
+            allow-clear
+            placeholder="选择前一章节，AI 生成时自动注入其摘要与正文末尾"
+          >
+            <a-option v-for="c in siblingChapters" :key="c.id" :value="c.id">
+              第{{ c.orderNo }}章 · {{ c.title }}
+            </a-option>
+          </a-select>
+        </a-form-item>
+
         <a-alert v-if="!storylines.length" type="warning" style="margin-bottom: 12px">
           当前小说暂无故事线数据，情节点与关联节点选择不可用；可在故事线模块创建后再来关联。
         </a-alert>
@@ -321,17 +330,6 @@ const storylineIdForNodes = computed(() => selectedStorylineId.value ?? 0)
         <a-form-item label="摘要">
           <a-textarea v-model="form.summary" :auto-size="{ minRows: 2, maxRows: 6 }" />
         </a-form-item>
-        <a-form-item label="关联前序章节">
-          <a-select
-            v-model="form.previousChapterId"
-            allow-clear
-            placeholder="选择前一章节，AI 生成时自动注入其摘要与正文末尾"
-          >
-            <a-option v-for="c in siblingChapters" :key="c.id" :value="c.id">
-              第{{ c.orderNo }}章 · {{ c.title }}
-            </a-option>
-          </a-select>
-        </a-form-item>
         <a-form-item label="章节大纲">
           <a-textarea v-model="form.outline" :auto-size="{ minRows: 2, maxRows: 8 }" />
         </a-form-item>
@@ -339,7 +337,7 @@ const storylineIdForNodes = computed(() => selectedStorylineId.value ?? 0)
           <a-textarea v-model="form.promptMemo" :auto-size="{ minRows: 2, maxRows: 6 }" />
         </a-form-item>
 
-        <a-form-item label="章节正文" class="chapter-create__content-field">
+        <a-form-item label="章节正文" class="chapter-edit__content-field">
           <NovelTextEditor v-model="form.content" :min-rows="16" :max-rows="48" />
         </a-form-item>
 
@@ -350,34 +348,34 @@ const storylineIdForNodes = computed(() => selectedStorylineId.value ?? 0)
       </a-form>
     </a-card>
   </div>
-  <a-spin v-else :loading="loading" class="chapter-create__loading" />
+  <a-spin v-else :loading="loading" class="chapter-edit__loading" />
 </template>
 
 <style scoped>
-.chapter-create {
+.chapter-edit {
   padding: 12px 24px 24px;
   max-width: none;
   margin: 0 auto;
   width: 100%;
   box-sizing: border-box;
 }
-.chapter-create__card {
+.chapter-edit__card {
   border-radius: 8px;
   max-width: none;
 }
-.chapter-create__ai-card {
+.chapter-edit__ai-card {
   margin-bottom: 14px;
   background: var(--color-fill-1);
 }
-.chapter-create__loading {
+.chapter-edit__loading {
   margin-top: 80px;
   display: flex;
   justify-content: center;
 }
-.chapter-create__form :deep(.arco-form-item-content) {
+.chapter-edit__form :deep(.arco-form-item-content) {
   max-width: none;
 }
-.chapter-create__content-field :deep(.arco-form-item-content) {
+.chapter-edit__content-field :deep(.arco-form-item-content) {
   display: block;
   width: 100%;
 }
