@@ -9,11 +9,11 @@ import StorylineNodeMultiSelect from '@/components/select/StorylineNodeMultiSele
 import { getNovel } from '@/api/novels'
 import { listVolumes } from '@/api/volumes'
 import { listStorylines } from '@/api/storylines'
-import { createChapter, generateChapterContentByAI, listChapters } from '@/api/chapters'
+import { createChapter, generateChapterSummary, generateChapterOutline, generateChapterBody, listChapters, predictPlot } from '@/api/chapters'
 import type { Novel } from '@/types/novel'
 import type { Volume } from '@/types/volume'
 import type { Storyline } from '@/types/storyline'
-import type { Chapter, GenerateChapterBody } from '@/types/chapter'
+import type { Chapter, GenerateChapterFieldBody, PlotPrediction } from '@/types/chapter'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,7 +27,15 @@ const siblingChapters = ref<Chapter[]>([])
 const selectedStorylineId = ref<number | undefined>(undefined)
 const loading = ref(false)
 const saving = ref(false)
-const aiLoading = ref(false)
+const aiSummaryLoading = ref(false)
+const aiOutlineLoading = ref(false)
+const aiBodyLoading = ref(false)
+const aiSummaryFeedback = ref('')
+const aiOutlineFeedback = ref('')
+const aiBodyFeedback = ref('')
+const predictLoading = ref(false)
+const predictions = ref<PlotPrediction[]>([])
+const predictDirection = ref('')
 
 const form = reactive({
   title: '',
@@ -37,7 +45,7 @@ const form = reactive({
   status: 'draft',
   characterIds: '',
   plotPointIds: '',
-  previousChapterId: undefined as number | undefined,
+  previousChapterIds: [] as number[],
   outline: '',
   relatedNodeIds: '',
   promptMemo: '',
@@ -45,18 +53,17 @@ const form = reactive({
 
 const PLOT_NODE_TYPES = 'event,twist,clue,payoff'
 
-const aiMessage = ref('请生成本卷下一章，要求情节推进明显，文风与已有设定一致。')
-const aiFeedback = ref('')
-const aiModel = ref('')
-const aiMaxTokens = ref<number | undefined>(undefined)
-const aiLockedFields = ref<string[]>([])
-const AI_LOCK_FIELDS = [
-  { label: '标题', value: 'title' },
-  { label: '正文', value: 'content' },
-  { label: '摘要', value: 'summary' },
-  { label: '大纲', value: 'outline' },
-  { label: '状态', value: 'status' },
-]
+function buildFieldBody(feedback: string): GenerateChapterFieldBody {
+  return {
+    novelId: novelId.value,
+    volumeId: volumeId.value,
+    previousChapterIds: form.previousChapterIds.length ? form.previousChapterIds.join(',') : undefined,
+    previousChapterId: form.previousChapterIds[0] || undefined,
+    characterIds: form.characterIds || undefined,
+    feedback: feedback.trim() || undefined,
+    baseDraft: currentDraft(),
+  }
+}
 
 function currentDraft(): Partial<Chapter> {
   return {
@@ -66,26 +73,13 @@ function currentDraft(): Partial<Chapter> {
     summary: form.summary,
     characterIds: form.characterIds,
     plotPointIds: form.plotPointIds,
-    previousChapterId: form.previousChapterId,
+    previousChapterIds: form.previousChapterIds.length ? form.previousChapterIds.join(',') : undefined,
+    previousChapterId: form.previousChapterIds[0] || 0,
     outline: form.outline,
     relatedNodeIds: form.relatedNodeIds,
     promptMemo: form.promptMemo,
     status: form.status,
   }
-}
-
-function applyDraft(draft: Partial<Chapter>) {
-  form.title = draft.title || ''
-  form.content = draft.content || ''
-  form.orderNo = draft.orderNo && draft.orderNo > 0 ? draft.orderNo : 1
-  form.summary = draft.summary || ''
-  form.characterIds = draft.characterIds || ''
-  form.plotPointIds = draft.plotPointIds || ''
-  form.previousChapterId = draft.previousChapterId || undefined
-  form.outline = draft.outline || ''
-  form.relatedNodeIds = draft.relatedNodeIds || ''
-  form.promptMemo = draft.promptMemo || ''
-  form.status = draft.status || 'draft'
 }
 
 watch(selectedStorylineId, (id, prev) => {
@@ -115,7 +109,7 @@ async function loadContext() {
       return
     }
     form.orderNo = (volume.value.chapterStart || 0) + 1
-    // load sibling chapters for previousChapterId selector
+    // load sibling chapters for previous-chapter multi-select
     const chRes = await listChapters({ novelId: novelId.value, volumeId: volumeId.value, page: 1, size: 200 })
     siblingChapters.value = chRes.chapters
   } catch (e) {
@@ -133,57 +127,69 @@ onMounted(async () => {
   await loadContext()
 })
 
-async function runChapterAI() {
-  const msg = aiMessage.value.trim()
-  if (!msg) {
-    Message.warning('请填写 AI 需求')
-    return
-  }
-  aiLoading.value = true
+async function runGenerateSummary() {
+  aiSummaryLoading.value = true
   try {
-    const novelCtx = novel.value
-      ? [
-          `小说标题：${novel.value.title || ''}`,
-          `主题：${novel.value.theme || ''}`,
-          `简介：${novel.value.description || ''}`,
-          `世界观：${novel.value.worldSetting || ''}`,
-        ].join('\n')
-      : ''
-    const volumeCtx = volume.value
-      ? [
-          `卷标题：${volume.value.title || ''}`,
-          `卷主题：${volume.value.theme || ''}`,
-          `卷简介：${volume.value.description || ''}`,
-        ].join('\n')
-      : ''
-    const mergedMessage = [
-      '请基于以下设定生成章节草稿。',
-      novelCtx,
-      volumeCtx,
-      `用户要求：${msg}`,
-    ]
-      .filter(Boolean)
-      .join('\n\n')
-
-    const body: GenerateChapterBody = {
-      message: mergedMessage,
-      model: aiModel.value.trim() || undefined,
-      maxTokens: aiMaxTokens.value,
-      feedback: aiFeedback.value.trim() || undefined,
-      lockedFields: aiLockedFields.value,
-      baseDraft: {
-        ...currentDraft(),
-        novelId: novelId.value,
-        volumeId: volumeId.value,
-      },
-    }
-    const { draft } = await generateChapterContentByAI(body)
-    applyDraft(draft)
-    Message.success('AI 章节草稿已写入，可继续反馈重写')
+    const { value } = await generateChapterSummary(buildFieldBody(aiSummaryFeedback.value))
+    if (value) form.summary = value
+    Message.success('摘要已生成')
   } catch (e) {
     Message.error(String((e as Error)?.message || e))
   } finally {
-    aiLoading.value = false
+    aiSummaryLoading.value = false
+  }
+}
+
+async function runGenerateOutline() {
+  aiOutlineLoading.value = true
+  try {
+    const { value } = await generateChapterOutline(buildFieldBody(aiOutlineFeedback.value))
+    if (value) form.outline = value
+    Message.success('大纲已生成')
+  } catch (e) {
+    Message.error(String((e as Error)?.message || e))
+  } finally {
+    aiOutlineLoading.value = false
+  }
+}
+
+async function runGenerateBody() {
+  aiBodyLoading.value = true
+  try {
+    const { value } = await generateChapterBody(buildFieldBody(aiBodyFeedback.value))
+    if (value) form.content = value
+    Message.success('正文已生成')
+  } catch (e) {
+    Message.error(String((e as Error)?.message || e))
+  } finally {
+    aiBodyLoading.value = false
+  }
+}
+
+async function runPredictPlot() {
+  predictLoading.value = true
+  predictions.value = []
+  try {
+    const res = await predictPlot({
+      novelId: novelId.value,
+      volumeId: volumeId.value,
+      previousChapterIds: form.previousChapterIds.length ? form.previousChapterIds.join(',') : undefined,
+      previousChapterId: form.previousChapterIds[0] || undefined,
+      characterIds: form.characterIds || undefined,
+      direction: predictDirection.value.trim() || undefined,
+      count: 3,
+    })
+    predictions.value = res.predictions
+  } catch (e) {
+    Message.error(String((e as Error)?.message || e))
+  } finally {
+    predictLoading.value = false
+  }
+}
+
+function applyPrediction(p: PlotPrediction) {
+  if (p.summary) {
+    form.outline = (form.outline ? form.outline + '\n' : '') + `【预测方向：${p.direction}】\n${p.summary}`
   }
 }
 
@@ -204,7 +210,8 @@ async function saveChapter() {
       status: form.status || undefined,
       characterIds: form.characterIds || undefined,
       plotPointIds: form.plotPointIds || undefined,
-      previousChapterId: form.previousChapterId || undefined,
+      previousChapterIds: form.previousChapterIds.length ? form.previousChapterIds.join(',') : undefined,
+      previousChapterId: form.previousChapterIds[0] || undefined,
       outline: form.outline || undefined,
       relatedNodeIds: form.relatedNodeIds || undefined,
       promptMemo: form.promptMemo || undefined,
@@ -236,29 +243,22 @@ const storylineIdForNodes = computed(() => selectedStorylineId.value ?? 0)
 
       <a-form :model="form" layout="vertical" class="chapter-create__form">
         <a-card :bordered="false" class="chapter-create__ai-card">
-          <template #title>AI 章节草稿</template>
-          <a-form-item label="需求说明" required>
-            <a-textarea v-model="aiMessage" :auto-size="{ minRows: 3, maxRows: 8 }" />
+          <template #title>预测后续情节</template>
+          <a-form-item label="倾向方向（可选）">
+            <a-input v-model="predictDirection" allow-clear placeholder="如：复仇、和解、悬疑等" />
           </a-form-item>
-          <a-form-item label="反馈（用于重写）">
-            <a-textarea v-model="aiFeedback" :auto-size="{ minRows: 2, maxRows: 6 }" />
-          </a-form-item>
-          <a-form-item label="锁定字段">
-            <a-checkbox-group v-model="aiLockedFields" :options="AI_LOCK_FIELDS" />
-          </a-form-item>
-          <a-row :gutter="12">
-            <a-col :span="12">
-              <a-form-item label="模型（可选）">
-                <a-input v-model="aiModel" allow-clear />
-              </a-form-item>
-            </a-col>
-            <a-col :span="12">
-              <a-form-item label="maxTokens">
-                <a-input-number v-model="aiMaxTokens" :min="256" :max="8000" placeholder="默认" />
-              </a-form-item>
-            </a-col>
-          </a-row>
-          <a-button type="primary" :loading="aiLoading" @click="runChapterAI">生成 / 重写章节</a-button>
+          <a-button type="outline" :loading="predictLoading" @click="runPredictPlot">
+            预测情节走向
+          </a-button>
+          <div v-if="predictions.length" class="chapter-create__predictions">
+            <div v-for="(p, i) in predictions" :key="i" class="chapter-create__prediction-item">
+              <div class="chapter-create__prediction-head">
+                <a-tag color="arcoblue">{{ p.direction }}</a-tag>
+                <a-button type="text" size="mini" @click="applyPrediction(p)">采纳到大纲</a-button>
+              </div>
+              <div class="chapter-create__prediction-summary">{{ p.summary }}</div>
+            </div>
+          </div>
         </a-card>
 
         <a-row :gutter="12">
@@ -318,28 +318,52 @@ const storylineIdForNodes = computed(() => selectedStorylineId.value ?? 0)
           />
         </a-form-item>
 
-        <a-form-item label="摘要">
+        <a-form-item>
+          <template #label>
+            <div class="chapter-create__field-label">
+              <span>摘要</span>
+              <a-input v-model="aiSummaryFeedback" size="mini" allow-clear placeholder="重写意见" class="chapter-create__feedback-input" />
+              <a-button type="outline" size="mini" :loading="aiSummaryLoading" @click="runGenerateSummary">AI 生成</a-button>
+            </div>
+          </template>
           <a-textarea v-model="form.summary" :auto-size="{ minRows: 2, maxRows: 6 }" />
         </a-form-item>
         <a-form-item label="关联前序章节">
           <a-select
-            v-model="form.previousChapterId"
+            v-model="form.previousChapterIds"
+            multiple
             allow-clear
-            placeholder="选择前一章节，AI 生成时自动注入其摘要与正文末尾"
+            allow-search
+            placeholder="可多选前几章（建议按阅读顺序选），AI 按顺序注入摘要与正文末尾"
+            :max-tag-count="3"
           >
             <a-option v-for="c in siblingChapters" :key="c.id" :value="c.id">
               第{{ c.orderNo }}章 · {{ c.title }}
             </a-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="章节大纲">
+        <a-form-item>
+          <template #label>
+            <div class="chapter-create__field-label">
+              <span>章节大纲</span>
+              <a-input v-model="aiOutlineFeedback" size="mini" allow-clear placeholder="重写意见" class="chapter-create__feedback-input" />
+              <a-button type="outline" size="mini" :loading="aiOutlineLoading" @click="runGenerateOutline">AI 生成</a-button>
+            </div>
+          </template>
           <a-textarea v-model="form.outline" :auto-size="{ minRows: 2, maxRows: 8 }" />
         </a-form-item>
         <a-form-item label="提示词备注">
           <a-textarea v-model="form.promptMemo" :auto-size="{ minRows: 2, maxRows: 6 }" />
         </a-form-item>
 
-        <a-form-item label="章节正文" class="chapter-create__content-field">
+        <a-form-item class="chapter-create__content-field">
+          <template #label>
+            <div class="chapter-create__field-label">
+              <span>章节正文</span>
+              <a-input v-model="aiBodyFeedback" size="mini" allow-clear placeholder="重写意见" class="chapter-create__feedback-input" />
+              <a-button type="outline" size="mini" :loading="aiBodyLoading" @click="runGenerateBody">AI 生成</a-button>
+            </div>
+          </template>
           <NovelTextEditor v-model="form.content" :min-rows="16" :max-rows="48" />
         </a-form-item>
 
@@ -369,6 +393,22 @@ const storylineIdForNodes = computed(() => selectedStorylineId.value ?? 0)
   margin-bottom: 14px;
   background: var(--color-fill-1);
 }
+.chapter-create__field-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.chapter-create__field-label > span:first-child {
+  flex-shrink: 0;
+}
+.chapter-create__field-label .chapter-create__feedback-input,
+.chapter-create__field-label .arco-btn {
+  margin-left: auto;
+}
+.chapter-create__feedback-input {
+  max-width: 200px;
+}
 .chapter-create__loading {
   margin-top: 80px;
   display: flex;
@@ -380,5 +420,27 @@ const storylineIdForNodes = computed(() => selectedStorylineId.value ?? 0)
 .chapter-create__content-field :deep(.arco-form-item-content) {
   display: block;
   width: 100%;
+}
+.chapter-create__predictions {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.chapter-create__prediction-item {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--color-bg-2);
+}
+.chapter-create__prediction-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.chapter-create__prediction-summary {
+  font-size: 13px;
+  color: var(--color-text-2);
+  line-height: 1.6;
 }
 </style>

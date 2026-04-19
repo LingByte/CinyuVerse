@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconPlus, IconRefresh, IconEdit } from '@arco-design/web-vue/es/icon'
 import { WorkspaceBreadcrumb } from '@/components/layout'
+import { listStyleProfiles } from '@/api/styleLearning'
 import {
   createNovel,
   deleteNovel,
@@ -15,6 +16,7 @@ import {
   uploadNovelCover,
 } from '@/api/novels'
 import type { GeneratedNovelDraft, GenerateNovelBody, Novel } from '@/types/novel'
+import type { StyleProfile } from '@/types/styleLearning'
 
 const router = useRouter()
 
@@ -33,6 +35,16 @@ const coverUploading = ref(false)
 const coverFileRef = ref<HTMLInputElement | null>(null)
 const aiLoading = ref(false)
 
+const styleProfiles = ref<StyleProfile[]>([])
+const styleProfilesLoading = ref(false)
+
+const styleProfileOptions = computed(() =>
+  styleProfiles.value.map((p) => ({
+    label: `${p.name}${p.learnedAt ? ' · 已学习' : ''}`,
+    value: p.id,
+  })),
+)
+
 const form = reactive({
   title: '',
   status: '',
@@ -44,6 +56,8 @@ const form = reactive({
   tags: '',
   coverImage: '',
   styleGuide: '',
+  /** 未选时为 undefined；保存时转为 0 解除绑定 */
+  styleProfileId: undefined as number | undefined,
 })
 
 const aiMessage = ref('请生成一部长篇小说策划草案，给出标题、题材、受众、主题、简介、世界观与标签。')
@@ -78,6 +92,7 @@ function resetForm() {
   form.tags = ''
   form.coverImage = ''
   form.styleGuide = ''
+  form.styleProfileId = undefined
 }
 
 function fillFromNovel(n: Novel) {
@@ -91,6 +106,8 @@ function fillFromNovel(n: Novel) {
   form.tags = n.tags || ''
   form.coverImage = n.coverImage || ''
   form.styleGuide = n.styleGuide || ''
+  form.styleProfileId =
+    n.styleProfileId && n.styleProfileId > 0 ? n.styleProfileId : undefined
 }
 
 function fillFromDraft(d: GeneratedNovelDraft) {
@@ -132,6 +149,7 @@ function formToCreateBody() {
     tags: form.tags.trim() || undefined,
     coverImage: form.coverImage.trim() || undefined,
     styleGuide: form.styleGuide.trim() || undefined,
+    styleProfileId: form.styleProfileId && form.styleProfileId > 0 ? form.styleProfileId : undefined,
   }
 }
 
@@ -147,6 +165,19 @@ function formToUpdateBody() {
     tags: form.tags.trim(),
     coverImage: form.coverImage.trim(),
     styleGuide: form.styleGuide.trim(),
+    styleProfileId: form.styleProfileId ?? 0,
+  }
+}
+
+async function loadStyleProfiles() {
+  styleProfilesLoading.value = true
+  try {
+    const res = await listStyleProfiles({ page: 1, size: 200 })
+    styleProfiles.value = res.items ?? []
+  } catch (e) {
+    Message.error(String((e as Error)?.message || e))
+  } finally {
+    styleProfilesLoading.value = false
   }
 }
 
@@ -208,7 +239,7 @@ function onCoverLoadError(ev: Event) {
   }
 }
 
-function openCreate() {
+async function openCreate() {
   drawerMode.value = 'create'
   editId.value = null
   resetForm()
@@ -217,6 +248,7 @@ function openCreate() {
   aiModel.value = ''
   aiMaxTokens.value = undefined
   drawerVisible.value = true
+  await loadStyleProfiles()
 }
 
 async function openEdit(row: Novel) {
@@ -224,6 +256,7 @@ async function openEdit(row: Novel) {
   editId.value = row.id
   drawerVisible.value = true
   try {
+    await loadStyleProfiles()
     const n = await getNovel(row.id)
     fillFromNovel(n)
   } catch (e) {
@@ -381,7 +414,13 @@ async function onCoverFileChange(ev: Event) {
             <a-typography-paragraph class="novel-home__desc" :ellipsis="{ rows: 3 }">
               {{ row.description || '暂无简介' }}
             </a-typography-paragraph>
-            <div class="novel-home__meta">类型：{{ row.genre || '未设置' }} | 受众：{{ row.audience || '未设置' }}</div>
+            <div class="novel-home__meta">
+              类型：{{ row.genre || '未设置' }} | 受众：{{ row.audience || '未设置' }}
+              <template v-if="row.styleProfileName">
+                <span class="novel-home__style-sp">|</span>
+                风格：{{ row.styleProfileName }}
+              </template>
+            </div>
             <div class="novel-home__ops" @click.stop>
               <a-button type="text" size="small" @click="openEdit(row)">
                 <template #icon>
@@ -514,6 +553,21 @@ async function onCoverFileChange(ev: Event) {
         <a-form-item label="写作风格指南">
           <a-textarea v-model="form.styleGuide" :auto-size="{ minRows: 2, maxRows: 6 }" allow-clear />
         </a-form-item>
+        <a-form-item label="风格学习档案">
+          <a-select
+            v-model="form.styleProfileId"
+            allow-clear
+            placeholder="不绑定（可在「风格学习」中创建档案后在此选择）"
+            :loading="styleProfilesLoading"
+            :options="styleProfileOptions"
+          />
+          <template #extra>
+            <span class="novel-home__hint">
+              绑定后可与创作流程联动使用已学习的风格指令；未学习完成的档案也可先绑定。
+              <a-link @click="router.push({ name: 'style-learning' })">前往风格学习</a-link>
+            </span>
+          </template>
+        </a-form-item>
       </a-form>
     </a-drawer>
   </div>
@@ -570,6 +624,14 @@ async function onCoverFileChange(ev: Event) {
 .novel-home__meta {
   color: var(--color-text-3);
   font-size: 12px;
+}
+.novel-home__style-sp {
+  margin: 0 4px;
+  opacity: 0.6;
+}
+.novel-home__hint {
+  font-size: 12px;
+  color: var(--color-text-3);
 }
 .novel-home__ops {
   display: flex;

@@ -36,12 +36,33 @@ const chapterColumns: TableColumnData[] = [
   { title: '序号', dataIndex: 'orderNo', width: 80 },
   { title: '状态', dataIndex: 'status', width: 120 },
   { title: '摘要', dataIndex: 'summary', ellipsis: true, tooltip: true },
+  { title: '操作', slotName: 'action', width: 100, align: 'center' },
 ]
 
 function goEditChapter(chapter: Chapter) {
   router.push({
     name: 'chapter-edit',
     params: { id: String(novelId.value), volumeId: String(chapter.volumeId), chapterId: String(chapter.id) },
+  })
+}
+
+async function onDeleteChapter(chapter: Chapter) {
+  const { deleteChapter } = await import('@/api/chapters')
+  Modal.warning({
+    title: '确认删除',
+    content: `确定删除章节「${chapter.title}」？`,
+    hideCancel: false,
+    okText: '删除',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        await deleteChapter(chapter.id)
+        Message.success('章节已删除')
+        await loadChaptersByVolume(chapter.volumeId)
+      } catch (e) {
+        Message.error(String((e as Error)?.message || e))
+      }
+    },
   })
 }
 
@@ -332,6 +353,11 @@ function goStorylines() {
         </a-space>
       </template>
       <h2 class="novel-volumes__title">{{ novel.title || '未命名小说' }}</h2>
+      <div class="novel-volumes__stats">
+        <a-tag color="arcoblue">已写 {{ novel.totalWordCount ?? 0 }} 字</a-tag>
+        <a-tag>共 {{ novel.chapterCount ?? 0 }} 章</a-tag>
+        <span class="novel-volumes__stats-hint">字数为各章节保存时的字数累计（章节「正文」）</span>
+      </div>
       <a-typography-paragraph class="novel-volumes__desc">
         {{ novel.description || '暂无小说介绍' }}
       </a-typography-paragraph>
@@ -383,7 +409,16 @@ function goStorylines() {
                 size="small"
                 class="novel-volumes__chapter-table"
                 @row-click="(record: TableData) => goEditChapter(record as unknown as Chapter)"
-              />
+              >
+                <template #action="{ record }">
+                  <a-button
+                    type="text"
+                    status="danger"
+                    size="mini"
+                    @click.stop="onDeleteChapter(record as unknown as Chapter)"
+                  >删除</a-button>
+                </template>
+              </a-table>
               <div class="novel-volumes__chapters-pager">
                 <a-pagination
                   :total="ensureChapterState(v.id).total"
@@ -489,6 +524,17 @@ function goStorylines() {
 }
 .novel-volumes__title {
   margin: 0 0 8px;
+}
+.novel-volumes__stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.novel-volumes__stats-hint {
+  font-size: 12px;
+  color: var(--color-text-3);
 }
 .novel-volumes__desc {
   margin-top: 8px;

@@ -22,7 +22,7 @@ import (
 
 const maxPersistedHistoryMessages = 80 // 约 40 轮 user+assistant，控制上下文体积
 
-const maxSystemPromptContextBytes = 28000
+const maxSystemPromptContextBytes = 52000
 
 // CreateChatSessionRequest 创建会话
 type CreateChatSessionRequest struct {
@@ -118,10 +118,15 @@ func (ch *CinyuHandlers) registerChatRoutes(r *gin.RouterGroup) {
 	sessions := ai.Group("/sessions")
 	{
 		sessions.POST("", ch.CreateChatSession)
+		// 固定路径，body 含 sessionId；优先于 /:id 注册，避免通配与旧部署差异导致 404。
+		sessions.POST("/update", ch.UpdateChatSessionByBody)
 		sessions.GET("", ch.ListChatSessions)
 		sessions.GET("/:id/messages", ch.ListChatMessages)
 		sessions.POST("/:id/chat/stream", ch.ChatTurnStream)
 		sessions.POST("/:id/chat", ch.ChatTurn)
+		// POST 与 PUT 等价；前端默认用 POST，避免部分环境/旧二进制未注册 PUT 时出现 Gin 原生 404。
+		sessions.POST("/:id/update", ch.UpdateChatSession)
+		sessions.PUT("/:id", ch.UpdateChatSession)
 		sessions.GET("/:id", ch.GetChatSession)
 		sessions.DELETE("/:id", ch.DeleteChatSession)
 	}
@@ -182,6 +187,16 @@ func (ch *CinyuHandlers) CreateChatSession(c *gin.Context) {
 	if model == "" {
 		model = config.GlobalConfig.Services.LLM.Model
 	}
+	if req.NovelID > 0 {
+		if _, err := models.GetNovelByID(ch.db, req.NovelID); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				response.FailWithCode(c, 400, "小说不存在", nil)
+				return
+			}
+			response.Fail(c, "Failed to validate novel", nil)
+			return
+		}
+	}
 	s := &models.ChatSession{
 		Title:        strings.TrimSpace(req.Title),
 		Status:       models.ChatSessionStatusActive,
@@ -196,6 +211,71 @@ func (ch *CinyuHandlers) CreateChatSession(c *gin.Context) {
 		return
 	}
 	response.Success(c, "Chat session created", chatSessionToResponse(s))
+}
+
+// UpdateChatSessionRequest 更新会话（仅部分字段）
+type UpdateChatSessionRequest struct {
+	NovelID *uint `json:"novelId"`
+}
+
+// UpdateChatSessionByBody POST /api/ai/sessions/update — 绑定/解绑小说（novelId 传 0 解除）
+func (ch *CinyuHandlers) UpdateChatSessionByBody(c *gin.Context) {
+	var body struct {
+		SessionID uint  `json:"sessionId" binding:"required"`
+		NovelID   *uint `json:"novelId"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		response.Fail(c, err.Error(), nil)
+		return
+	}
+	ch.applyUpdateChatSession(c, body.SessionID, &UpdateChatSessionRequest{NovelID: body.NovelID})
+}
+
+// UpdateChatSession POST /api/ai/sessions/:id/update 或 PUT /api/ai/sessions/:id — 同上（兼容）
+func (ch *CinyuHandlers) UpdateChatSession(c *gin.Context) {
+	idStr := c.Param("id")
+	id64, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.Fail(c, "Invalid session ID", nil)
+		return
+	}
+	var req UpdateChatSessionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, err.Error(), nil)
+		return
+	}
+	ch.applyUpdateChatSession(c, uint(id64), &req)
+}
+
+func (ch *CinyuHandlers) applyUpdateChatSession(c *gin.Context, sessionID uint, req *UpdateChatSessionRequest) {
+	s, err := models.GetChatSessionByID(ch.db, sessionID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.FailWithCode(c, 404, "Session not found", nil)
+			return
+		}
+		response.Fail(c, "Failed to load session", nil)
+		return
+	}
+	if req.NovelID != nil {
+		if *req.NovelID > 0 {
+			if _, err := models.GetNovelByID(ch.db, *req.NovelID); err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					response.FailWithCode(c, 400, "小说不存在", nil)
+					return
+				}
+				response.Fail(c, "Failed to validate novel", nil)
+				return
+			}
+		}
+		s.NovelID = *req.NovelID
+	}
+	s.SetUpdateInfo("system")
+	if err := models.UpdateChatSession(ch.db, s); err != nil {
+		response.Fail(c, "Failed to update session", nil)
+		return
+	}
+	response.Success(c, "OK", chatSessionToResponse(s))
 }
 
 // ListChatSessions GET /api/ai/sessions?novelId=&page=&size= — 无 novelId 时列出全部会话。
@@ -562,7 +642,7 @@ func (ch *CinyuHandlers) runChatTurnStream(ctx context.Context, c *gin.Context, 
 		Provider:     strings.TrimSpace(session.Provider),
 		ApiKey:       strings.TrimSpace(config.GlobalConfig.Services.LLM.APIKey),
 		BaseURL:      strings.TrimSpace(config.GlobalConfig.Services.LLM.BaseURL),
-		SystemPrompt: buildLingoroutineContextSystemPrompt(session, history),
+		SystemPrompt: buildLingoroutineContextSystemPrompt(ch.db, session, history),
 		Logger:       log,
 	}
 
@@ -744,7 +824,7 @@ func (ch *CinyuHandlers) runChatTurn(ctx context.Context, session *models.ChatSe
 		Provider:     strings.TrimSpace(session.Provider),
 		ApiKey:       strings.TrimSpace(config.GlobalConfig.Services.LLM.APIKey),
 		BaseURL:      strings.TrimSpace(config.GlobalConfig.Services.LLM.BaseURL),
-		SystemPrompt: buildLingoroutineContextSystemPrompt(session, history),
+		SystemPrompt: buildLingoroutineContextSystemPrompt(ch.db, session, history),
 		Logger:       log,
 	}
 
@@ -872,10 +952,18 @@ func pickChatModel(m string) string {
 	return config.GlobalConfig.Services.LLM.Model
 }
 
-func buildLingoroutineContextSystemPrompt(session *models.ChatSession, history []*models.ChatMessage) string {
+func buildLingoroutineContextSystemPrompt(db *gorm.DB, session *models.ChatSession, history []*models.ChatMessage) string {
 	var b strings.Builder
 	if s := strings.TrimSpace(session.SystemPrompt); s != "" {
 		b.WriteString(s)
+	}
+	if session != nil && session.NovelID > 0 && db != nil {
+		if block := buildNovelContextBlockForChat(db, session.NovelID); block != "" {
+			if b.Len() > 0 {
+				b.WriteString("\n\n")
+			}
+			b.WriteString(block)
+		}
 	}
 	if sum := strings.TrimSpace(session.Summary); sum != "" {
 		if b.Len() > 0 {

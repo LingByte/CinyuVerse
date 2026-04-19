@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/LingByte/CinyuVerse/internal/models"
@@ -8,6 +9,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+func validateStyleProfileID(db *gorm.DB, id uint) error {
+	if id == 0 {
+		return nil
+	}
+	_, err := models.GetStyleProfileByID(db, id)
+	return err
+}
 
 // Copyright (c) 2026 LingByte
 // SPDX-License-Identifier: MIT
@@ -24,6 +33,7 @@ type CreateNovelRequest struct {
 	Tags           string `json:"tags"`
 	CoverImage     string `json:"coverImage"`
 	StyleGuide     string `json:"styleGuide"`
+	StyleProfileID uint   `json:"styleProfileId"`
 }
 
 // UpdateNovelRequest 更新小说请求结构
@@ -38,25 +48,31 @@ type UpdateNovelRequest struct {
 	Tags           string `json:"tags"`
 	CoverImage     string `json:"coverImage"`
 	StyleGuide     string `json:"styleGuide"`
+	// 指针：nil 表示不修改；非 nil 时写入（含 0 表示解除绑定）
+	StyleProfileID *uint `json:"styleProfileId"`
 }
 
 // NovelResponse 小说响应结构
 type NovelResponse struct {
-	ID             uint   `json:"id"`
-	Title          string `json:"title"`
-	Status         string `json:"status"`
-	Genre          string `json:"genre"`
-	Audience       string `json:"audience"`
-	Theme          string `json:"theme"`
-	Description    string `json:"description"`
-	WorldSetting   string `json:"worldSetting"`
-	Tags           string `json:"tags"`
-	CoverImage     string `json:"coverImage"`
-	StyleGuide     string `json:"styleGuide"`
-	CreatedAt      string `json:"createdAt"`
-	UpdatedAt      string `json:"updatedAt"`
-	CreateBy       string `json:"createBy"`
-	UpdateBy       string `json:"updateBy"`
+	ID               uint   `json:"id"`
+	Title            string `json:"title"`
+	Status           string `json:"status"`
+	Genre            string `json:"genre"`
+	Audience         string `json:"audience"`
+	Theme            string `json:"theme"`
+	Description      string `json:"description"`
+	WorldSetting     string `json:"worldSetting"`
+	Tags             string `json:"tags"`
+	CoverImage       string `json:"coverImage"`
+	StyleGuide       string `json:"styleGuide"`
+	StyleProfileID   uint   `json:"styleProfileId"`
+	StyleProfileName string `json:"styleProfileName,omitempty"`
+	TotalWordCount   int64  `json:"totalWordCount"`
+	ChapterCount     int64  `json:"chapterCount"`
+	CreatedAt        string `json:"createdAt"`
+	UpdatedAt        string `json:"updatedAt"`
+	CreateBy         string `json:"createBy"`
+	UpdateBy         string `json:"updateBy"`
 }
 
 // PaginatedNovelResponse 分页小说响应结构
@@ -91,6 +107,15 @@ func (ch *CinyuHandlers) CreateNovel(c *gin.Context) {
 		return
 	}
 
+	if err := validateStyleProfileID(ch.db, req.StyleProfileID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.FailWithCode(c, 400, "风格档案不存在", nil)
+			return
+		}
+		response.Fail(c, "Failed to validate style profile", nil)
+		return
+	}
+
 	novel := &models.Novel{
 		Title:          req.Title,
 		Status:         req.Status,
@@ -102,6 +127,7 @@ func (ch *CinyuHandlers) CreateNovel(c *gin.Context) {
 		Tags:           req.Tags,
 		CoverImage:     req.CoverImage,
 		StyleGuide:     req.StyleGuide,
+		StyleProfileID: req.StyleProfileID,
 	}
 
 	// 设置创建信息
@@ -112,7 +138,7 @@ func (ch *CinyuHandlers) CreateNovel(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, "Novel created successfully", novelToResponse(novel))
+	response.Success(c, "Novel created successfully", novelToResponseWithDB(ch.db, novel))
 }
 
 // GetNovel 获取单个小说
@@ -134,7 +160,7 @@ func (ch *CinyuHandlers) GetNovel(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, "Novel retrieved successfully", novelToResponse(novel))
+	response.Success(c, "Novel retrieved successfully", novelToResponseWithDB(ch.db, novel))
 }
 
 // UpdateNovel 更新小说
@@ -193,6 +219,17 @@ func (ch *CinyuHandlers) UpdateNovel(c *gin.Context) {
 	if req.StyleGuide != "" {
 		novel.StyleGuide = req.StyleGuide
 	}
+	if req.StyleProfileID != nil {
+		if err := validateStyleProfileID(ch.db, *req.StyleProfileID); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				response.FailWithCode(c, 400, "风格档案不存在", nil)
+				return
+			}
+			response.Fail(c, "Failed to validate style profile", nil)
+			return
+		}
+		novel.StyleProfileID = *req.StyleProfileID
+	}
 
 	// 设置更新信息
 	novel.SetUpdateInfo("system") // 可以从JWT token中获取用户信息
@@ -202,7 +239,7 @@ func (ch *CinyuHandlers) UpdateNovel(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, "Novel updated successfully", novelToResponse(novel))
+	response.Success(c, "Novel updated successfully", novelToResponseWithDB(ch.db, novel))
 }
 
 // DeleteNovel 删除小说
@@ -234,7 +271,7 @@ func (ch *CinyuHandlers) GetNovelsByGenre(c *gin.Context) {
 
 	responses := make([]*NovelResponse, len(novels))
 	for i, novel := range novels {
-		responses[i] = novelToResponse(novel)
+		responses[i] = novelToResponseWithDB(ch.db, novel)
 	}
 
 	response.Success(c, "Novels retrieved successfully", responses)
@@ -252,7 +289,7 @@ func (ch *CinyuHandlers) GetNovelsByStatus(c *gin.Context) {
 
 	responses := make([]*NovelResponse, len(novels))
 	for i, novel := range novels {
-		responses[i] = novelToResponse(novel)
+		responses[i] = novelToResponseWithDB(ch.db, novel)
 	}
 
 	response.Success(c, "Novels retrieved successfully", responses)
@@ -281,7 +318,7 @@ func (ch *CinyuHandlers) GetAllNovels(c *gin.Context) {
 
 	responses := make([]*NovelResponse, len(novels))
 	for i, novel := range novels {
-		responses[i] = novelToResponse(novel)
+		responses[i] = novelToResponseWithDB(ch.db, novel)
 	}
 
 	response.Success(c, "Novels retrieved successfully", PaginatedNovelResponse{
@@ -316,7 +353,7 @@ func (ch *CinyuHandlers) SearchNovels(c *gin.Context) {
 	}
 	responses := make([]*NovelResponse, len(novels))
 	for i, novel := range novels {
-		responses[i] = novelToResponse(novel)
+		responses[i] = novelToResponseWithDB(ch.db, novel)
 	}
 	response.Success(c, "Novels searched successfully", PaginatedNovelResponse{
 		Novels: responses,
@@ -343,9 +380,8 @@ func (ch *CinyuHandlers) RestoreNovel(c *gin.Context) {
 	response.Success(c, "Novel restored successfully", nil)
 }
 
-// novelToResponse 将Novel模型转换为响应结构
-func novelToResponse(novel *models.Novel) *NovelResponse {
-	return &NovelResponse{
+func novelToResponseWithDB(db *gorm.DB, novel *models.Novel) *NovelResponse {
+	r := &NovelResponse{
 		ID:             novel.ID,
 		Title:          novel.Title,
 		Status:         novel.Status,
@@ -357,9 +393,24 @@ func novelToResponse(novel *models.Novel) *NovelResponse {
 		Tags:           novel.Tags,
 		CoverImage:     novel.CoverImage,
 		StyleGuide:     novel.StyleGuide,
+		StyleProfileID: novel.StyleProfileID,
 		CreatedAt:      novel.GetCreatedAtString(),
 		UpdatedAt:      novel.GetUpdatedAtString(),
 		CreateBy:       novel.CreateBy,
 		UpdateBy:       novel.UpdateBy,
 	}
+	if db != nil && novel.StyleProfileID > 0 {
+		if p, err := models.GetStyleProfileByID(db, novel.StyleProfileID); err == nil {
+			r.StyleProfileName = p.Name
+		}
+	}
+	if db != nil {
+		if sum, err := models.SumWordCountByNovel(db, novel.ID); err == nil {
+			r.TotalWordCount = sum
+		}
+		if cnt, err := models.CountChaptersByNovel(db, novel.ID); err == nil {
+			r.ChapterCount = cnt
+		}
+	}
+	return r
 }

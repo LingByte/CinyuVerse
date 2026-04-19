@@ -10,6 +10,8 @@ export interface Chapter {
   characterIds: string
   plotPointIds: string
   previousChapterId: number
+  /** 前序章节 ID，逗号分隔；与 previousChapterId（首项）同源 */
+  previousChapterIds?: string
   outline: string
   relatedNodeIds: string
   promptMemo: string
@@ -36,6 +38,7 @@ export interface CreateChapterBody {
   characterIds?: string
   plotPointIds?: string
   previousChapterId?: number
+  previousChapterIds?: string
   outline?: string
   relatedNodeIds?: string
   promptMemo?: string
@@ -51,6 +54,7 @@ export interface UpdateChapterBody {
   characterIds?: string
   plotPointIds?: string
   previousChapterId?: number
+  previousChapterIds?: string
   outline?: string
   relatedNodeIds?: string
   promptMemo?: string
@@ -69,5 +73,42 @@ export interface GenerateChapterBody {
 
 export interface GenerateChapterResult {
   draft: Chapter
+  raw: string
+}
+
+export interface PlotPrediction {
+  direction: string
+  summary: string
+}
+
+export interface PredictPlotBody {
+  novelId: number
+  volumeId?: number
+  previousChapterId?: number
+  previousChapterIds?: string
+  characterIds?: string
+  direction?: string
+  count?: number
+  model?: string
+}
+
+export interface PredictPlotResult {
+  predictions: PlotPrediction[]
+  raw: string
+}
+
+export interface GenerateChapterFieldBody {
+  novelId: number
+  volumeId?: number
+  previousChapterId?: number
+  previousChapterIds?: string
+  characterIds?: string
+  model?: string
+  feedback?: string
+  baseDraft?: Partial<Chapter>
+}
+
+export interface GenerateChapterFieldResult {
+  value: string
   raw: string
 }

@@ -17,8 +17,9 @@ type Novel struct {
 	Description    string `json:"description" gorm:"type:text;comment:小说简介"`
 	WorldSetting   string `json:"worldSetting" gorm:"type:text;comment:世界观设定"`
 	Tags           string `json:"tags" gorm:"size:500;comment:标签(逗号分隔)"`
-	CoverImage     string `json:"coverImage" gorm:"size:500;comment:封面图片URL"`
-	StyleGuide     string `json:"styleGuide" gorm:"type:text;comment:写作风格指南"`
+	CoverImage      string `json:"coverImage" gorm:"size:500;comment:封面图片URL"`
+	StyleGuide      string `json:"styleGuide" gorm:"type:text;comment:写作风格指南"`
+	StyleProfileID  uint   `json:"styleProfileId" gorm:"index;default:0;comment:关联风格学习档案 ci_style_profiles.id，0 表示未绑定"`
 }
 
 func (Novel) TableName() string {

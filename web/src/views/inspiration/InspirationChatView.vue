@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { IconSend, IconFolder } from '@arco-design/web-vue/es/icon'
 import { Message } from '@arco-design/web-vue'
 import { inspirationLastSessionKey } from '@/composables/inspirationStorage'
 import { useInspirationStore } from '@/stores/inspiration'
+import { getChatSession, updateChatSession } from '@/api/ai/sessions'
+import { listNovels } from '@/api/novels'
 import { postChatTurnStream } from '@/api/ai/stream'
 import { postRecognizeDocument } from '@/api/recognize'
 import type { ChatSseEvent } from '@/types/chat'
+import type { Novel } from '@/types/novel'
 import MarkdownRender from '@/components/markdown/MarkdownRender.vue'
 import StreamingAssistantMarkdown from '@/components/chat/StreamingAssistantMarkdown.vue'
 
@@ -21,6 +24,12 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const recognizing = ref(false)
 const recognizeAppendix = ref('')
 const recognizeFileName = ref('')
+
+const novels = ref<Novel[]>([])
+const sessionNovelId = ref<number | undefined>(undefined)
+const novelOptions = computed(() =>
+  novels.value.map((n) => ({ label: n.title || `小说 #${n.id}`, value: n.id })),
+)
 
 const sessionId = computed(() => {
   if (route.name !== 'inspiration-session') {
@@ -43,12 +52,15 @@ watch(
   sessionId,
   async (id) => {
     if (!id) {
+      sessionNovelId.value = undefined
       return
     }
     localStorage.setItem(inspirationLastSessionKey, id)
     store.touchSession(id)
     try {
       await store.loadThreadMessages(id)
+      const s = await getChatSession(Number(id))
+      sessionNovelId.value = s.novelId && s.novelId > 0 ? s.novelId : undefined
     } catch (e) {
       Message.error(`加载历史失败：${String((e as Error)?.message || e)}`)
       await router.replace({ name: 'inspiration-root' })
@@ -56,6 +68,38 @@ watch(
   },
   { immediate: true },
 )
+
+onMounted(async () => {
+  try {
+    const res = await listNovels({ page: 1, size: 100 })
+    novels.value = res.novels
+  } catch {
+    /* 忽略 */
+  }
+})
+
+async function onSessionNovelChange(v: number | string | Record<string, unknown> | undefined) {
+  const sid = sessionId.value
+  if (!sid) {
+    return
+  }
+  let novelId: number | undefined
+  if (typeof v === 'number' && Number.isFinite(v)) {
+    novelId = v
+  } else if (typeof v === 'string' && /^\d+$/.test(v)) {
+    novelId = Number(v)
+  } else {
+    novelId = undefined
+  }
+  try {
+    await updateChatSession(Number(sid), { novelId: novelId ?? 0 })
+    sessionNovelId.value = novelId
+    Message.success('已更新关联小说，后续回复将带入该书摘要与正文节选')
+    await store.refreshSessions()
+  } catch (e) {
+    Message.error(String((e as Error)?.message || e))
+  }
+}
 
 function abortInFlight() {
   streamCtl.value?.abort()
@@ -152,6 +196,18 @@ async function onSend() {
       <div class="insp-chat__toolbar">
         <span class="insp-chat__thread-title">{{ threadTitle }}</span>
       </div>
+      <div class="insp-chat__novel-bar">
+        <span class="insp-chat__novel-label">关联小说</span>
+        <a-select
+          :model-value="sessionNovelId"
+          allow-clear
+          placeholder="不关联（普通闲聊）"
+          :options="novelOptions"
+          class="insp-chat__novel-select"
+          @change="onSessionNovelChange"
+        />
+        <span class="insp-chat__novel-hint">关联后会话将带入该书前序摘要与最近章正文节选，便于讨论后续发展。</span>
+      </div>
       <div class="insp-chat__messages">
         <template v-for="m in messages" :key="m.localId">
           <div v-if="m.role === 'user'" class="insp-chat__row insp-chat__row--user">
@@ -240,6 +296,30 @@ async function onSend() {
   font-size: 14px;
   font-weight: 500;
   color: var(--color-text-1);
+}
+.insp-chat__novel-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--color-border-2);
+  background: var(--color-bg-1);
+}
+.insp-chat__novel-label {
+  font-size: 13px;
+  color: var(--color-text-2);
+  flex-shrink: 0;
+}
+.insp-chat__novel-select {
+  min-width: 200px;
+  max-width: 360px;
+}
+.insp-chat__novel-hint {
+  font-size: 12px;
+  color: var(--color-text-3);
+  flex: 1 1 200px;
 }
 .insp-chat__messages {
   flex: 1;

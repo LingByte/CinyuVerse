@@ -62,3 +62,6 @@ dist-ssr
 *.sln
 *.sw?
 
+novel_out/
+chapter_ids.txt
+analysis

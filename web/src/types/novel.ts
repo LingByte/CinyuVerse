@@ -12,6 +12,14 @@ export interface Novel {
   tags: string
   coverImage: string
   styleGuide: string
+  /** 关联「风格学习」档案 id，0 表示未绑定 */
+  styleProfileId: number
+  /** 档案名称（列表/详情接口可能返回） */
+  styleProfileName?: string
+  /** 全书本章 word_count 之和 */
+  totalWordCount?: number
+  /** 章节篇数 */
+  chapterCount?: number
   createdAt: string
   updatedAt: string
   createBy: string
@@ -37,9 +45,10 @@ export interface CreateNovelBody {
   tags?: string
   coverImage?: string
   styleGuide?: string
+  styleProfileId?: number
 }
 
-/** PUT /novels/:id — 与 UpdateNovelRequest 一致，空串不传则后端不更新该字段 */
+/** PUT /novels/:id — 与 UpdateNovelRequest 一致，空串不传则后端不更新字符串字段；styleProfileId 传数字（含 0）会更新绑定 */
 export interface UpdateNovelBody {
   title?: string
   status?: string
@@ -51,6 +60,7 @@ export interface UpdateNovelBody {
   tags?: string
   coverImage?: string
   styleGuide?: string
+  styleProfileId?: number
 }
 
 export interface GeneratedNovelDraft {

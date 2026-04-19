@@ -1,6 +1,8 @@
 package models
 
-import "gorm.io/gorm"
+import (
+	"gorm.io/gorm"
+)
 
 const TABLE_CHAPTER = "ci_chapters"
 
@@ -16,7 +18,8 @@ type Chapter struct {
 	Summary         string `json:"summary" gorm:"type:text;comment:章节摘要"`
 	CharacterIDs    string `json:"characterIds" gorm:"type:text;comment:参与角色ID列表(逗号分隔)"`
 	PlotPointIDs    string `json:"plotPointIds" gorm:"type:text;comment:涉及情节ID列表(逗号分隔)"`
-	PreviousChapterID uint   `json:"previousChapterId" gorm:"index;default:0;comment:前序章节ID"`
+	PreviousChapterID uint   `json:"previousChapterId" gorm:"index;default:0;comment:前序章节ID(兼容单选，取多选首项)"`
+	PreviousChapterIDs string `json:"previousChapterIds" gorm:"type:text;comment:前序章节ID列表(逗号分隔)"`
 	Outline         string `json:"outline" gorm:"type:text;comment:章节大纲"`
 	RelatedNodeIDs  string `json:"relatedNodeIds" gorm:"type:text;comment:关联故事线节点ID(逗号分隔)"`
 	PromptMemo      string `json:"promptMemo" gorm:"type:text;comment:生成提示词备注"`
@@ -74,4 +77,32 @@ func GetAllChapters(db *gorm.DB, novelID, volumeID uint, page, pageSize int) ([]
 	}
 	err := q.Offset(offset).Limit(pageSize).Order("order_no ASC, created_at ASC").Find(&rows).Error
 	return rows, total, err
+}
+
+// ListChaptersByNovelOrdered 返回某小说下全部章节（按卷、章节序），用于构建对话上下文等。
+func ListChaptersByNovelOrdered(db *gorm.DB, novelID uint) ([]*Chapter, error) {
+	var rows []*Chapter
+	err := db.Where("novel_id = ? AND is_deleted = ?", novelID, SoftDeleteStatusActive).
+		Order("volume_id ASC, order_no ASC, id ASC").
+		Find(&rows).Error
+	return rows, err
+}
+
+// SumWordCountByNovel 汇总章节 word_count（依赖各章保存时已更新字数；为 0 的章不计入）。
+func SumWordCountByNovel(db *gorm.DB, novelID uint) (int64, error) {
+	var n int64
+	err := db.Model(&Chapter{}).
+		Where("novel_id = ? AND is_deleted = ?", novelID, SoftDeleteStatusActive).
+		Select("COALESCE(SUM(word_count), 0)").
+		Scan(&n).Error
+	return n, err
+}
+
+// CountChaptersByNovel 章节篇数。
+func CountChaptersByNovel(db *gorm.DB, novelID uint) (int64, error) {
+	var n int64
+	err := db.Model(&Chapter{}).
+		Where("novel_id = ? AND is_deleted = ?", novelID, SoftDeleteStatusActive).
+		Count(&n).Error
+	return n, err
 }

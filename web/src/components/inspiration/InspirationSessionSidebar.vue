@@ -1,13 +1,21 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { MessageSquare, Plus, Trash2, MessagesSquare } from 'lucide-vue-next'
 import { Message, Modal } from '@arco-design/web-vue'
 import { useRoute, useRouter } from 'vue-router'
+import { listNovels } from '@/api/novels'
+import type { Novel } from '@/types/novel'
 import { useInspirationStore } from '@/stores/inspiration'
 
 const route = useRoute()
 const router = useRouter()
 const store = useInspirationStore()
+
+const novels = ref<Novel[]>([])
+const pickNovelId = ref<number | undefined>(undefined)
+const novelOptions = computed(() =>
+  novels.value.map((n) => ({ label: n.title || `小说 #${n.id}`, value: n.id })),
+)
 
 const activeId = computed(() => {
   if (route.name !== 'inspiration-session') {
@@ -20,6 +28,13 @@ const activeId = computed(() => {
 
 onMounted(() => {
   void store.refreshSessions()
+  void listNovels({ page: 1, size: 100 })
+    .then((res) => {
+      novels.value = res.novels
+    })
+    .catch(() => {
+      /* ignore */
+    })
 })
 
 function isActive(id: string) {
@@ -32,7 +47,12 @@ function openThread(id: string) {
 
 async function onNewChat() {
   try {
-    const s = await store.createBackendSession('新对话')
+    const nid = pickNovelId.value
+    const title =
+      nid && novels.value.find((n) => n.id === nid)
+        ? `灵感 · ${novels.value.find((n) => n.id === nid)!.title}`
+        : '新对话'
+    const s = await store.createBackendSession(title, nid)
     await router.push({ name: 'inspiration-session', params: { sessionId: String(s.id) } })
   } catch (e) {
     Message.error(String((e as Error)?.message || e))
@@ -62,6 +82,13 @@ function onDelete(id: string, title: string, ev: MouseEvent) {
       <span>会话</span>
     </div>
     <div class="insp-sidebar__new-wrap">
+      <a-select
+        v-model="pickNovelId"
+        allow-clear
+        placeholder="可选：绑定小说再开聊"
+        :options="novelOptions"
+        class="insp-sidebar__novel-pick"
+      />
       <a-button type="primary" class="insp-sidebar__new" :loading="store.listLoading" @click="onNewChat">
         <template #icon>
           <Plus :size="16" :stroke-width="1.75" />
@@ -79,7 +106,10 @@ function onDelete(id: string, title: string, ev: MouseEvent) {
         @click="openThread(t.id)"
       >
         <MessagesSquare :size="15" :stroke-width="1.75" class="insp-sidebar__row-icon" />
-        <span class="insp-sidebar__item" :title="t.title">{{ t.title }}</span>
+        <span class="insp-sidebar__item" :title="t.title">
+          {{ t.title }}
+          <a-tag v-if="t.novelId" size="small" class="insp-sidebar__novel-tag">书</a-tag>
+        </span>
         <a-button
           type="text"
           size="mini"
@@ -133,6 +163,12 @@ function onDelete(id: string, title: string, ev: MouseEvent) {
   width: 100%;
   padding: 0 12px 12px;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.insp-sidebar__novel-pick {
+  width: 100%;
 }
 .insp-sidebar__new {
   width: 100%;

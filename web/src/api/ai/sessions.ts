@@ -20,6 +20,13 @@ export function createChatSession(body: CreateChatSessionBody) {
   return request.post<ChatSession>('/ai/sessions', body).then((res) => res.data)
 }
 
+/** POST /api/ai/sessions/update — body: sessionId + novelId（0 解除绑定） */
+export function updateChatSession(id: number, body: { novelId: number }) {
+  return request
+    .post<ChatSession>('/ai/sessions/update', { sessionId: id, novelId: body.novelId })
+    .then((res) => res.data)
+}
+
 /** GET /api/ai/sessions */
 export function listChatSessions(params: ListChatSessionsParams) {
   return request.get<PaginatedChatSessions>('/ai/sessions', { params }).then((res) => res.data)

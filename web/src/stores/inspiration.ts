@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { ChatMessage, ChatSession } from '@/types/chat'
+import type { ChatMessage, ChatSession, CreateChatSessionBody } from '@/types/chat'
 import { createChatSession, deleteChatSession, listChatMessages, listChatSessions } from '@/api/ai/sessions'
 
 export interface InspirationThread {
@@ -9,6 +9,8 @@ export interface InspirationThread {
   title: string
   /** 用于排序，毫秒时间戳 */
   lastMessageAt: number
+  /** 关联小说（灵感讨论后续发展） */
+  novelId?: number
 }
 
 export interface UiChatMessage {
@@ -52,6 +54,7 @@ export const useInspirationStore = defineStore('inspiration', () => {
         s.lastMessageAt > 0
           ? s.lastMessageAt * 1000
           : new Date(s.updatedAt || s.createdAt).getTime() || Date.now(),
+      novelId: s.novelId && s.novelId > 0 ? s.novelId : undefined,
     }
   }
 
@@ -75,18 +78,21 @@ export const useInspirationStore = defineStore('inspiration', () => {
   function applySessionMeta(session: ChatSession) {
     const id = String(session.id)
     const row = threads.value.find((t) => t.id === id)
+    const nid = session.novelId && session.novelId > 0 ? session.novelId : undefined
     if (row) {
       if (session.title) {
         row.title = session.title
       }
       row.lastMessageAt =
         session.lastMessageAt > 0 ? session.lastMessageAt * 1000 : Date.now()
+      row.novelId = nid
     } else {
       threads.value.unshift({
         id,
         title: (session.title && session.title.trim()) || '新对话',
         lastMessageAt:
           session.lastMessageAt > 0 ? session.lastMessageAt * 1000 : Date.now(),
+        novelId: nid,
       })
     }
   }
@@ -182,9 +188,13 @@ export const useInspirationStore = defineStore('inspiration', () => {
     }
   }
 
-  /** 新建后端会话并刷新侧栏（调用方负责导航） */
-  async function createBackendSession(title = '新对话') {
-    const s = await createChatSession({ title })
+  /** 新建后端会话并刷新侧栏（调用方负责导航）；novelId 可选，用于注入全书上下文 */
+  async function createBackendSession(title = '新对话', novelId?: number) {
+    const body: CreateChatSessionBody = { title }
+    if (novelId && novelId > 0) {
+      body.novelId = novelId
+    }
+    const s = await createChatSession(body)
     await refreshSessions()
     return s
   }
