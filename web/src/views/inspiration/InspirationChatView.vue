@@ -78,7 +78,7 @@ onMounted(async () => {
   }
 })
 
-async function onSessionNovelChange(v: number | string | Record<string, unknown> | undefined) {
+async function onSessionNovelChange(v: unknown) {
   const sid = sessionId.value
   if (!sid) {
     return
@@ -88,6 +88,8 @@ async function onSessionNovelChange(v: number | string | Record<string, unknown>
     novelId = v
   } else if (typeof v === 'string' && /^\d+$/.test(v)) {
     novelId = Number(v)
+  } else if (v === false || v === undefined || v === null || v === '') {
+    novelId = undefined
   } else {
     novelId = undefined
   }

@@ -8,6 +8,7 @@ import type {
   StorylineFact,
   StorylineGraph,
   StorylineNode,
+  NarrativeContext,
 } from '@/types/storyline'
 
 export interface ListStorylinesParams {
@@ -38,6 +39,22 @@ export function deleteStoryline(id: number) {
 
 export function getStorylineGraph(id: number) {
   return request.get<StorylineGraph>(`/storylines/${id}/graph`).then((res) => res.data)
+}
+
+export function getNarrativeContext(
+  storylineId: number,
+  params?: { chapterOrder?: number; nextBeats?: number },
+) {
+  const q: Record<string, number> = {}
+  if (params?.chapterOrder != null && params.chapterOrder > 0) {
+    q.chapterOrder = params.chapterOrder
+  }
+  if (params?.nextBeats != null && params.nextBeats > 0) {
+    q.nextBeats = params.nextBeats
+  }
+  return request
+    .get<NarrativeContext>(`/storylines/${storylineId}/narrative-context`, { params: q })
+    .then((res) => res.data)
 }
 
 export function generateStorylineByAI(body: GenerateStorylineBody) {

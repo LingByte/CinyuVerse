@@ -12,6 +12,7 @@ import (
 	"unicode"
 
 	"github.com/LingByte/CinyuVerse/internal/models"
+	storylinectx "github.com/LingByte/CinyuVerse/internal/storyline"
 	"github.com/LingByte/CinyuVerse/pkg/config"
 	"github.com/LingByte/lingoroutine/llm"
 	"github.com/LingByte/lingoroutine/logger"
@@ -111,6 +112,7 @@ func (ch *CinyuHandlers) registerStorylineRoutes(r *gin.RouterGroup) {
 
 		g.POST("/ai/generate", ch.GenerateStorylineByAI)
 		g.GET("/:id/graph", ch.GetStorylineGraph)
+		g.GET("/:id/narrative-context", ch.GetStorylineNarrativeContext)
 		g.POST("/:id/seed-demo", ch.SeedStorylineDemoData)
 		g.GET("/:id/state", ch.GetStorylineState)
 		g.POST("/:id/advance", ch.AdvanceStorylineByAI)
@@ -249,6 +251,9 @@ func (ch *CinyuHandlers) UpdateStoryline(c *gin.Context) {
 	}
 	if req.Description != "" {
 		row.Description = req.Description
+	}
+	if strings.TrimSpace(req.SpineSummary) != "" {
+		row.SpineSummary = strings.TrimSpace(req.SpineSummary)
 	}
 	if req.CurrentNodeID != "" {
 		row.CurrentNodeID = req.CurrentNodeID
@@ -842,6 +847,52 @@ func (ch *CinyuHandlers) GetStorylineGraph(c *gin.Context) {
 	})
 }
 
+// GetStorylineNarrativeContext GET /storylines/:id/narrative-context
+// Query: chapterOrder (可选，按章节过滤事实)、nextBeats (默认 3，后续主线拍数上限)
+func (ch *CinyuHandlers) GetStorylineNarrativeContext(c *gin.Context) {
+	id, err := parseIDParam(c, "id")
+	if err != nil {
+		response.Fail(c, "Invalid storyline id", nil)
+		return
+	}
+	sl, err := models.GetStorylineByID(ch.db, id)
+	if err != nil {
+		response.FailWithCode(c, 404, "Storyline not found", nil)
+		return
+	}
+	nodes, _, err := models.ListStorylineNodes(ch.db, id, 0, "", "", 1, 1000)
+	if err != nil {
+		response.Fail(c, "list nodes failed", nil)
+		return
+	}
+	edges, _, err := models.ListStorylineEdges(ch.db, id, 1, 1000)
+	if err != nil {
+		response.Fail(c, "list edges failed", nil)
+		return
+	}
+	facts, _, err := models.ListStorylineFacts(ch.db, id, 1, 1000)
+	if err != nil {
+		response.Fail(c, "list facts failed", nil)
+		return
+	}
+	chapterOrder, _ := strconv.Atoi(strings.TrimSpace(c.Query("chapterOrder")))
+	nextLimit, _ := strconv.Atoi(strings.TrimSpace(c.Query("nextBeats")))
+	nodePtrs := make([]*models.StorylineNode, len(nodes))
+	for i := range nodes {
+		nodePtrs[i] = nodes[i]
+	}
+	edgePtrs := make([]*models.StorylineEdge, len(edges))
+	for i := range edges {
+		edgePtrs[i] = edges[i]
+	}
+	factPtrs := make([]*models.StorylineFact, len(facts))
+	for i := range facts {
+		factPtrs[i] = facts[i]
+	}
+	ctx := storylinectx.BuildNarrativeContext(sl, nodePtrs, edgePtrs, factPtrs, chapterOrder, nextLimit)
+	response.Success(c, "OK", ctx)
+}
+
 func (ch *CinyuHandlers) SeedStorylineDemoData(c *gin.Context) {
 	id, err := parseIDParam(c, "id")
 	if err != nil {
@@ -854,10 +905,11 @@ func (ch *CinyuHandlers) SeedStorylineDemoData(c *gin.Context) {
 		return
 	}
 	demoNodes := []models.StorylineNode{
-		{StorylineID: id, NodeID: "evt-open", NovelID: sl.NovelID, Type: "event", Title: "开篇危机", Summary: "主角被公开陷害", Status: "approved", ChapterNo: 1, VolumeNo: 1, Priority: 10, Props: "{}"},
-		{StorylineID: id, NodeID: "clue-watch", NovelID: sl.NovelID, Type: "clue", Title: "黄铜怀表", Summary: "出现关键线索", Status: "approved", ChapterNo: 3, VolumeNo: 1, Priority: 9, Props: "{}"},
-		{StorylineID: id, NodeID: "twist-friend", NovelID: sl.NovelID, Type: "twist", Title: "闺蜜背刺", Summary: "信任关系反转", Status: "approved", ChapterNo: 12, VolumeNo: 1, Priority: 10, Props: "{}"},
-		{StorylineID: id, NodeID: "payoff-origin", NovelID: sl.NovelID, Type: "payoff", Title: "旧案真相", Summary: "伏笔回收", Status: "draft", ChapterNo: 46, VolumeNo: 2, Priority: 10, Props: "{}"},
+		{StorylineID: id, NodeID: "evt-open", NovelID: sl.NovelID, Type: "event", Title: "开篇危机", Summary: "主角被公开陷害", Status: "approved", ChapterNo: 1, VolumeNo: 1, Priority: 10, Props: `{"spineOrder":1}`},
+		{StorylineID: id, NodeID: "clue-watch", NovelID: sl.NovelID, Type: "clue", Title: "黄铜怀表", Summary: "出现关键线索", Status: "approved", ChapterNo: 3, VolumeNo: 1, Priority: 9, Props: `{"spineOrder":2}`},
+		{StorylineID: id, NodeID: "twist-friend", NovelID: sl.NovelID, Type: "twist", Title: "闺蜜背刺", Summary: "信任关系反转", Status: "approved", ChapterNo: 12, VolumeNo: 1, Priority: 10, Props: `{"spineOrder":3}`},
+		{StorylineID: id, NodeID: "payoff-origin", NovelID: sl.NovelID, Type: "payoff", Title: "旧案真相", Summary: "伏笔回收", Status: "draft", ChapterNo: 46, VolumeNo: 2, Priority: 10, Props: `{"spineOrder":4}`},
+		{StorylineID: id, NodeID: "detail-trial", NovelID: sl.NovelID, Type: "event", Title: "廷上对峙", Summary: "细化：开篇危机中的公开对峙戏", Status: "draft", ChapterNo: 2, VolumeNo: 1, Priority: 8, Props: `{"detail":true,"detailOf":"evt-open"}`},
 	}
 	for i := range demoNodes {
 		demoNodes[i].SetCreateInfo("system")
@@ -867,6 +919,7 @@ func (ch *CinyuHandlers) SeedStorylineDemoData(c *gin.Context) {
 		}
 	}
 	demoEdges := []models.StorylineEdge{
+		{StorylineID: id, EdgeID: "e-open-detail", NovelID: sl.NovelID, FromNodeID: "evt-open", ToNodeID: "detail-trial", Relation: "depends", Weight: 1, Status: "active", Props: "{}"},
 		{StorylineID: id, EdgeID: "e-open-clue", NovelID: sl.NovelID, FromNodeID: "evt-open", ToNodeID: "clue-watch", Relation: "introduces", Weight: 1, Status: "active", Props: "{}"},
 		{StorylineID: id, EdgeID: "e-clue-twist", NovelID: sl.NovelID, FromNodeID: "clue-watch", ToNodeID: "twist-friend", Relation: "causes", Weight: 2, Status: "active", Props: "{}"},
 		{StorylineID: id, EdgeID: "e-clue-payoff", NovelID: sl.NovelID, FromNodeID: "clue-watch", ToNodeID: "payoff-origin", Relation: "payoff", Weight: 3, Status: "active", Props: "{}"},
@@ -887,7 +940,17 @@ func (ch *CinyuHandlers) SeedStorylineDemoData(c *gin.Context) {
 		response.Fail(c, "seed fact failed", nil)
 		return
 	}
-	response.Success(c, "OK", gin.H{"storylineId": id, "nodes": len(demoNodes), "edges": len(demoEdges), "facts": 1})
+	sl.SpineSummary = "王子历经背叛与试炼，夺回力量，最终击败魔王拯救王国。"
+	sl.CurrentNodeID = "evt-open"
+	sl.SetUpdateInfo("system")
+	if err := models.UpdateStoryline(ch.db, sl); err != nil {
+		response.Fail(c, "update storyline spine failed", nil)
+		return
+	}
+	response.Success(c, "OK", gin.H{
+		"storylineId": id, "nodes": len(demoNodes), "edges": len(demoEdges), "facts": 1,
+		"hint": "已写入 spineOrder 主线四拍 + 一条 detailOf 细化节点；可用 GET /storylines/:id/narrative-context 查看桥接文本",
+	})
 }
 
 func (ch *CinyuHandlers) GetStorylineState(c *gin.Context) {

@@ -25,6 +25,8 @@ type Storyline struct {
 	Promise       string `json:"promise" gorm:"type:text;comment:读者承诺/卖点"`
 	Forbidden     string `json:"forbidden" gorm:"type:text;comment:禁忌规则(JSON数组字符串)"`
 	Description   string `json:"description" gorm:"type:text;comment:故事线说明"`
+	// SpineSummary 一句话主线（如「王子历经试炼击败怪兽，夺回王国」），供叙事流通与 LLM 桥接。
+	SpineSummary  string `json:"spineSummary" gorm:"type:text;comment:一句话主线摘要"`
 	CurrentNodeID string `json:"currentNodeId" gorm:"size:128;index;comment:当前推进节点ID"`
 }
 

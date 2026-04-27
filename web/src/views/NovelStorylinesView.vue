@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Message, Modal } from '@arco-design/web-vue'
-import { ArrowLeft, FileText, GitBranch, Sparkles, Wand2 } from 'lucide-vue-next'
+import { ArrowLeft, FileText, GitBranch, ListOrdered, Sparkles, Wand2 } from 'lucide-vue-next'
 import { WorkspaceBreadcrumb } from '@/components/layout'
 import StorylineGraphCanvas from '@/components/storyline/StorylineGraphCanvas.vue'
 import { getNovel } from '@/api/novels'
@@ -17,6 +17,7 @@ import {
   deleteStorylineFact,
   deleteStorylineNode,
   generateStorylineByAI,
+  getNarrativeContext,
   getStoryline,
   listStorylineEdges,
   listStorylineFacts,
@@ -27,6 +28,7 @@ import {
 import { ApiBizError } from '@/types/api'
 import type { Novel } from '@/types/novel'
 import type {
+  NarrativeContext,
   Storyline,
   StorylineAIDraft,
   StorylineEdge,
@@ -43,6 +45,12 @@ const loading = ref(false)
 const storylines = ref<Storyline[]>([])
 const selectedId = ref<number | null>(null)
 const tab = ref('graph')
+
+const narrativeCtx = ref<NarrativeContext | null>(null)
+const narrativeLoading = ref(false)
+/** 0 = 不按章节过滤事实；>0 传入 narrative-context */
+const narrativeChapterOrder = ref(0)
+const narrativeNextBeats = ref(3)
 
 const graphRef = ref<{ reload: () => Promise<void>; fitView: () => void } | null>(null)
 
@@ -61,6 +69,7 @@ const slForm = reactive({
   promise: '',
   forbidden: '',
   description: '',
+  spineSummary: '',
   currentNodeId: '',
 })
 
@@ -257,6 +266,45 @@ onMounted(async () => {
   await loadSubs()
 })
 
+watch([tab, selectedId], () => {
+  if (tab.value === 'narrative' && selectedId.value) {
+    void loadNarrativeContext()
+  }
+})
+
+async function loadNarrativeContext() {
+  if (!selectedId.value) {
+    narrativeCtx.value = null
+    return
+  }
+  narrativeLoading.value = true
+  try {
+    narrativeCtx.value = await getNarrativeContext(selectedId.value, {
+      chapterOrder: narrativeChapterOrder.value > 0 ? narrativeChapterOrder.value : undefined,
+      nextBeats: narrativeNextBeats.value,
+    })
+  } catch (e) {
+    Message.error(String((e as Error)?.message || e))
+    narrativeCtx.value = null
+  } finally {
+    narrativeLoading.value = false
+  }
+}
+
+async function copyNarrativeBridge() {
+  const t = narrativeCtx.value?.bridgeText?.trim()
+  if (!t) {
+    Message.warning('暂无桥接文本，请先刷新叙事流通')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(t)
+    Message.success('已复制桥接文本，可粘贴到灵感中心或章生成提示中')
+  } catch {
+    Message.error('复制失败，请手动选中下方文本复制')
+  }
+}
+
 async function onSelectStoryline(id: number) {
   selectedId.value = id
   tab.value = 'graph'
@@ -274,6 +322,7 @@ function openCreate() {
   slForm.promise = ''
   slForm.forbidden = ''
   slForm.description = ''
+  slForm.spineSummary = ''
   slForm.currentNodeId = ''
   drawerVisible.value = true
 }
@@ -289,6 +338,7 @@ function openEdit() {
   slForm.promise = s.promise || ''
   slForm.forbidden = s.forbidden || ''
   slForm.description = s.description || ''
+  slForm.spineSummary = s.spineSummary || ''
   slForm.currentNodeId = s.currentNodeId || ''
   drawerVisible.value = true
 }
@@ -309,6 +359,7 @@ async function saveStorylineMeta() {
         promise: slForm.promise.trim(),
         forbidden: slForm.forbidden.trim(),
         description: slForm.description.trim(),
+        spineSummary: slForm.spineSummary.trim(),
         currentNodeId: slForm.currentNodeId.trim(),
       })
       selectedId.value = created.id
@@ -322,6 +373,7 @@ async function saveStorylineMeta() {
         promise: slForm.promise.trim(),
         forbidden: slForm.forbidden.trim(),
         description: slForm.description.trim(),
+        spineSummary: slForm.spineSummary.trim(),
         currentNodeId: slForm.currentNodeId.trim(),
       })
       Message.success('已保存')
@@ -604,6 +656,9 @@ async function persistMergeToCurrent() {
       facts: factBodies,
       nextCurrentNodeId: d.storyline.currentNodeId?.trim() || undefined,
     })
+    if ((d.storyline.spineSummary || '').trim()) {
+      await updateStoryline(sid, { spineSummary: (d.storyline.spineSummary || '').trim() })
+    }
     Message.success('已将 AI 草稿中的节点/边/事实合并到当前故事线')
     aiVisible.value = false
     aiError.value = null
@@ -635,6 +690,7 @@ async function persistAIDraft() {
       promise: d.storyline.promise || '',
       forbidden: d.storyline.forbidden || '',
       description: d.storyline.description || '',
+      spineSummary: d.storyline.spineSummary || '',
       currentNodeId: d.storyline.currentNodeId || '',
     })
     const sid = created.id
@@ -899,6 +955,96 @@ function confirmDeleteFact(row: StorylineFact) {
             <a-tab-pane key="graph" title="关系图">
               <StorylineGraphCanvas v-if="selectedId" ref="graphRef" :storyline-id="selectedId" />
             </a-tab-pane>
+            <a-tab-pane key="narrative" title="叙事流通">
+              <a-space direction="vertical" fill style="width: 100%">
+                <a-alert type="info" show-icon>
+                  <template #icon><ListOrdered :size="16" :stroke-width="1.75" /></template>
+                  主线：在节点 <code>props</code> 里设 <code>spineOrder</code>（1,2,3…）表示从头到尾的节拍；细化：设
+                  <code>detail: true</code> 与 <code>detailOf</code> 指向主线 <code>nodeId</code>。未设
+                  <code>spineOrder</code> 时按卷/章/优先级自动排时间轴。桥接文本可直接给 LLM 写下一章。
+                </a-alert>
+                <a-space wrap>
+                  <span class="novel-sl__muted">章节（过滤事实，0=不过滤）</span>
+                  <a-input-number
+                    v-model="narrativeChapterOrder"
+                    :min="0"
+                    :max="9999"
+                    placeholder="0"
+                    style="width: 120px"
+                  />
+                  <span class="novel-sl__muted">后续拍数</span>
+                  <a-input-number v-model="narrativeNextBeats" :min="1" :max="20" style="width: 100px" />
+                  <a-button type="primary" :loading="narrativeLoading" @click="loadNarrativeContext">刷新</a-button>
+                  <a-button @click="copyNarrativeBridge">复制桥接文本</a-button>
+                </a-space>
+                <a-spin :loading="narrativeLoading" style="width: 100%">
+                  <template v-if="narrativeCtx">
+                    <a-descriptions :column="2" bordered size="small" style="margin-bottom: 12px">
+                      <a-descriptions-item label="解析模式" :span="2">
+                        {{ narrativeCtx.spineResolvedMode }}
+                      </a-descriptions-item>
+                      <a-descriptions-item label="一句话主线" :span="2">
+                        {{ narrativeCtx.spineSummary || '—' }}
+                      </a-descriptions-item>
+                      <a-descriptions-item label="当前节点">
+                        {{ narrativeCtx.currentNodeId || '—' }}
+                      </a-descriptions-item>
+                      <a-descriptions-item label="主线位置">
+                        {{
+                          narrativeCtx.currentSpineIndex >= 0
+                            ? `第 ${narrativeCtx.currentSpineIndex + 1} / ${narrativeCtx.spineBeats.length} 拍`
+                            : '（当前节点不在主线序列上）'
+                        }}
+                      </a-descriptions-item>
+                    </a-descriptions>
+                    <a-typography-title :heading="6">主线节拍（头→尾）</a-typography-title>
+                    <a-table
+                      :data="narrativeCtx.spineBeats"
+                      :pagination="false"
+                      row-key="nodeId"
+                      size="small"
+                      style="margin-bottom: 12px"
+                    >
+                      <a-table-column title="#" :width="48">
+                        <template #cell="{ record }">{{ record.spineOrder }}</template>
+                      </a-table-column>
+                      <a-table-column title="nodeId" data-index="nodeId" :width="140" />
+                      <a-table-column title="标题" data-index="title" />
+                      <a-table-column title="章" :width="56">
+                        <template #cell="{ record }">{{ record.chapterNo || '—' }}</template>
+                      </a-table-column>
+                    </a-table>
+                    <a-typography-title :heading="6">后续桥接（下一章重点）</a-typography-title>
+                    <a-table :data="narrativeCtx.nextBeats" :pagination="false" row-key="nodeId" size="small">
+                      <a-table-column title="nodeId" data-index="nodeId" :width="140" />
+                      <a-table-column title="标题" data-index="title" />
+                      <a-table-column title="摘要" data-index="summary" ellipsis tooltip />
+                    </a-table>
+                    <a-typography-title :heading="6" style="margin-top: 12px">细化挂靠</a-typography-title>
+                    <a-empty
+                      v-if="!narrativeCtx.detailClusters?.length"
+                      description="暂无 detailOf 细化节点"
+                    />
+                    <a-collapse v-else>
+                      <a-collapse-item
+                        v-for="c in narrativeCtx.detailClusters"
+                        :key="c.anchorNodeId"
+                        :header="`[${c.anchorNodeId}] ${c.anchorTitle || ''}`"
+                      >
+                        <a-table :data="c.details" :pagination="false" row-key="nodeId" size="small">
+                          <a-table-column title="nodeId" data-index="nodeId" :width="140" />
+                          <a-table-column title="标题" data-index="title" />
+                          <a-table-column title="摘要" data-index="summary" ellipsis tooltip />
+                        </a-table>
+                      </a-collapse-item>
+                    </a-collapse>
+                    <a-typography-title :heading="6" style="margin-top: 12px">桥接文本（给 LLM）</a-typography-title>
+                    <pre class="novel-sl__bridge-pre">{{ narrativeCtx.bridgeText }}</pre>
+                  </template>
+                  <a-empty v-else-if="!narrativeLoading" description="点击刷新加载叙事上下文" />
+                </a-spin>
+              </a-space>
+            </a-tab-pane>
             <a-tab-pane key="meta" title="元数据">
               <a-descriptions :column="1" bordered size="small">
                 <a-descriptions-item label="名称">{{ selectedStoryline.name }}</a-descriptions-item>
@@ -906,6 +1052,9 @@ function confirmDeleteFact(row: StorylineFact) {
                 <a-descriptions-item label="状态">{{ selectedStoryline.status }}</a-descriptions-item>
                 <a-descriptions-item label="主题">{{ selectedStoryline.theme || '—' }}</a-descriptions-item>
                 <a-descriptions-item label="卖点">{{ selectedStoryline.promise || '—' }}</a-descriptions-item>
+                <a-descriptions-item label="一句话主线 (spineSummary)">
+                  {{ selectedStoryline.spineSummary || '—' }}
+                </a-descriptions-item>
                 <a-descriptions-item label="禁忌">{{ selectedStoryline.forbidden || '—' }}</a-descriptions-item>
                 <a-descriptions-item label="说明">{{ selectedStoryline.description || '—' }}</a-descriptions-item>
                 <a-descriptions-item label="当前节点 ID">{{ selectedStoryline.currentNodeId || '—' }}</a-descriptions-item>
@@ -1011,6 +1160,13 @@ function confirmDeleteFact(row: StorylineFact) {
         </a-form-item>
         <a-form-item label="说明">
           <a-textarea v-model="slForm.description" :auto-size="{ minRows: 2, maxRows: 8 }" />
+        </a-form-item>
+        <a-form-item label="一句话主线（spineSummary）">
+          <a-textarea
+            v-model="slForm.spineSummary"
+            placeholder="例如：王子历经试炼击败魔王，夺回王国。"
+            :auto-size="{ minRows: 2, maxRows: 4 }"
+          />
         </a-form-item>
         <a-form-item label="当前推进节点 ID">
           <a-input v-model="slForm.currentNodeId" />
@@ -1263,6 +1419,23 @@ function confirmDeleteFact(row: StorylineFact) {
   border-radius: 8px;
   background: var(--color-fill-2);
   border: 1px solid var(--color-border-2);
+}
+.novel-sl__bridge-pre {
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--color-fill-2);
+  border: 1px solid var(--color-border-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.novel-sl__muted {
+  color: var(--color-text-3);
+  font-size: 13px;
 }
 .novel-sl__spin {
   margin-top: 80px;

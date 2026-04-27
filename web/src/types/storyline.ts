@@ -8,6 +8,8 @@ export interface Storyline {
   promise: string
   forbidden: string
   description: string
+  /** 一句话主线，供叙事流通与写章桥接 */
+  spineSummary?: string
   currentNodeId: string
   createdAt?: string
   updatedAt?: string
@@ -122,4 +124,63 @@ export interface GenerateStorylineResult {
   draft: StorylineAIDraft
   raw: string
   regenerated?: boolean
+}
+
+/** GET /storylines/:id/narrative-context 与后端 narrative.NarrativeContext 对齐 */
+export interface NarrativeSpineBeat {
+  nodeId: string
+  title: string
+  summary: string
+  type: string
+  status: string
+  chapterNo: number
+  volumeNo: number
+  spineOrder: number
+}
+
+export interface NarrativeOpenHook {
+  nodeId: string
+  title: string
+  summary: string
+  type: string
+}
+
+export interface NarrativeFact {
+  factKey: string
+  factValue: string
+  sourceNodeId: string
+  validFromChap: number
+  validToChap: number
+  confidence: number
+}
+
+export interface NarrativeDetailNode {
+  nodeId: string
+  title: string
+  summary: string
+  type: string
+  status: string
+  chapterNo: number
+  volumeNo: number
+}
+
+export interface DetailCluster {
+  anchorNodeId: string
+  anchorTitle: string
+  details: NarrativeDetailNode[]
+}
+
+export interface NarrativeContext {
+  storylineId: number
+  novelId: number
+  spineSummary: string
+  spineResolvedMode: string
+  currentNodeId: string
+  currentSpineIndex: number
+  spineBeats: NarrativeSpineBeat[]
+  nextBeats: NarrativeSpineBeat[]
+  openHooks: NarrativeOpenHook[]
+  factsAtChapter: NarrativeFact[]
+  detailClusters: DetailCluster[]
+  bridgeText: string
 }
