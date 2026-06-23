@@ -1,25 +1,47 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import Landing from '@/pages/Landing.vue'
 import IdeWorkspace from '@/pages/IdeWorkspace.vue'
+import InspirationPage from '@/pages/InspirationPage.vue'
 import BackgroundLayer from '@/components/ide/BackgroundLayer.vue'
 
-const currentPage = ref<'landing' | 'ide'>('landing')
+const appMode = ref<'landing' | 'ide' | 'inspiration'>('landing')
 const initialWorkspaceId = ref<string | null>(null)
+const detachPanel = ref<'ai' | 'outline' | null>(null)
+
+onMounted(() => {
+  const p = new URLSearchParams(window.location.search)
+  if (p.get('mode') === 'inspiration') {
+    appMode.value = 'inspiration'
+    return
+  }
+  if (p.get('mode') === 'detach') {
+    appMode.value = 'ide'
+    initialWorkspaceId.value = p.get('wsId')
+    const panel = p.get('panel')
+    if (panel === 'ai' || panel === 'outline') detachPanel.value = panel
+  }
+})
 
 function enterIDE() {
   initialWorkspaceId.value = null
-  currentPage.value = 'ide'
+  detachPanel.value = null
+  appMode.value = 'ide'
 }
 </script>
 
 <template>
-  <BackgroundLayer />
+  <BackgroundLayer v-if="appMode !== 'inspiration'" />
+  <InspirationPage v-if="appMode === 'inspiration'" />
   <Landing
-    v-if="currentPage === 'landing'"
+    v-else-if="appMode === 'landing'"
     @enter-ide="enterIDE"
   />
-  <IdeWorkspace v-else :initial-workspace-id="initialWorkspaceId" />
+  <IdeWorkspace
+    v-else
+    :initial-workspace-id="initialWorkspaceId"
+    :detach-panel="detachPanel"
+  />
 </template>
 
 <style>

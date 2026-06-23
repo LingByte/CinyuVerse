@@ -1,15 +1,31 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, Menu, globalShortcut } from 'electron'
 import { spawn, ChildProcess } from 'child_process'
 import path from 'node:path'
 import fs from 'node:fs'
 
 let mainWindow: BrowserWindow | null = null
 let goProcess: ChildProcess | null = null
+const childWindows = new Map<string, BrowserWindow>()
+let pendingOpenFile: string | null = null
 
 const isDev = !app.isPackaged
+const DEV_URL = 'http://localhost:9090'
 const GO_BINARY = isDev
   ? path.join(__dirname, '..', '..', 'cmd', 'server', 'server.exe')
   : path.join(process.resourcesPath, 'bin', 'server')
+
+function loadURL(win: BrowserWindow, pathQuery = '') {
+  if (isDev) {
+    win.loadURL(DEV_URL + pathQuery)
+  } else {
+    const indexHtml = path.join(__dirname, '..', 'dist', 'index.html')
+    if (pathQuery.startsWith('?')) {
+      win.loadFile(indexHtml, { search: pathQuery })
+    } else {
+      win.loadFile(indexHtml)
+    }
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -33,10 +49,17 @@ function createWindow() {
   mainWindow.setAutoHideMenuBar(true)
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:9090')
+    mainWindow.loadURL(DEV_URL)
     mainWindow.webContents.openDevTools({ mode: 'detach' })
   } else {
     mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
+  }
+
+  if (pendingOpenFile) {
+    mainWindow.webContents.once('did-finish-load', () => {
+      mainWindow?.webContents.send('app:open-file', pendingOpenFile)
+      pendingOpenFile = null
+    })
   }
 
   mainWindow.on('closed', () => {
@@ -229,7 +252,118 @@ ipcMain.handle('window:close', () => {
 
 ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false)
 
+// ── Inspiration drafts ──────────────────────────────────────
+
+function inspirationPath(wsId: string) {
+  return path.join(app.getPath('userData'), 'inspiration', `${wsId}.json`)
+}
+
+function readInspiration(wsId: string) {
+  const fp = inspirationPath(wsId)
+  if (!fs.existsSync(fp)) return []
+  try {
+    return JSON.parse(fs.readFileSync(fp, 'utf-8'))
+  } catch {
+    return []
+  }
+}
+
+function writeInspiration(wsId: string, notes: unknown[]) {
+  const dir = path.dirname(inspirationPath(wsId))
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(inspirationPath(wsId), JSON.stringify(notes, null, 2), 'utf-8')
+}
+
+ipcMain.handle('inspiration:list', (_e, wsId: string) => readInspiration(wsId || 'default'))
+
+ipcMain.handle('inspiration:add', (_e, wsId: string, note: { id: string; content: string; created_at: string }) => {
+  const id = wsId || 'default'
+  const list = readInspiration(id)
+  list.unshift(note)
+  writeInspiration(id, list)
+  mainWindow?.webContents.send('inspiration:saved')
+  return list
+})
+
+function createInspirationWindow(wsId: string) {
+  const key = 'inspiration-' + wsId
+  if (childWindows.has(key)) {
+    childWindows.get(key)?.focus()
+    return
+  }
+  const win = new BrowserWindow({
+    width: 420,
+    height: 360,
+    alwaysOnTop: true,
+    title: '灵感草稿箱',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  loadURL(win, `?mode=inspiration&wsId=${encodeURIComponent(wsId)}`)
+  childWindows.set(key, win)
+  win.on('closed', () => childWindows.delete(key))
+}
+
+ipcMain.handle('window:openInspiration', (_e, wsId: string) => {
+  createInspirationWindow(wsId || 'default')
+})
+
+function createDetachedPanel(panel: 'ai' | 'outline', wsId: string) {
+  const key = `detach-${panel}-${wsId}`
+  if (childWindows.has(key)) {
+    childWindows.get(key)?.focus()
+    return
+  }
+  const win = new BrowserWindow({
+    width: panel === 'ai' ? 420 : 520,
+    height: 800,
+    title: panel === 'ai' ? 'CinyuVerse AI' : 'CinyuVerse 大纲',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  loadURL(win, `?mode=detach&panel=${panel}&wsId=${encodeURIComponent(wsId)}`)
+  childWindows.set(key, win)
+  win.on('closed', () => childWindows.delete(key))
+}
+
+ipcMain.handle('window:openDetached', (_e, panel: 'ai' | 'outline', wsId: string) => {
+  createDetachedPanel(panel, wsId)
+})
+
+function handleOpenFile(filePath: string) {
+  const ext = path.extname(filePath).toLowerCase()
+  if (!['.md', '.txt', '.cinv'].includes(ext)) return
+  if (mainWindow) {
+    mainWindow.webContents.send('app:open-file', filePath)
+    mainWindow.focus()
+  } else {
+    pendingOpenFile = filePath
+  }
+}
+
 // ── App Lifecycle ───────────────────────────────────────────
+
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (_e, argv) => {
+    const fileArg = argv.find((a) => /\.(md|txt|cinv)$/i.test(a))
+    if (fileArg) handleOpenFile(fileArg)
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
+  })
+}
 
 app.whenReady().then(async () => {
   // Remove Electron default application menu (File/Edit/View/Window/Help)
@@ -242,6 +376,18 @@ app.whenReady().then(async () => {
     }
   }
   createWindow()
+
+  globalShortcut.register('CommandOrControl+Shift+I', () => {
+    createInspirationWindow('default')
+  })
+
+  // Windows 文件关联：启动参数中的文件路径
+  const startupFile = process.argv.find((a) => /\.(md|txt|cinv)$/i.test(a))
+  if (startupFile) handleOpenFile(startupFile)
+
+  if (process.platform === 'win32') {
+    app.setAsDefaultProtocolClient('cinyuverse')
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -256,5 +402,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  globalShortcut.unregisterAll()
   stopGoBackend()
 })

@@ -29,6 +29,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleMaximizeWindow: () => ipcRenderer.invoke('window:toggleMaximize') as Promise<boolean>,
   closeWindow: () => ipcRenderer.invoke('window:close'),
   isWindowMaximized: () => ipcRenderer.invoke('window:isMaximized') as Promise<boolean>,
+  openInspirationWindow: (wsId: string) => ipcRenderer.invoke('window:openInspiration', wsId),
+  openDetachedPanel: (panel: 'ai' | 'outline', wsId: string) => ipcRenderer.invoke('window:openDetached', panel, wsId),
+  listInspiration: (wsId: string) => ipcRenderer.invoke('inspiration:list', wsId) as Promise<{ id: string; content: string; created_at: string }[]>,
+  addInspiration: (wsId: string, note: { id: string; content: string; created_at: string }) =>
+    ipcRenderer.invoke('inspiration:add', wsId, note) as Promise<{ id: string; content: string; created_at: string }[]>,
+  onInspirationSaved: (cb: () => void) => {
+    ipcRenderer.on('inspiration:saved', cb)
+  },
+  onOpenFile: (cb: (filePath: string) => void) => {
+    ipcRenderer.on('app:open-file', (_e, fp: string) => cb(fp))
+  },
 })
 
 export type ElectronAPI = {

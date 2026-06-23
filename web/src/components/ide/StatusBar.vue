@@ -11,6 +11,7 @@ defineProps<{
 const emit = defineEmits<{
   exportTxt: []
   exportMd: []
+  openDashboard: []
 }>()
 </script>
 
@@ -21,7 +22,7 @@ const emit = defineEmits<{
         <span class="status-dot" :class="{ connected }"/>{{ connected ? '已连接' : '未连接' }}
       </span>
       <span v-if="streaming" class="status-item streaming"><span class="spinner-sm"/>AI 生成中…</span>
-      <span class="status-item">{{ wordCount.toLocaleString() }} 字</span>
+      <button class="status-item status-clickable" @click="emit('openDashboard')">{{ wordCount.toLocaleString() }} 字</button>
       <span class="status-item">{{ volumeCount }} 卷 / {{ chapterCount }} 章</span>
     </div>
     <div class="status-right">
@@ -107,4 +108,14 @@ const emit = defineEmits<{
   font-size: 10px;
 }
 .status-btn:hover { border-color: var(--accent); color: var(--text-main); }
+
+.status-clickable {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  padding: 0;
+}
+.status-clickable:hover { color: var(--accent); }
 </style>

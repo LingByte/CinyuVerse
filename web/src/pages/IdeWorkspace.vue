@@ -1,18 +1,25 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import FileTree from '@/components/ide/FileTree.vue'
+import LeftSidebar from '@/components/ide/LeftSidebar.vue'
 import EditorPanel from '@/components/ide/EditorPanel.vue'
 import AiChatPanel from '@/components/ide/AiChatPanel.vue'
 import StatusBar from '@/components/ide/StatusBar.vue'
 import MenuBar from '@/components/ide/MenuBar.vue'
 import ThemeSettings from '@/components/ide/ThemeSettings.vue'
+import WritingDashboard from '@/components/ide/WritingDashboard.vue'
+import ChapterHistoryModal from '@/components/ide/ChapterHistoryModal.vue'
+import OutlinePanel from '@/components/ide/OutlinePanel.vue'
 import { useWorkspace } from '@/composables/useWorkspace'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useThemeStore } from '@/stores/themeStore'
+import { useFocusModeStore } from '@/stores/focusModeStore'
+import { useWritingStatsStore } from '@/stores/writingStatsStore'
+import type { WordStats } from '@/api/ide'
 import { createWorkspace, createVolume, createChapter, saveChapterContent } from '@/api/ide'
 
 const props = defineProps<{
   initialWorkspaceId?: string | null
+  detachPanel?: 'ai' | 'outline' | null
 }>()
 
 const workspace = useWorkspace()
@@ -35,6 +42,22 @@ const editorZoom = ref(0) // 字体缩放等级，0=默认
 const showPreferences = ref(false)
 const menuBarRef = ref<InstanceType<typeof MenuBar> | null>(null)
 const themeStore = useThemeStore()
+const focusMode = useFocusModeStore()
+const writingStats = useWritingStatsStore()
+const showDashboard = ref(false)
+const showChapterHistory = ref(false)
+const wordStats = ref<WordStats | null>(null)
+
+const workspaceMeta = computed(() => {
+  const ws = workspace.currentWorkspace.value
+  if (!ws) return null
+  return {
+    world_view: ws.world_view,
+    character: ws.character,
+    outline: ws.outline,
+    style: ws.style,
+  }
+})
 
 // ── Computed ──────────────────────────────────────────────
 
@@ -82,11 +105,20 @@ async function onSelectChapter(volId: string, chId: string, title: string) {
 
 async function doSave() {
   if (!currentChId.value || !currentVolId.value || !isDirty.value) return
+  const prevLen = savedContent.value.length
   saveStatus.value = '保存中...'
   await workspace.saveChapterContent(currentVolId.value, currentChId.value, currentContent.value)
+  const delta = Math.max(0, currentContent.value.length - prevLen)
+  if (workspace.currentWorkspace.value) {
+    writingStats.load(workspace.currentWorkspace.value.id)
+    writingStats.recordSave(delta)
+  }
   savedContent.value = currentContent.value
   isDirty.value = false
   saveStatus.value = '已保存 ' + new Date().toLocaleTimeString()
+  if (workspace.currentWorkspace.value) {
+    await workspace.openWorkspace(workspace.currentWorkspace.value.id)
+  }
 }
 
 function onContentUpdate(content: string) {
@@ -126,9 +158,53 @@ async function onDeleteWorkspace() {
 }
 
 async function onDeleteVolume(volId: string) {
-  if (confirm('确定删除该卷及其所有章节？')) {
+  if (confirm('确定删除该卷及其所有章节？可在回收站中 7 天内恢复。')) {
     await workspace.removeVolume(volId)
+    if (volId === currentVolId.value) {
+      currentContent.value = ''
+      currentTitle.value = ''
+      currentChId.value = ''
+      currentVolId.value = ''
+    }
   }
+}
+
+async function onSidebarRestored() {
+  if (workspace.currentWorkspace.value) {
+    await workspace.openWorkspace(workspace.currentWorkspace.value.id)
+  }
+}
+
+async function openDashboard() {
+  if (!workspace.currentWorkspace.value) return
+  writingStats.load(workspace.currentWorkspace.value.id)
+  wordStats.value = await workspace.loadWordStats(writingStats.targetWords)
+  showDashboard.value = true
+}
+
+async function refreshWordStats() {
+  if (!workspace.currentWorkspace.value) return
+  wordStats.value = await workspace.loadWordStats(writingStats.targetWords)
+}
+
+function toggleTypewriter() {
+  focusMode.toggle()
+  if (focusMode.typewriterMode) {
+    showSidebar.value = false
+    showAiPanel.value = false
+  }
+}
+
+function exitTypewriter() {
+  focusMode.disable()
+  showSidebar.value = true
+  showAiPanel.value = true
+}
+
+function onRestoreChapter(content: string) {
+  currentContent.value = content
+  isDirty.value = true
+  doSave()
 }
 
 async function onDeleteChapter(volId: string, chId: string) {
@@ -315,7 +391,7 @@ async function onExportTxt() {
   try {
     const { exportTxt } = await import('@/api/ide')
     const blob = await exportTxt(workspace.currentWorkspace.value.id)
-    downloadBlob(blob, `${workspace.currentWorkspace.value.name}.txt`)
+    downloadBlob(blob, `${workspace.currentWorkspace.value.book_name}.txt`)
   } catch {
     saveStatus.value = '导出失败'
   }
@@ -326,10 +402,60 @@ async function onExportMd() {
   try {
     const { exportMd } = await import('@/api/ide')
     const blob = await exportMd(workspace.currentWorkspace.value.id)
-    downloadBlob(blob, `${workspace.currentWorkspace.value.name}.md`)
+    downloadBlob(blob, `${workspace.currentWorkspace.value.book_name}.md`)
   } catch {
     saveStatus.value = '导出失败'
   }
+}
+
+async function exportBlob(fn: (id: string) => Promise<Blob>, ext: string) {
+  if (!workspace.currentWorkspace.value) return
+  try {
+    const blob = await fn(workspace.currentWorkspace.value.id)
+    downloadBlob(blob, `${workspace.currentWorkspace.value.book_name}.${ext}`)
+  } catch {
+    saveStatus.value = '导出失败'
+  }
+}
+
+async function onExportEpub() {
+  const { exportEpub } = await import('@/api/ide')
+  await exportBlob(exportEpub, 'epub')
+}
+
+async function onExportDocx() {
+  const { exportDocx } = await import('@/api/ide')
+  await exportBlob(exportDocx, 'docx')
+}
+
+async function onExportFanqie() {
+  const { exportPlatform } = await import('@/api/ide')
+  await exportBlob((id) => exportPlatform(id, 'fanqie'), 'txt')
+}
+
+async function onExportQidian() {
+  const { exportPlatform } = await import('@/api/ide')
+  await exportBlob((id) => exportPlatform(id, 'qidian'), 'txt')
+}
+
+async function onExportJinjiang() {
+  const { exportPlatform } = await import('@/api/ide')
+  await exportBlob((id) => exportPlatform(id, 'jjwxc'), 'txt')
+}
+
+function onOpenInspiration() {
+  const wsId = workspace.currentWorkspace.value?.id ?? 'default'
+  window.electronAPI?.openInspirationWindow?.(wsId)
+}
+
+function onDetachPanel(panel: 'ai' | 'outline') {
+  const wsId = workspace.currentWorkspace.value?.id
+  if (!wsId) return
+  window.electronAPI?.openDetachedPanel?.(panel, wsId)
+}
+
+function onJumpChapter(volId: string, chId: string, title: string) {
+  onSelectChapter(volId, chId, title)
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -362,6 +488,15 @@ function onOpenPreferences() {
 }
 
 function onGlobalKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && focusMode.typewriterMode) {
+    exitTypewriter()
+    return
+  }
+  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'i') {
+    e.preventDefault()
+    onOpenInspiration()
+    return
+  }
   if (e.ctrlKey && !e.altKey && e.key === ',') {
     e.preventDefault()
     onOpenPreferences()
@@ -447,6 +582,7 @@ onMounted(async () => {
   // Auto-open workspace if passed via prop
   if (props.initialWorkspaceId) {
     await workspace.openWorkspace(props.initialWorkspaceId)
+    writingStats.load(props.initialWorkspaceId)
     ws.connect()
   } else {
     // 没有工作区时自动创建一个默认的，确保AI对话可用
@@ -485,9 +621,36 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="ide-workspace" :class="{ resizing: !!resizing }">
+  <div class="ide-workspace" :class="{ resizing: !!resizing, 'typewriter-mode': focusMode.typewriterMode, 'detach-mode': !!props.detachPanel }">
+    <!-- Detached panel only -->
+    <div v-if="props.detachPanel === 'ai'" class="detach-full">
+      <AiChatPanel
+        :connected="ws.connected.value"
+        :streaming="ws.streaming.value"
+        :stream-text="ws.streamText.value"
+        :log-messages="ws.logMessages.value"
+        :tool-calls="ws.toolCalls.value"
+        :error="ws.error.value"
+        :chapter-id="currentChId"
+        :workspace-id="workspace.currentWorkspace.value?.id"
+        :workspace-name="workspace.currentWorkspace.value?.book_name"
+        :workspace-meta="workspaceMeta"
+        @generate="onGenerate"
+        @stop="ws.stop()"
+        @insert="onInsertGenerated"
+      />
+    </div>
+    <div v-else-if="props.detachPanel === 'outline'" class="detach-full">
+      <OutlinePanel
+        :workspace-id="workspace.currentWorkspace.value?.id ?? null"
+        @jump-chapter="onJumpChapter"
+      />
+    </div>
+
+    <template v-else>
     <!-- Menu Bar (top) -->
     <MenuBar
+      v-if="!focusMode.typewriterMode"
       ref="menuBarRef"
       class="menu-bar-top"
       :workspace-name="workspace.currentWorkspace.value?.book_name"
@@ -496,6 +659,11 @@ onUnmounted(() => {
       @save="doSave"
       @export-txt="onExportTxt"
       @export-md="onExportMd"
+      @export-epub="onExportEpub"
+      @export-docx="onExportDocx"
+      @export-fanqie="onExportFanqie"
+      @export-qidian="onExportQidian"
+      @export-jinjiang="onExportJinjiang"
       @close-workspace="onMenuCloseWorkspace"
       @new-workspace="onMenuNewWorkspace"
       @new-volume="onMenuNewVolume"
@@ -507,6 +675,11 @@ onUnmounted(() => {
       @zoom-reset="zoomReset"
       @reset-layout="resetLayout"
       @open-preferences="onOpenPreferences"
+      @toggle-typewriter="toggleTypewriter"
+      @open-dashboard="openDashboard"
+      @open-chapter-history="showChapterHistory = true"
+      @open-inspiration="onOpenInspiration"
+      @detach-panel="onDetachPanel"
       @minimize-window="onMinimizeWindow"
       @toggle-maximize="onToggleMaximize"
       @close-window="onCloseWindow"
@@ -515,9 +688,8 @@ onUnmounted(() => {
     <!-- Main content area -->
     <div class="ide-main">
     <!-- Left Panel: File Tree -->
-    <template v-if="showSidebar">
-    <div class="panel left-panel" :style="{ width: panelWidths.left + 'px' }">
-      <FileTree
+    <div v-if="showSidebar && !focusMode.typewriterMode" class="panel left-panel" :style="{ width: panelWidths.left + 'px' }">
+      <LeftSidebar
         :workspace="workspace.currentWorkspace.value"
         @select-chapter="onSelectChapter"
         @create-workspace="onCreateWorkspace"
@@ -526,12 +698,13 @@ onUnmounted(() => {
         @delete-workspace="onDeleteWorkspace"
         @delete-volume="onDeleteVolume"
         @delete-chapter="onDeleteChapter"
+        @restored="onSidebarRestored"
+        @jump-chapter="onJumpChapter"
       />
     </div>
 
     <!-- Resize Handle -->
-    <div class="resize-handle" @mousedown="startResize('left')"></div>
-    </template>
+    <div v-if="showSidebar && !focusMode.typewriterMode" class="resize-handle" @mousedown="startResize('left')"></div>
 
     <!-- Center Panel: Editor -->
     <div class="panel center-panel" :style="{ fontSize: (1 + editorZoom * 0.1) + 'em' }">
@@ -546,10 +719,10 @@ onUnmounted(() => {
     </div>
 
     <!-- Resize Handle -->
-    <div v-if="showAiPanel" class="resize-handle" @mousedown="startResize('right')"></div>
+    <div v-if="showAiPanel && !focusMode.typewriterMode" class="resize-handle" @mousedown="startResize('right')"></div>
 
     <!-- Right Panel: AI Chat -->
-    <div v-if="showAiPanel" class="panel right-panel" :style="{ width: panelWidths.right + 'px' }">
+    <div v-if="showAiPanel && !focusMode.typewriterMode" class="panel right-panel" :style="{ width: panelWidths.right + 'px' }">
       <AiChatPanel
         :connected="ws.connected.value"
         :streaming="ws.streaming.value"
@@ -560,6 +733,7 @@ onUnmounted(() => {
         :chapter-id="currentChId"
         :workspace-id="workspace.currentWorkspace.value?.id"
         :workspace-name="workspace.currentWorkspace.value?.book_name"
+        :workspace-meta="workspaceMeta"
         @generate="onGenerate"
         @stop="ws.stop()"
         @insert="onInsertGenerated"
@@ -567,8 +741,11 @@ onUnmounted(() => {
     </div>
     </div>
 
+    <button v-if="focusMode.typewriterMode" class="typewriter-exit" @click="exitTypewriter">退出专注模式 (Esc)</button>
+
     <!-- Status Bar -->
     <StatusBar
+      v-if="!focusMode.typewriterMode"
       class="status-bar"
       :word-count="totalWordCount"
       :chapter-count="totalChapters"
@@ -578,6 +755,7 @@ onUnmounted(() => {
       :save-status="saveStatus"
       @export-txt="onExportTxt"
       @export-md="onExportMd"
+      @open-dashboard="openDashboard"
     />
 
     <!-- Loading overlay -->
@@ -587,6 +765,24 @@ onUnmounted(() => {
     <div v-if="menuError" class="error-toast">{{ menuError }}</div>
 
     <ThemeSettings :visible="showPreferences" @close="showPreferences = false" />
+
+    <WritingDashboard
+      :visible="showDashboard"
+      :workspace-id="workspace.currentWorkspace.value?.id ?? null"
+      :stats="wordStats"
+      @close="showDashboard = false"
+    />
+
+    <ChapterHistoryModal
+      :visible="showChapterHistory"
+      :workspace-id="workspace.currentWorkspace.value?.id ?? null"
+      :vol-id="currentVolId"
+      :ch-id="currentChId"
+      :current-content="currentContent"
+      @close="showChapterHistory = false"
+      @restore="onRestoreChapter"
+    />
+    </template>
   </div>
 </template>
 
@@ -676,5 +872,38 @@ onUnmounted(() => {
 @keyframes toastIn {
   from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.ide-workspace.typewriter-mode .center-panel {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.typewriter-exit {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 100;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text-sub);
+  cursor: pointer;
+  font-size: 12px;
+}
+.typewriter-exit:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.detach-full {
+  flex: 1;
+  height: 100vh;
+  overflow: hidden;
+}
+.ide-workspace.detach-mode {
+  display: flex;
+  flex-direction: column;
 }
 </style>

@@ -123,7 +123,7 @@ function handleContextAction(action: string) {
         >
           <span class="tree-arrow">{{ collapsedVolumes.has(vol.id) ? '▸' : '▾' }}</span>
           <svg class="tree-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 6a2 2 0 012-2h5l2 2h9a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/><path d="M2 10h20" stroke-width="1"/></svg>
-          <span class="tree-label">{{ vol.name }}</span>
+          <span class="tree-label">{{ vol.title }}</span>
         </div>
 
         <template v-if="!collapsedVolumes.has(vol.id)">

@@ -12,6 +12,11 @@ const emit = defineEmits<{
   save: []
   exportTxt: []
   exportMd: []
+  exportEpub: []
+  exportDocx: []
+  exportFanqie: []
+  exportQidian: []
+  exportJinjiang: []
   closeWorkspace: []
   newWorkspace: []
   newVolume: []
@@ -23,6 +28,11 @@ const emit = defineEmits<{
   zoomReset: []
   resetLayout: []
   openPreferences: []
+  toggleTypewriter: []
+  openDashboard: []
+  openChapterHistory: []
+  openInspiration: []
+  detachPanel: [panel: 'ai' | 'outline']
   minimizeWindow: []
   toggleMaximize: []
   closeWindow: []
@@ -62,6 +72,12 @@ const fileMenuItems = computed<MenuItem[]>(() => {
     { separator: true },
     { label: '导出为 TXT', action: () => emit('exportTxt') },
     { label: '导出为 Markdown', action: () => emit('exportMd') },
+    { label: '导出 EPUB', action: () => emit('exportEpub') },
+    { label: '导出 Word (.docx)', action: () => emit('exportDocx') },
+    { separator: true },
+    { label: '导出·番茄小说', action: () => emit('exportFanqie') },
+    { label: '导出·起点中文网', action: () => emit('exportQidian') },
+    { label: '导出·晋江文学城', action: () => emit('exportJinjiang') },
     { separator: true },
     { label: '关闭工作区', action: () => emit('closeWorkspace') },
   ]
@@ -109,6 +125,14 @@ const menus = computed<MenuDef[]>(() => [
     items: [
       { label: '切换侧边栏', shortcut: 'Ctrl+B', action: () => emit('toggleSidebar') },
       { label: '切换 AI 面板', shortcut: 'Ctrl+J', action: () => emit('toggleAiPanel') },
+      { separator: true },
+      { label: '打字机专注模式', action: () => emit('toggleTypewriter') },
+      { label: '写作数据看板', action: () => emit('openDashboard') },
+      { label: '章节历史版本…', action: () => emit('openChapterHistory') },
+      { separator: true },
+      { label: '灵感草稿箱', shortcut: 'Ctrl+Shift+I', action: () => emit('openInspiration') },
+      { label: '拆出 AI 面板', action: () => emit('detachPanel', 'ai') },
+      { label: '拆出大纲面板', action: () => emit('detachPanel', 'outline') },
       { separator: true },
       { label: '放大字体', shortcut: 'Ctrl+=', action: () => emit('zoomIn') },
       { label: '缩小字体', shortcut: 'Ctrl+-', action: () => emit('zoomOut') },

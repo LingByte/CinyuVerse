@@ -91,6 +91,7 @@ export async function chatCompletion(body: {
   model?: string
   temperature?: number
   maxTokens?: number
+  systemPrompt?: string
 }): Promise<{
   session: ChatSessionItem
   userMessage: ChatMessageItem
@@ -105,6 +106,7 @@ export async function chatCompletion(body: {
     model: body.model ?? '',
     temperature: body.temperature,
     maxTokens: body.maxTokens,
+    systemPrompt: body.systemPrompt ?? '',
   })
   return unwrap(res)
 }

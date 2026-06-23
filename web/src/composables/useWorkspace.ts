@@ -64,8 +64,12 @@ export function useWorkspace() {
 
   async function removeVolume(volId: string) {
     if (!currentWorkspace.value) return
-    // Note: backend doesn't support deleteVolume yet, but keep the UI
-    currentWorkspace.value.volumes = currentWorkspace.value.volumes.filter((v) => v.id !== volId)
+    try {
+      await api.deleteVolume(currentWorkspace.value.id, volId)
+      await openWorkspace(currentWorkspace.value.id)
+    } catch {
+      error.value = '删除卷失败'
+    }
   }
 
   // ── Chapters ─────────────────────────────────────────────
@@ -85,8 +89,57 @@ export function useWorkspace() {
 
   async function removeChapter(volId: string, chId: string) {
     if (!currentWorkspace.value) return
-    const vol = currentWorkspace.value.volumes.find((v) => v.id === volId)
-    if (vol) vol.chapters = vol.chapters.filter((c) => c.id !== chId)
+    try {
+      await api.deleteChapter(currentWorkspace.value.id, volId, chId)
+      await openWorkspace(currentWorkspace.value.id)
+    } catch {
+      error.value = '删除章节失败'
+    }
+  }
+
+  async function restoreTrashItem(trashId: string) {
+    if (!currentWorkspace.value) return
+    try {
+      await api.restoreTrash(currentWorkspace.value.id, trashId)
+      await openWorkspace(currentWorkspace.value.id)
+    } catch {
+      error.value = '恢复失败'
+    }
+  }
+
+  async function loadTrash() {
+    if (!currentWorkspace.value) return []
+    try {
+      return await api.listTrash(currentWorkspace.value.id)
+    } catch {
+      error.value = '加载回收站失败'
+      return []
+    }
+  }
+
+  async function loadCharacters() {
+    if (!currentWorkspace.value) return []
+    return api.getCharacters(currentWorkspace.value.id)
+  }
+
+  async function saveCharacters(cards: api.CharacterCard[]) {
+    if (!currentWorkspace.value) return []
+    return api.saveCharacters(currentWorkspace.value.id, cards)
+  }
+
+  async function loadGlossary() {
+    if (!currentWorkspace.value) return []
+    return api.getGlossary(currentWorkspace.value.id)
+  }
+
+  async function saveGlossary(entries: api.GlossaryEntry[]) {
+    if (!currentWorkspace.value) return []
+    return api.saveGlossary(currentWorkspace.value.id, entries)
+  }
+
+  async function loadWordStats(target = 0) {
+    if (!currentWorkspace.value) return null
+    return api.getWordStats(currentWorkspace.value.id, target)
   }
 
   // ── Chapter Content ──────────────────────────────────────
@@ -123,6 +176,13 @@ export function useWorkspace() {
     removeVolume,
     addChapter,
     removeChapter,
+    restoreTrashItem,
+    loadTrash,
+    loadCharacters,
+    saveCharacters,
+    loadGlossary,
+    saveGlossary,
+    loadWordStats,
     loadChapterContent,
     saveChapterContent,
   }

@@ -24,6 +24,12 @@ export interface ElectronAPI {
   toggleMaximizeWindow: () => Promise<boolean>
   closeWindow: () => Promise<void>
   isWindowMaximized: () => Promise<boolean>
+  openInspirationWindow?: (wsId: string) => Promise<void>
+  openDetachedPanel?: (panel: 'ai' | 'outline', wsId: string) => Promise<void>
+  listInspiration?: (wsId: string) => Promise<{ id: string; content: string; created_at: string }[]>
+  addInspiration?: (wsId: string, note: { id: string; content: string; created_at: string }) => Promise<{ id: string; content: string; created_at: string }[]>
+  onInspirationSaved?: (cb: () => void) => void
+  onOpenFile?: (cb: (filePath: string) => void) => void
 }
 
 declare global {

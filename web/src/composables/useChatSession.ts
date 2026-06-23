@@ -91,6 +91,7 @@ export function useChatSession(workspaceId: Ref<string | null | undefined>, work
     model: string,
     temperature: number,
     maxTokens: number,
+    systemPrompt?: string,
   ) {
     const wsId = workspaceId.value
     if (!wsId) throw new Error('未打开工作区')
@@ -114,6 +115,7 @@ export function useChatSession(workspaceId: Ref<string | null | undefined>, work
         model,
         temperature,
         maxTokens,
+        systemPrompt: systemPrompt ?? '',
       })
       sessionId.value = resp.session.id
       sessionTitle.value = resp.session.title || sessionTitle.value

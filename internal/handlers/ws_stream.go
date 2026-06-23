@@ -454,6 +454,19 @@ func buildUserInstruction(req wsRequest) string {
 	case "polish":
 		b.WriteString("请润色以下文本：\n\n")
 		b.WriteString(req.SelectText)
+	case "plot_branch":
+		b.WriteString("【剧情推演】请基于现有章节、人物卡和大纲，生成后续 3 段不同走向的剧情分支（每段 200 字摘要 + 关键冲突点）。")
+		b.WriteString("完成后询问用户选择哪条分支，若用户确认则调用 WriteChapter 创建新章节。")
+	case "conflict":
+		b.WriteString("【冲突生成】针对当前章节内容，制造 2-3 个矛盾冲突或反转点，给出具体改写方案。")
+	case "foreshadow":
+		b.WriteString("【伏笔回收】检索全文和大纲中的伏笔、未解悬念，生成对应的回收段落建议，可调用 SearchProject 查找关键词。")
+	case "dialogue_opt":
+		b.WriteString("【对话优化】统一全书人物对话风格，修正人设 OOC。先 ReadProjectFiles 读取 character_list，再对照当前章节对话。")
+	case "chapter_summary":
+		b.WriteString("【章节总结】为当前章节生成 100 字以内简介，并调用 UpdateProjectSetting 更新 outline 字段中对应章节摘要。")
+	case "duplicate_check":
+		b.WriteString("【全局查重】调用 ScanDuplicateContent 工具检索全文重复剧情和描述，给出修改建议。")
 	default:
 		b.WriteString("请根据用户指令创作。")
 	}

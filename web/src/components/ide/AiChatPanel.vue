@@ -2,6 +2,8 @@
 import { ref, computed, watch, nextTick, toRef } from 'vue'
 import ThemeSettings from '@/components/ide/ThemeSettings.vue'
 import { useChatSession } from '@/composables/useChatSession'
+import { useLlmStore } from '@/stores/llmStore'
+import { usePromptStore } from '@/stores/promptStore'
 
 const showThemeModal = ref(false)
 
@@ -15,6 +17,12 @@ const props = defineProps<{
   chapterId: string
   workspaceId?: string | null
   workspaceName?: string
+  workspaceMeta?: {
+    world_view?: string
+    character?: string
+    outline?: string
+    style?: string
+  } | null
 }>()
 
 const emit = defineEmits<{
@@ -47,6 +55,9 @@ const showMoreMenu = ref(false)
 const agentMode = ref<'chat' | 'create'>('chat')
 const lastCreateUserMsg = ref('')
 
+const llmStore = useLlmStore()
+const promptStore = usePromptStore()
+
 const chatSession = useChatSession(
   toRef(props, 'workspaceId'),
   computed(() => props.workspaceName ?? '工作区'),
@@ -62,16 +73,39 @@ const contextSizes = [
 ]
 const selectedContext = ref(contextSizes[0])
 
-const models = [
-  { id: 'qwen-plus', name: '通义 Plus' },
-  { id: 'qwen-turbo', name: '通义 Turbo（快速）' },
-  { id: 'qwen-max', name: '通义 Max' },
-  { id: 'qwen-long', name: '通义 Long（长文本）' },
-]
-const selectedModel = ref(models[0])
+const models = computed(() => llmStore.models.map((m) => ({ id: m.id, name: m.name })))
+const selectedModel = ref(llmStore.models[0] ?? { id: 'qwen-plus', name: '通义 Plus' })
+
+const promptOptions = computed(() => promptStore.allPrompts)
+const selectedPromptId = ref('')
+const showPromptMenu = ref(false)
+
+watch(() => props.workspaceId, (id) => {
+  if (!id) return
+  const active = promptStore.getActivePrompt(id)
+  selectedPromptId.value = active?.id ?? promptOptions.value[0]?.id ?? ''
+}, { immediate: true })
+
+function buildGlobalMemoryPrompt(): string {
+  const parts: string[] = []
+  const meta = props.workspaceMeta
+  if (meta?.world_view?.trim()) parts.push('【世界观】\n' + meta.world_view.trim())
+  if (meta?.character?.trim()) parts.push('【人物设定】\n' + meta.character.trim())
+  if (meta?.outline?.trim()) parts.push('【大纲】\n' + meta.outline.trim())
+  if (meta?.style?.trim()) parts.push('【文风】\n' + meta.style.trim())
+  const prompt = promptOptions.value.find((p) => p.id === selectedPromptId.value)
+  if (prompt?.content) parts.push('【文风模板】\n' + prompt.content)
+  return parts.join('\n\n')
+}
 
 const modes = [
   { value: 'chapter', label: '续写' },
+  { value: 'plot_branch', label: '剧情推演' },
+  { value: 'conflict', label: '冲突' },
+  { value: 'foreshadow', label: '伏笔' },
+  { value: 'dialogue_opt', label: '对话' },
+  { value: 'chapter_summary', label: '摘要' },
+  { value: 'duplicate_check', label: '查重' },
   { value: 'select', label: '改写选中' },
   { value: 'rewrite', label: '改写' },
   { value: 'expand', label: '扩写' },
@@ -114,6 +148,7 @@ async function handleGenerate() {
         selectedModel.value.id,
         temperature.value,
         maxTokens.value,
+        buildGlobalMemoryPrompt(),
       )
       scrollToBottom()
     } catch {
@@ -203,9 +238,15 @@ function scrollToBottom() {
   })
 }
 
-function selectModel(m: typeof models[number]) {
+function selectModel(m: { id: string; name: string }) {
   selectedModel.value = m
   showModelMenu.value = false
+}
+
+function selectPrompt(id: string) {
+  selectedPromptId.value = id
+  if (props.workspaceId) promptStore.setActivePrompt(props.workspaceId, id)
+  showPromptMenu.value = false
 }
 
 function selectContext(c: typeof contextSizes[number]) {
@@ -427,11 +468,16 @@ watch(() => props.logMessages.length, scrollToBottom)
             >{{ selectedContext.label }}</button>
             <button
               class="toolbar-pill model-pill"
-              @click="showModelMenu = !showModelMenu; showContextMenu = false"
+              @click="showModelMenu = !showModelMenu; showContextMenu = false; showPromptMenu = false"
             >
               <span class="model-name">{{ selectedModel.name }}</span>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
+            <button
+              class="toolbar-pill"
+              title="文风 Prompt 模板"
+              @click="showPromptMenu = !showPromptMenu; showModelMenu = false; showContextMenu = false"
+            >Prompt</button>
             <div v-if="showContextMenu" class="dropdown-menu">
               <button
                 v-for="c in contextSizes"
@@ -452,6 +498,18 @@ watch(() => props.logMessages.length, scrollToBottom)
                 :class="{ active: selectedModel.id === m.id }"
                 @click="selectModel(m)"
               >{{ m.name }}</button>
+            </div>
+            <div v-if="showPromptMenu" class="dropdown-menu prompt-menu">
+              <button
+                v-for="p in promptOptions"
+                :key="p.id"
+                class="dropdown-item"
+                :class="{ active: selectedPromptId === p.id }"
+                @click="selectPrompt(p.id)"
+              >
+                <span class="item-label">{{ p.name }}</span>
+                <span class="item-desc">{{ p.category }}</span>
+              </button>
             </div>
           </div>
 
