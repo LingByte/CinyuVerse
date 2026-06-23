@@ -67,3 +67,8 @@ server_stderr.txt
 server_stdout.txt
 workspace/
 
+# Local build artifacts
+*.exe
+build/
+packages/
+
