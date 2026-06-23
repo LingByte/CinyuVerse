@@ -7,12 +7,13 @@ import (
 const TABLE_CHAT_SESSION = "ci_chat_sessions"
 
 const (
-	ChatLLMProviderOpenAI    = "openai"
-	ChatLLMProviderOllama    = "ollama"
-	ChatLLMProviderAlibaba   = "alibaba"
-	ChatLLMProviderAnthropic = "anthropic"
-	ChatLLMProviderLMStudio  = "lmstudio"
-	ChatLLMProviderCoze      = "coze"
+	ChatLLMProviderOpenAI      = "openai"
+	ChatLLMProviderOllama      = "ollama"
+	ChatLLMProviderAlibaba     = "alibaba"
+	ChatLLMProviderAnthropic   = "anthropic"
+	ChatLLMProviderLMStudio    = "lmstudio"
+	ChatLLMProviderCoze        = "coze"
+	ChatLLMProviderSiliconFlow = "siliconflow"
 )
 
 const (
@@ -28,6 +29,7 @@ type ChatSession struct {
 	Status        string        `json:"status" gorm:"size:32;default:active;index;comment:会话状态"`
 	UserID        uint          `json:"userId" gorm:"index;comment:业务用户ID"`
 	NovelID       uint          `json:"novelId" gorm:"index;comment:关联小说ID(可选)"`
+	WorkspaceID   string        `json:"workspaceId" gorm:"size:128;index;comment:关联工作区ID(IDE)"`
 	Provider      string        `json:"provider" gorm:"size:32;index;comment:LLM 提供方(openai/ollama/...)"`
 	Model         string        `json:"model" gorm:"size:128;comment:默认或最近使用的模型名"`
 	SystemPrompt  string        `json:"systemPrompt" gorm:"type:text;comment:创建时的系统提示(快照)"`
@@ -81,6 +83,18 @@ func ListChatSessionsByNovelID(db *gorm.DB, novelID uint, page, pageSize int) ([
 	var total int64
 	offset := (page - 1) * pageSize
 	q := db.Model(&ChatSession{}).Where("novel_id = ? AND is_deleted = ?", novelID, SoftDeleteStatusActive)
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := q.Order("last_message_at DESC, created_at DESC").Offset(offset).Limit(pageSize).Find(&rows).Error
+	return rows, total, err
+}
+
+func ListChatSessionsByWorkspaceID(db *gorm.DB, workspaceID string, page, pageSize int) ([]*ChatSession, int64, error) {
+	var rows []*ChatSession
+	var total int64
+	offset := (page - 1) * pageSize
+	q := db.Model(&ChatSession{}).Where("workspace_id = ? AND is_deleted = ?", workspaceID, SoftDeleteStatusActive)
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}

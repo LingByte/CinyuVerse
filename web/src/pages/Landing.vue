@@ -4,6 +4,7 @@ import ParallaxFloatingPreview from '@/components/fancy/image/ParallaxFloatingPr
 
 const emit = defineEmits<{
   (e: 'goChat'): void
+  (e: 'enterIde'): void
 }>()
 </script>
 
@@ -15,29 +16,29 @@ const emit = defineEmits<{
     <div class="landing__container">
       <section class="hero">
         <h1 class="hero__title">
-          Your <span class="hero__accent">AI-Powered</span> study assistant with
+          你的 <span class="hero__accent">AI 驱动</span> 小说创作
           <br />
-          Superpowers
+          工作台
         </h1>
         <p class="hero__subtitle">
-          CinyuVerse is your study assistant for notes, summaries, and learning workflows.
+          CinyuVerse 是新一代 AI 小说编辑器，集创作、续写、润色于一体。
         </p>
 
         <div class="hero__cta">
-          <Button variant="soft" shape="square" size="lg" radius="14px" @click="emit('goChat')">Go to Chat</Button>
+          <Button variant="soft" shape="square" size="lg" radius="14px" padding="14px 36px" @click="emit('enterIde')">进入编辑器</Button>
         </div>
 
         <div class="hero__hint">
-          Trusted by <span class="hero__hint-accent">30,000+</span> learners.
+          已有 <span class="hero__hint-accent">30,000+</span> 创作者信赖
         </div>
       </section>
 
-      <section class="brands" aria-label="Supported models">
-        <div class="brands__item">OpenAI</div>
-        <div class="brands__item">Claude</div>
+      <section class="brands" aria-label="支持的模型">
+        <div class="brands__item">通义千问</div>
+        <div class="brands__item">文心一言</div>
         <div class="brands__item">Gemini</div>
         <div class="brands__item">DeepSeek</div>
-        <div class="brands__item">Grok</div>
+        <div class="brands__item">月之暗面</div>
         <div class="brands__item">Meta</div>
       </section>
     </div>
@@ -48,8 +49,8 @@ const emit = defineEmits<{
 .landing {
   position: relative;
   min-height: 100vh;
-  background: #ffffff;
-  color: var(--text);
+  background: var(--bg-primary);
+  color: var(--text-main);
   padding: clamp(18px, 3.2vw, 28px) clamp(14px, 2.2vw, 18px);
   overflow: hidden;
 }
@@ -89,11 +90,11 @@ const emit = defineEmits<{
   line-height: 1.06;
   font-weight: 950;
   letter-spacing: -0.03em;
-  color: #0b1220;
+  color: var(--text-main);
 }
 
 .hero__accent {
-  background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+  background: linear-gradient(90deg, var(--accent), #a78bfa);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -104,21 +105,25 @@ const emit = defineEmits<{
   max-width: 560px;
   font-size: clamp(13px, 1.35vw, 14px);
   line-height: 1.7;
-  color: color-mix(in oklab, #0b1220 48%, #ffffff);
+  color: var(--text-sub);
 }
 
 .hero__cta {
   margin-top: clamp(14px, 2.6vh, 22px);
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .hero__hint {
   margin-top: clamp(10px, 1.8vh, 14px);
   font-size: clamp(11px, 1.15vw, 12px);
-  color: color-mix(in oklab, #0b1220 38%, #ffffff);
+  color: var(--text-muted);
 }
 
 .hero__hint-accent {
-  color: #8b5cf6;
+  color: var(--accent);
   font-weight: 800;
 }
 
@@ -137,7 +142,7 @@ const emit = defineEmits<{
   font-size: clamp(16px, 2.2vw, 22px);
   font-weight: 750;
   letter-spacing: -0.02em;
-  color: color-mix(in oklab, #0b1220 30%, #ffffff);
+  color: var(--text-muted);
 }
 
 @media (max-width: 520px) {

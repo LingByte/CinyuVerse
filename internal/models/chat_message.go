@@ -1,6 +1,10 @@
 package models
 
-import "gorm.io/gorm"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 const TABLE_CHAT_MESSAGE = "ci_chat_messages"
 
@@ -48,4 +52,33 @@ func NextChatMessageSeq(db *gorm.DB, sessionID uint) (int, error) {
 		return 0, err
 	}
 	return maxSeq + 1, nil
+}
+
+func AppendChatMessages(db *gorm.DB, sessionID uint, rows []*ChatMessage) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	tx := db.Begin()
+	seq, err := NextChatMessageSeq(tx, sessionID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	for i, row := range rows {
+		row.SessionID = sessionID
+		row.Seq = seq + i
+		row.SetCreateInfo("system")
+		if err := tx.Create(row).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	if err := tx.Model(&ChatSession{}).Where("id = ?", sessionID).Updates(map[string]interface{}{
+		"last_message_at": time.Now().Unix(),
+		"updated_at":      time.Now(),
+	}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit().Error
 }

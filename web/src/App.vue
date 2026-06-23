@@ -1,87 +1,44 @@
 <script setup lang="ts">
-import AiCreate from '@/pages/AiCreate.vue'
-import HotTemplate from '@/pages/HotTemplate.vue'
+import { ref } from 'vue'
 import Landing from '@/pages/Landing.vue'
-import NovelDetail from '@/pages/NovelDetail.vue'
-import NovelWriter from '@/pages/NovelWriter.vue'
+import IdeWorkspace from '@/pages/IdeWorkspace.vue'
+import BackgroundLayer from '@/components/ide/BackgroundLayer.vue'
 
-type View = 'landing' | 'chat' | 'hotTemplate' | 'novelDetail' | 'novelWriter'
+const currentPage = ref<'landing' | 'ide'>('landing')
+const initialWorkspaceId = ref<string | null>(null)
 
-import { computed, ref } from 'vue'
-
-const view = ref<View>('landing')
-
-const showLanding = computed(() => view.value === 'landing')
-
-const selectedNovelId = ref<number | string | null>(null)
-const selectedVolumeId = ref<string | null>(null)
-const selectedChapterId = ref<string | null>(null)
-
-const openNovel = (id: number | string) => {
-  selectedNovelId.value = id
-  selectedVolumeId.value = null
-  selectedChapterId.value = null
-  view.value = 'novelDetail'
-}
-
-const startCreate = (payload: { volumeId: string; chapterId: string }) => {
-  selectedVolumeId.value = payload.volumeId
-  selectedChapterId.value = payload.chapterId
-  view.value = 'novelWriter'
+function enterIDE() {
+  initialWorkspaceId.value = null
+  currentPage.value = 'ide'
 }
 </script>
 
 <template>
-  <Transition name="page" mode="out-in">
-    <Landing v-if="showLanding" key="landing" @goChat="view = 'chat'" />
-
-    <HotTemplate
-      v-else-if="view === 'hotTemplate'"
-      key="hotTemplate"
-      @back="view = 'chat'"
-      @openNovel="openNovel"
-    />
-
-    <NovelDetail
-      v-else-if="view === 'novelDetail'"
-      key="novelDetail"
-      :novel-id="selectedNovelId ?? ''"
-      @back="view = 'hotTemplate'"
-      @startCreate="startCreate"
-    />
-
-    <NovelWriter
-      v-else-if="view === 'novelWriter'"
-      key="novelWriter"
-      :novel-id="selectedNovelId ?? ''"
-      :volume-id="selectedVolumeId ?? ''"
-      :chapter-id="selectedChapterId ?? ''"
-      @back="view = 'novelDetail'"
-    />
-
-    <main v-else key="chat" class="chat">
-      <AiCreate @back="view = 'landing'" @goHotTemplate="view = 'hotTemplate'" />
-    </main>
-  </Transition>
+  <BackgroundLayer />
+  <Landing
+    v-if="currentPage === 'landing'"
+    @enter-ide="enterIDE"
+  />
+  <IdeWorkspace v-else :initial-workspace-id="initialWorkspaceId" />
 </template>
 
-<style scoped>
-.chat {
-  min-height: 100vh;
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-.page-enter-active,
-.page-leave-active {
-  transition: opacity 220ms ease, transform 260ms ease;
+html, body, #app {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
 }
 
-.page-enter-from {
-  opacity: 0;
-  transform: translateY(10px);
-}
-
-.page-leave-to {
-  opacity: 0;
-  transform: translateY(-6px);
+html:not([data-has-bg-image]) body,
+html:not([data-has-bg-image]) #app {
+  background: var(--bg-primary);
 }
 </style>

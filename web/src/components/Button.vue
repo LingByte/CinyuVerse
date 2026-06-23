@@ -134,7 +134,7 @@ const onMouseDown = () => {
       class="cv-btn__diffuse pointer-events-none absolute inset-0 rounded-[inherit]"
       aria-hidden="true"
     />
-    <span v-if="loading" aria-hidden="true">⏳</span>
+    <span v-if="loading" class="spinner" aria-hidden="true" />
     <slot />
   </button>
 </template>
@@ -144,6 +144,19 @@ const onMouseDown = () => {
   transform: scale(0.92);
   opacity: 0.75;
   animation: cv-btn-diffuse 560ms ease-out;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid color-mix(in oklab, currentColor 20%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 @keyframes cv-btn-diffuse {

@@ -10,9 +10,7 @@ import (
 
 	"github.com/LingByte/CinyuVerse/internal/models"
 	"github.com/LingByte/CinyuVerse/pkg/config"
-	"github.com/LingByte/lingoroutine/llm"
-	"github.com/LingByte/lingoroutine/logger"
-	"github.com/LingByte/lingoroutine/response"
+	"github.com/LingByte/CinyuVerse/pkg/lingo"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -27,6 +25,7 @@ type CreateChatSessionRequest struct {
 	Title        string `json:"title"`
 	UserID       uint   `json:"userId" binding:"required"`
 	NovelID      uint   `json:"novelId"`
+	WorkspaceID  string `json:"workspaceId"`
 	SystemPrompt string `json:"systemPrompt"`
 	Provider     string `json:"provider"`
 	Model        string `json:"model"`
@@ -47,6 +46,7 @@ type ChatSessionResponse struct {
 	Status        string `json:"status"`
 	UserID        uint   `json:"userId"`
 	NovelID       uint   `json:"novelId"`
+	WorkspaceID   string `json:"workspaceId,omitempty"`
 	Provider      string `json:"provider"`
 	Model         string `json:"model"`
 	SystemPrompt  string `json:"systemPrompt,omitempty"`
@@ -90,11 +90,20 @@ type paginatedChatSessionsResponse struct {
 	Size     int                    `json:"size"`
 }
 
+// AppendChatMessagesRequest 追加消息（不调用 LLM，供 WebSocket 创作模式同步历史）
+type AppendChatMessagesRequest struct {
+	Messages []struct {
+		Role    string `json:"role" binding:"required"`
+		Content string `json:"content" binding:"required"`
+	} `json:"messages" binding:"required,min=1,dive"`
+}
+
 // ChatCompletionRequest POST /api/ai/chat — 统一对话入口：sessionId 为 0 时先建会话再生成回复；否则在已有会话中续聊。
 type ChatCompletionRequest struct {
 	SessionID    uint     `json:"sessionId"`
 	UserID       uint     `json:"userId" binding:"required"`
 	NovelID      uint     `json:"novelId"`
+	WorkspaceID  string   `json:"workspaceId"`
 	Title        string   `json:"title"`
 	SystemPrompt string   `json:"systemPrompt"`
 	Provider     string   `json:"provider"`
@@ -120,6 +129,7 @@ func (ch *CinyuHandlers) registerChatRoutes(r *gin.RouterGroup) {
 		sessions.POST("", ch.CreateChatSession)
 		sessions.GET("", ch.ListChatSessions)
 		sessions.GET("/:id/messages", ch.ListChatMessages)
+		sessions.POST("/:id/messages", ch.AppendChatMessages)
 		sessions.POST("/:id/chat", ch.ChatTurn)
 		sessions.GET("/:id", ch.GetChatSession)
 		sessions.DELETE("/:id", ch.DeleteChatSession)
@@ -136,6 +146,7 @@ func chatSessionToResponse(s *models.ChatSession) *ChatSessionResponse {
 		Status:        s.Status,
 		UserID:        s.UserID,
 		NovelID:       s.NovelID,
+		WorkspaceID:   s.WorkspaceID,
 		Provider:      s.Provider,
 		Model:         s.Model,
 		SystemPrompt:  s.SystemPrompt,
@@ -168,7 +179,7 @@ func chatMessageToResponse(m *models.ChatMessage) *ChatMessageResponse {
 func (ch *CinyuHandlers) CreateChatSession(c *gin.Context) {
 	var req CreateChatSessionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, err.Error(), nil)
+		lingo.Fail(c, err.Error(), nil)
 		return
 	}
 	provider := strings.TrimSpace(req.Provider)
@@ -187,22 +198,24 @@ func (ch *CinyuHandlers) CreateChatSession(c *gin.Context) {
 		Status:       models.ChatSessionStatusActive,
 		UserID:       req.UserID,
 		NovelID:      req.NovelID,
+		WorkspaceID:  strings.TrimSpace(req.WorkspaceID),
 		Provider:     provider,
 		Model:        model,
 		SystemPrompt: req.SystemPrompt,
 	}
 	s.SetCreateInfo("system")
 	if err := models.CreateChatSession(ch.db, s); err != nil {
-		response.Fail(c, "Failed to create chat session", nil)
+		lingo.Fail(c, "Failed to create chat session", nil)
 		return
 	}
-	response.Success(c, "Chat session created", chatSessionToResponse(s))
+	lingo.Success(c, "Chat session created", chatSessionToResponse(s))
 }
 
 // ListChatSessions GET /api/ai/sessions?userId=&novelId=&page=&size=
 func (ch *CinyuHandlers) ListChatSessions(c *gin.Context) {
 	userIDStr := c.Query("userId")
 	novelIDStr := c.Query("novelId")
+	workspaceIDStr := strings.TrimSpace(c.Query("workspaceId"))
 	pageStr := c.DefaultQuery("page", "1")
 	sizeStr := c.DefaultQuery("size", "20")
 	page, err := strconv.Atoi(pageStr)
@@ -219,33 +232,35 @@ func (ch *CinyuHandlers) ListChatSessions(c *gin.Context) {
 
 	var rows []*models.ChatSession
 	var total int64
-	if novelIDStr != "" {
+	if workspaceIDStr != "" {
+		rows, total, err = models.ListChatSessionsByWorkspaceID(ch.db, workspaceIDStr, page, size)
+	} else if novelIDStr != "" {
 		nid, err := strconv.ParseUint(novelIDStr, 10, 32)
 		if err != nil {
-			response.Fail(c, "Invalid novelId", nil)
+			lingo.Fail(c, "Invalid novelId", nil)
 			return
 		}
 		rows, total, err = models.ListChatSessionsByNovelID(ch.db, uint(nid), page, size)
 	} else if userIDStr != "" {
 		uid, err := strconv.ParseUint(userIDStr, 10, 32)
 		if err != nil {
-			response.Fail(c, "Invalid userId", nil)
+			lingo.Fail(c, "Invalid userId", nil)
 			return
 		}
 		rows, total, err = models.ListChatSessionsByUserID(ch.db, uint(uid), page, size)
 	} else {
-		response.Fail(c, "Query userId or novelId is required", nil)
+		lingo.Fail(c, "Query userId, novelId or workspaceId is required", nil)
 		return
 	}
 	if err != nil {
-		response.Fail(c, "Failed to list sessions", nil)
+		lingo.Fail(c, "Failed to list sessions", nil)
 		return
 	}
 	out := make([]*ChatSessionResponse, 0, len(rows))
 	for _, s := range rows {
 		out = append(out, chatSessionToResponse(s))
 	}
-	response.Success(c, "OK", paginatedChatSessionsResponse{
+	lingo.Success(c, "OK", paginatedChatSessionsResponse{
 		Sessions: out,
 		Total:    total,
 		Page:     page,
@@ -257,71 +272,126 @@ func (ch *CinyuHandlers) ListChatSessions(c *gin.Context) {
 func (ch *CinyuHandlers) GetChatSession(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		response.Fail(c, "Invalid session id", nil)
+		lingo.Fail(c, "Invalid session id", nil)
 		return
 	}
 	s, err := models.GetChatSessionByID(ch.db, uint(id))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			response.FailWithCode(c, 404, "Session not found", nil)
+			lingo.FailWithCode(c, 404, "Session not found", nil)
 			return
 		}
-		response.Fail(c, "Failed to load session", nil)
+		lingo.Fail(c, "Failed to load session", nil)
 		return
 	}
-	response.Success(c, "OK", chatSessionToResponse(s))
+	lingo.Success(c, "OK", chatSessionToResponse(s))
 }
 
 // DeleteChatSession DELETE /api/ai/sessions/:id
 func (ch *CinyuHandlers) DeleteChatSession(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		response.Fail(c, "Invalid session id", nil)
+		lingo.Fail(c, "Invalid session id", nil)
 		return
 	}
 	if err := models.DeleteChatSession(ch.db, uint(id), "system"); err != nil {
-		response.Fail(c, "Failed to delete session", nil)
+		lingo.Fail(c, "Failed to delete session", nil)
 		return
 	}
-	response.Success(c, "Session deleted", gin.H{"id": id})
+	lingo.Success(c, "Session deleted", gin.H{"id": id})
 }
 
 // ListChatMessages GET /api/ai/sessions/:id/messages
 func (ch *CinyuHandlers) ListChatMessages(c *gin.Context) {
 	sid, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		response.Fail(c, "Invalid session id", nil)
+		lingo.Fail(c, "Invalid session id", nil)
 		return
 	}
 	if _, err := models.GetChatSessionByID(ch.db, uint(sid)); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			response.FailWithCode(c, 404, "Session not found", nil)
+			lingo.FailWithCode(c, 404, "Session not found", nil)
 			return
 		}
-		response.Fail(c, "Failed to load session", nil)
+		lingo.Fail(c, "Failed to load session", nil)
 		return
 	}
 	msgs, err := models.ListChatMessagesBySessionID(ch.db, uint(sid))
 	if err != nil {
-		response.Fail(c, "Failed to list messages", nil)
+		lingo.Fail(c, "Failed to list messages", nil)
 		return
 	}
 	out := make([]*ChatMessageResponse, 0, len(msgs))
 	for _, m := range msgs {
 		out = append(out, chatMessageToResponse(m))
 	}
-	response.Success(c, "OK", gin.H{"messages": out})
+	lingo.Success(c, "OK", gin.H{"messages": out})
+}
+
+// AppendChatMessages POST /api/ai/sessions/:id/messages — 追加 user/assistant 消息（不调用 LLM）
+func (ch *CinyuHandlers) AppendChatMessages(c *gin.Context) {
+	sid, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		lingo.Fail(c, "Invalid session id", nil)
+		return
+	}
+	if _, err := models.GetChatSessionByID(ch.db, uint(sid)); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			lingo.FailWithCode(c, 404, "Session not found", nil)
+			return
+		}
+		lingo.Fail(c, "Failed to load session", nil)
+		return
+	}
+	var req AppendChatMessagesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		lingo.Fail(c, err.Error(), nil)
+		return
+	}
+	rows := make([]*models.ChatMessage, 0, len(req.Messages))
+	for _, m := range req.Messages {
+		role := strings.ToLower(strings.TrimSpace(m.Role))
+		if role != models.ChatMessageRoleUser && role != models.ChatMessageRoleAssistant {
+			continue
+		}
+		content := strings.TrimSpace(m.Content)
+		if content == "" {
+			continue
+		}
+		rows = append(rows, &models.ChatMessage{
+			Role:    role,
+			Content: content,
+		})
+	}
+	if len(rows) == 0 {
+		lingo.Fail(c, "No valid messages to append", nil)
+		return
+	}
+	if err := models.AppendChatMessages(ch.db, uint(sid), rows); err != nil {
+		lingo.Fail(c, "Failed to append messages", nil)
+		return
+	}
+	msgs, err := models.ListChatMessagesBySessionID(ch.db, uint(sid))
+	if err != nil {
+		lingo.Fail(c, "Failed to list messages", nil)
+		return
+	}
+	out := make([]*ChatMessageResponse, 0, len(msgs))
+	for _, m := range msgs {
+		out = append(out, chatMessageToResponse(m))
+	}
+	lingo.Success(c, "OK", gin.H{"messages": out})
 }
 
 // ChatCompletion POST /api/ai/chat — 统一「对话」入口（含自动建会话）。
 func (ch *CinyuHandlers) ChatCompletion(c *gin.Context) {
 	if strings.TrimSpace(config.GlobalConfig.Services.LLM.APIKey) == "" {
-		response.FailWithCode(c, 503, "LLM is not configured (LLM_API_KEY)", nil)
+		lingo.FailWithCode(c, 503, "LLM is not configured (LLM_API_KEY)", nil)
 		return
 	}
 	var body ChatCompletionRequest
 	if err := c.ShouldBindJSON(&body); err != nil {
-		response.Fail(c, err.Error(), nil)
+		lingo.Fail(c, err.Error(), nil)
 		return
 	}
 
@@ -339,13 +409,14 @@ func (ch *CinyuHandlers) ChatCompletion(c *gin.Context) {
 			Status:       models.ChatSessionStatusActive,
 			UserID:       body.UserID,
 			NovelID:      body.NovelID,
+			WorkspaceID:  strings.TrimSpace(body.WorkspaceID),
 			Provider:     pickChatProvider(body.Provider),
 			Model:        pickChatModel(body.Model),
 			SystemPrompt: body.SystemPrompt,
 		}
 		s.SetCreateInfo("system")
 		if err := models.CreateChatSession(ch.db, s); err != nil {
-			response.Fail(c, "Failed to create chat session", nil)
+			lingo.Fail(c, "Failed to create chat session", nil)
 			return
 		}
 		session = s
@@ -353,18 +424,18 @@ func (ch *CinyuHandlers) ChatCompletion(c *gin.Context) {
 		s, err := models.GetChatSessionByID(ch.db, body.SessionID)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				response.FailWithCode(c, 404, "Session not found", nil)
+				lingo.FailWithCode(c, 404, "Session not found", nil)
 				return
 			}
-			response.Fail(c, "Failed to load session", nil)
+			lingo.Fail(c, "Failed to load session", nil)
 			return
 		}
 		if s.UserID != body.UserID {
-			response.FailWithCode(c, 403, "Session does not belong to this user", nil)
+			lingo.FailWithCode(c, 403, "Session does not belong to this user", nil)
 			return
 		}
 		if s.Status != models.ChatSessionStatusActive {
-			response.FailWithCode(c, 400, "Session is not active", nil)
+			lingo.FailWithCode(c, 400, "Session is not active", nil)
 			return
 		}
 		session = s
@@ -372,14 +443,14 @@ func (ch *CinyuHandlers) ChatCompletion(c *gin.Context) {
 
 	resp, err := ch.runChatTurn(c.Request.Context(), session, &turn)
 	if err != nil {
-		response.Fail(c, err.Error(), nil)
+		lingo.Fail(c, err.Error(), nil)
 		return
 	}
 	fresh, err := models.GetChatSessionByID(ch.db, session.ID)
 	if err != nil {
 		fresh = session
 	}
-	response.Success(c, "OK", ChatCompletionResponse{
+	lingo.Success(c, "OK", ChatCompletionResponse{
 		Session:          chatSessionToResponse(fresh),
 		UserMessage:      resp.UserMessage,
 		AssistantMessage: resp.AssistantMessage,
@@ -390,43 +461,44 @@ func (ch *CinyuHandlers) ChatCompletion(c *gin.Context) {
 // ChatTurn POST /api/ai/sessions/:id/chat — 在指定会话中续聊（与 POST /api/ai/chat 逻辑相同，仅入口不同）。
 func (ch *CinyuHandlers) ChatTurn(c *gin.Context) {
 	if strings.TrimSpace(config.GlobalConfig.Services.LLM.APIKey) == "" {
-		response.FailWithCode(c, 503, "LLM is not configured (LLM_API_KEY)", nil)
+		lingo.FailWithCode(c, 503, "LLM is not configured (LLM_API_KEY)", nil)
 		return
 	}
 	sid, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		response.Fail(c, "Invalid session id", nil)
+		lingo.Fail(c, "Invalid session id", nil)
 		return
 	}
 	var req ChatTurnRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, err.Error(), nil)
+		lingo.Fail(c, err.Error(), nil)
 		return
 	}
 
 	session, err := models.GetChatSessionByID(ch.db, uint(sid))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			response.FailWithCode(c, 404, "Session not found", nil)
+			lingo.FailWithCode(c, 404, "Session not found", nil)
 			return
 		}
-		response.Fail(c, "Failed to load session", nil)
+		lingo.Fail(c, "Failed to load session", nil)
 		return
 	}
 	if session.Status != models.ChatSessionStatusActive {
-		response.FailWithCode(c, 400, "Session is not active", nil)
+		lingo.FailWithCode(c, 400, "Session is not active", nil)
 		return
 	}
 
 	resp, err := ch.runChatTurn(c.Request.Context(), session, &req)
 	if err != nil {
-		response.Fail(c, err.Error(), nil)
+		lingo.Fail(c, err.Error(), nil)
 		return
 	}
-	response.Success(c, "OK", resp)
+	lingo.Success(c, "OK", resp)
 }
 
 // runChatTurn 执行一轮持久化对话：读历史 → 调 LLM → 写入 user/assistant 消息并更新会话。
+// 支持多轮 Function Call 工具调用循环（最多 5 轮）。
 func (ch *CinyuHandlers) runChatTurn(ctx context.Context, session *models.ChatSession, req *ChatTurnRequest) (*ChatTurnResponse, error) {
 	if session == nil || req == nil {
 		return nil, errors.New("invalid session or request")
@@ -456,11 +528,11 @@ func (ch *CinyuHandlers) runChatTurn(ctx context.Context, session *models.ChatSe
 		maxTok = 2048
 	}
 
-	log := logger.Lg
+	log := lingo.Lg
 	if log == nil {
 		log = zap.NewNop()
 	}
-	llmOpts := &llm.LLMOptions{
+	llmOpts := &lingo.LLMOptions{
 		Provider:     strings.TrimSpace(session.Provider),
 		ApiKey:       strings.TrimSpace(config.GlobalConfig.Services.LLM.APIKey),
 		BaseURL:      strings.TrimSpace(config.GlobalConfig.Services.LLM.BaseURL),
@@ -471,31 +543,75 @@ func (ch *CinyuHandlers) runChatTurn(ctx context.Context, session *models.ChatSe
 	llmCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
 
-	handler, err := llm.NewProviderHandler(llmCtx, session.Provider, llmOpts)
+	handler, err := lingo.NewProviderHandler(llmCtx, session.Provider, llmOpts)
 	if err != nil {
 		return nil, fmt.Errorf("llm handler: %w", err)
 	}
 	handler.ResetMemory()
 
-	qopts := &llm.QueryOptions{
-		Model:     modelName,
-		MaxTokens: maxTok,
+	qopts := &lingo.QueryOptions{
+		Model:       modelName,
+		MaxTokens:   maxTok,
+		Temperature: float32(config.GlobalConfig.Services.LLM.Temperature),
 	}
 	if req.Temperature != nil {
 		qopts.Temperature = *req.Temperature
 	}
 
-	qresp, err := handler.QueryWithOptions(strings.TrimSpace(req.Message), qopts)
-	if err != nil {
-		if logger.Lg != nil {
-			logger.Lg.Error("llm query", zap.Error(err))
+	userMessage := strings.TrimSpace(req.Message)
+
+	// 多轮工具调用循环（最多 5 轮）
+	const maxToolRounds = 5
+	var lastResp *lingo.QueryResult
+	totalPromptTok, totalCompletionTok, totalTotalTok := 0, 0, 0
+
+	for round := 0; round < maxToolRounds; round++ {
+		qresp, err := handler.QueryWithOptions(userMessage, qopts)
+		if err != nil {
+			if lingo.Lg != nil {
+				lingo.Lg.Error("llm query", zap.Error(err))
+			}
+			return nil, fmt.Errorf("LLM request failed: %w", err)
 		}
-		return nil, fmt.Errorf("LLM request failed: %w", err)
+		if qresp == nil || len(qresp.Choices) == 0 {
+			return nil, errors.New("empty completion choices")
+		}
+
+		// 累加 token 用量
+		if qresp.Usage != nil {
+			totalPromptTok += qresp.Usage.PromptTokens
+			totalCompletionTok += qresp.Usage.CompletionTokens
+			totalTotalTok += qresp.Usage.TotalTokens
+		}
+
+		choice := qresp.Choices[0]
+
+		// 如果 AI 请求工具调用，则执行工具并继续循环
+		if len(choice.ToolCalls) > 0 {
+			if lingo.Lg != nil {
+				lingo.Lg.Info("tool_calls detected, executing", zap.Int("count", len(choice.ToolCalls)))
+			}
+			for _, tc := range choice.ToolCalls {
+				// 执行工具调用
+				result := fmt.Sprintf("工具 %s 在当前聊天会话中不可用，请切换到工作区页面使用。", tc.Function.Name)
+				handler.RecordToolResult(tc.ID, result)
+			}
+			// 要求 AI 继续（告诉它工具不可用于普通聊天）
+			userMessage = "请直接回答用户问题，不要调用工具（当前对话模式下工具不可用）。"
+			lastResp = qresp
+			continue
+		}
+
+		// 无工具调用，这是最终回复
+		lastResp = qresp
+		break
 	}
-	if qresp == nil || len(qresp.Choices) == 0 {
-		return nil, errors.New("empty completion choices")
+
+	if lastResp == nil {
+		return nil, errors.New("failed to get final response")
 	}
-	choice := qresp.Choices[0]
+
+	choice := lastResp.Choices[0]
 	assistantText := strings.TrimSpace(choice.Content)
 
 	seqUser, err := models.NextChatMessageSeq(ch.db, sid)
@@ -511,13 +627,7 @@ func (ch *CinyuHandlers) runChatTurn(ctx context.Context, session *models.ChatSe
 	}
 	userRow.SetCreateInfo("system")
 
-	reqID := llm.GenerateLingRequestID()
-	var promptTok, completionTok, totalTok int
-	if qresp.Usage != nil {
-		promptTok = qresp.Usage.PromptTokens
-		completionTok = qresp.Usage.CompletionTokens
-		totalTok = qresp.Usage.TotalTokens
-	}
+	reqID := lingo.GenerateLingRequestID()
 	asstRow := &models.ChatMessage{
 		SessionID:        sid,
 		Seq:              seqUser + 1,
@@ -525,9 +635,9 @@ func (ch *CinyuHandlers) runChatTurn(ctx context.Context, session *models.ChatSe
 		Content:          assistantText,
 		FinishReason:     choice.FinishReason,
 		RequestID:        reqID,
-		PromptTokens:     promptTok,
-		CompletionTokens: completionTok,
-		TotalTokens:      totalTok,
+		PromptTokens:     totalPromptTok,
+		CompletionTokens: totalCompletionTok,
+		TotalTokens:      totalTotalTok,
 	}
 	asstRow.SetCreateInfo("system")
 
@@ -561,9 +671,9 @@ func (ch *CinyuHandlers) runChatTurn(ctx context.Context, session *models.ChatSe
 	}
 
 	usage := &chatUsageResponse{
-		PromptTokens:     promptTok,
-		CompletionTokens: completionTok,
-		TotalTokens:      totalTok,
+		PromptTokens:     totalPromptTok,
+		CompletionTokens: totalCompletionTok,
+		TotalTokens:      totalTotalTok,
 	}
 	return &ChatTurnResponse{
 		UserMessage:      chatMessageToResponse(userRow),

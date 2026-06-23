@@ -9,8 +9,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/LingByte/lingoroutine/logger"
-	"github.com/LingByte/lingoroutine/utils"
+	"github.com/LingByte/CinyuVerse/pkg/lingo"
 	"github.com/LingByte/lingstorage-sdk-go"
 )
 
@@ -18,16 +17,17 @@ import (
 type Config struct {
 	Server   ServerConfig     `mapstructure:"server"`
 	Database DatabaseConfig   `mapstructure:"database"`
-	Log      logger.LogConfig `mapstructure:"log"`
+	Log      lingo.LogConfig `mapstructure:"log"`
 	Services ServicesConfig   `mapstructure:"services"`
 }
 
 // ServerConfig HTTP 服务相关。
 type ServerConfig struct {
-	Name      string `env:"SERVER_NAME"`
-	Addr      string `env:"ADDR"`
-	Mode      string `env:"MODE"`
-	APIPrefix string `env:"API_PREFIX"`
+	Name       string `env:"SERVER_NAME"`
+	Addr       string `env:"ADDR"`
+	Mode       string `env:"MODE"`
+	APIPrefix  string `env:"API_PREFIX"`
+	WorkspaceDir string `env:"WORKSPACE_DIR"`
 }
 
 // DatabaseConfig 数据库连接。
@@ -44,10 +44,11 @@ type ServicesConfig struct {
 
 // LLMConfig 大模型调用（供后续引擎使用）。
 type LLMConfig struct {
-	Provider string `env:"LLM_PROVIDER"` // openai | ollama | lmstudio 等，走 OpenAI 兼容 Chat Completions
-	APIKey   string `env:"LLM_API_KEY"`
-	BaseURL  string `env:"LLM_BASE_URL"`
-	Model    string `env:"LLM_MODEL"`
+	Provider    string  `env:"LLM_PROVIDER"`    // openai | ollama | lmstudio 等，走 OpenAI 兼容 Chat Completions
+	APIKey      string  `env:"LLM_API_KEY"`
+	BaseURL     string  `env:"LLM_BASE_URL"`
+	Model       string  `env:"LLM_MODEL"`
+	Temperature float64 `env:"LLM_TEMPERATURE"` // 默认温度参数
 }
 
 // StorageConfig storage configuration
@@ -66,21 +67,22 @@ var GlobalStore *lingstorage.Client
 // Load 读取环境（含可选 .env / .env.$MODE），填充 GlobalConfig。
 func Load() error {
 	mode := os.Getenv("MODE")
-	if err := utils.LoadEnv(mode); err != nil {
+	if err := lingo.LoadEnv(mode); err != nil {
 		log.Printf("config: optional env file not loaded: %v (using defaults / OS env)", err)
 	}
 	GlobalConfig = &Config{
 		Server: ServerConfig{
-			Name:      getStringOrDefault("SERVER_NAME", "CinyuVerse"),
-			Addr:      getStringOrDefault("ADDR", ":8080"),
-			Mode:      getStringOrDefault("MODE", "development"),
-			APIPrefix: getStringOrDefault("API_PREFIX", "/api"),
+			Name:         getStringOrDefault("SERVER_NAME", "CinyuVerse"),
+			Addr:         getStringOrDefault("ADDR", ":8080"),
+			Mode:         getStringOrDefault("MODE", "development"),
+			APIPrefix:    getStringOrDefault("API_PREFIX", "/api"),
+			WorkspaceDir: getStringOrDefault("WORKSPACE_DIR", "./workspace"),
 		},
 		Database: DatabaseConfig{
 			Driver: getStringOrDefault("DB_DRIVER", "sqlite"),
 			DSN:    getStringOrDefault("DSN", "./data/cinyuverse.db"),
 		},
-		Log: logger.LogConfig{
+		Log: lingo.LogConfig{
 			Level:      getStringOrDefault("LOG_LEVEL", "info"),
 			Filename:   getStringOrDefault("LOG_FILENAME", "./logs/cinyuverse.log"),
 			MaxSize:    getIntOrDefault("LOG_MAX_SIZE", 32),
@@ -90,10 +92,11 @@ func Load() error {
 		},
 		Services: ServicesConfig{
 			LLM: LLMConfig{
-				Provider: getStringOrDefault("LLM_PROVIDER", "openai"),
-				APIKey:   getStringOrDefault("LLM_API_KEY", ""),
-				BaseURL:  getStringOrDefault("LLM_BASE_URL", "https://api.openai.com/v1"),
-				Model:    getStringOrDefault("LLM_MODEL", "gpt-4o-mini"),
+				Provider:    getStringOrDefault("LLM_PROVIDER", "openai"),
+				APIKey:      getStringOrDefault("LLM_API_KEY", ""),
+				BaseURL:     getStringOrDefault("LLM_BASE_URL", "https://api.siliconflow.cn/v1"),
+				Model:       getStringOrDefault("LLM_MODEL", "deepseek-ai/DeepSeek-R1"),
+				Temperature: getFloat64OrDefault("LLM_TEMPERATURE", 0.55),
 			},
 			Storage: StorageConfig{
 				BaseURL:   getStringOrDefault("LINGSTORAGE_BASE_URL", "https://api.lingstorage.com"),
@@ -126,24 +129,35 @@ func (c *Config) Validate() error {
 }
 
 func getStringOrDefault(key, defaultValue string) string {
-	if v := utils.GetEnv(key); v != "" {
+	if v := lingo.GetEnv(key); v != "" {
 		return v
 	}
 	return defaultValue
 }
 
 func getBoolOrDefault(key string, defaultValue bool) bool {
-	if utils.GetEnv(key) == "" {
+	if lingo.GetEnv(key) == "" {
 		return defaultValue
 	}
-	return utils.GetBoolEnv(key)
+	return lingo.GetBoolEnv(key)
 }
 
 func getIntOrDefault(key string, defaultValue int) int {
-	if utils.GetEnv(key) == "" {
+	if lingo.GetEnv(key) == "" {
 		return defaultValue
 	}
-	v, err := strconv.Atoi(utils.GetEnv(key))
+	v, err := strconv.Atoi(lingo.GetEnv(key))
+	if err != nil {
+		return defaultValue
+	}
+	return v
+}
+
+func getFloat64OrDefault(key string, defaultValue float64) float64 {
+	if lingo.GetEnv(key) == "" {
+		return defaultValue
+	}
+	v, err := strconv.ParseFloat(lingo.GetEnv(key), 64)
 	if err != nil {
 		return defaultValue
 	}

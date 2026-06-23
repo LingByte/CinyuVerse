@@ -62,3 +62,8 @@ dist-ssr
 *.sln
 *.sw?
 
+# Local dev logs & user workspace data
+server_stderr.txt
+server_stdout.txt
+workspace/
+
