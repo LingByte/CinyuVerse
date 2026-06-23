@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { TypographyText } from '@kousum/semi-ui-vue'
-import { IconFile } from '@kousum/semi-icons-vue'
+import { File } from 'lucide-vue-next'
 import { detectFileType } from '@/utils/fileTypes'
 
 const props = defineProps<{
@@ -21,21 +20,13 @@ const fileTypeLabel = computed(() => {
 <template>
   <div class="ide-status-bar">
     <div class="status-left">
-      <TypographyText v-if="fileTypeLabel" class="status-label">
-        {{ fileTypeLabel }}
-      </TypographyText>
-      <TypographyText
-        v-if="filePath"
-        class="status-path"
-        :ellipsis="{ showTooltip: true }"
-      >
-        <IconFile :size="'small'" />
-        {{ filePath }}
-      </TypographyText>
+      <span v-if="fileTypeLabel" class="status-label">{{ fileTypeLabel }}</span>
+      <span v-if="filePath" class="status-path">
+        <File class="h-3 w-3 shrink-0" />
+        <span class="truncate">{{ filePath }}</span>
+      </span>
     </div>
-    <TypographyText class="status-save">
-      {{ saveStatus }}
-    </TypographyText>
+    <span class="status-save">{{ saveStatus }}</span>
   </div>
 </template>
 

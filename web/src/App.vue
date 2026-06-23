@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { ConfigProvider } from '@kousum/semi-ui-vue'
-import zhCN from '@kousum/semi-ui-vue/dist/locale/source/zh_CN'
+import { Toaster } from 'vue-sonner'
 import Landing from '@/pages/Landing.vue'
 import IdeWorkspace from '@/pages/IdeWorkspace.vue'
 import InspirationPage from '@/pages/InspirationPage.vue'
@@ -22,12 +21,11 @@ function enterIDE() {
 </script>
 
 <template>
-  <ConfigProvider :locale="zhCN">
-    <BackgroundLayer v-if="appMode !== 'inspiration'" />
-    <InspirationPage v-if="appMode === 'inspiration'" />
-    <Landing v-else-if="appMode === 'landing'" @enter-ide="enterIDE" />
-    <IdeWorkspace v-else />
-  </ConfigProvider>
+  <BackgroundLayer v-if="appMode !== 'inspiration'" />
+  <InspirationPage v-if="appMode === 'inspiration'" />
+  <Landing v-else-if="appMode === 'landing'" @enter-ide="enterIDE" />
+  <IdeWorkspace v-else />
+  <Toaster position="top-center" rich-colors :duration="4000" />
 </template>
 
 <style>

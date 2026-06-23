@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Button } from '@kousum/semi-ui-vue'
-import { IconStar, IconEdit } from '@kousum/semi-icons-vue'
+import Button from '@/components/ui/Button.vue'
+import { Sparkles, Pencil } from 'lucide-vue-next'
 import ParallaxFloatingPreview from '@/components/fancy/image/ParallaxFloatingPreview.vue'
 
 const emit = defineEmits<{
@@ -18,7 +18,7 @@ const emit = defineEmits<{
     <div class="relative z-10 mx-auto flex min-h-[calc(100vh-56px)] w-full max-w-[1280px] flex-col items-center justify-center gap-[clamp(26px,4.8vh,42px)] text-center">
       <section class="flex max-w-[720px] flex-col items-center">
         <div class="mb-4 inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[color-mix(in_oklab,var(--bg-card)_88%,transparent)] px-3 py-1 text-xs text-[var(--text-sub)] backdrop-blur-sm">
-          <IconStar :size="'small'" class="text-[var(--accent)]" />
+          <Sparkles :size="14" class="text-[var(--accent)]" />
           AI 驱动创作工作台
         </div>
 
@@ -38,13 +38,11 @@ const emit = defineEmits<{
 
         <div class="mt-[clamp(14px,2.6vh,22px)] flex flex-wrap justify-center gap-3.5">
           <Button
-            theme="solid"
-            type="primary"
-            size="large"
-            :icon="IconEdit"
-            class="!px-9 !py-3.5 !text-base"
+            size="lg"
+            class="!px-9 !py-3.5 !text-base gap-2"
             @click="emit('enterIde')"
           >
+            <Pencil :size="16" />
             进入编辑器
           </Button>
         </div>

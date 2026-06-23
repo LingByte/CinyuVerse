@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Dropdown } from '@kousum/semi-ui-vue'
-import type { DropDownMenuItem } from '@kousum/semi-ui-vue'
+import DropdownMenu from '@/components/ui/DropdownMenu.vue'
+import DropdownMenuItem from '@/components/ui/DropdownMenuItem.vue'
+import DropdownMenuSeparator from '@/components/ui/DropdownMenuSeparator.vue'
 import ThemeSelector from '@/components/ide/ThemeSelector.vue'
 
 defineProps<{ folderName?: string }>()
@@ -97,29 +98,12 @@ const menus = computed<MenuDef[]>(() => [
   { id: 'window', label: '窗口', items: [] },
 ])
 
-function toSemiMenu(items: MenuItem[]): DropDownMenuItem[] {
-  const result: DropDownMenuItem[] = []
-  for (const item of items) {
-    if (item.separator) {
-      result.push({ node: 'divider' })
-      continue
-    }
-    const label = item.shortcut ? `${item.label}    ${item.shortcut}` : (item.label ?? '')
-    result.push({
-      node: 'item',
-      name: label,
-      disabled: item.disabled,
-      onClick: () => {
-        openMenuId.value = null
-        item.action?.()
-      },
-    })
-  }
-  return result
+function onOpenChange(id: string, value: boolean) {
+  openMenuId.value = value ? id : (openMenuId.value === id ? null : openMenuId.value)
 }
 
-function onMenuVisibleChange(id: string, visible: boolean) {
-  openMenuId.value = visible ? id : (openMenuId.value === id ? null : openMenuId.value)
+function onItemClick(action?: () => void) {
+  action?.()
 }
 
 async function syncMaximizedState() {
@@ -140,25 +124,35 @@ defineExpose({ syncMaximizedState })
     class="flex h-7 shrink-0 items-center border-b border-[var(--border)] bg-[var(--bg-secondary)] px-1 text-xs select-none [-webkit-app-region:drag]"
     @click.stop
   >
-    <Dropdown
+    <DropdownMenu
       v-for="menu in menus"
       :key="menu.id"
-      trigger="click"
-      position="bottomLeft"
-      :menu="toSemiMenu(menu.items)"
-      :disabled="menu.items.length === 0"
-      :visible="openMenuId === menu.id"
-      @visible-change="(v: boolean) => onMenuVisibleChange(menu.id, v)"
+      v-show="menu.items.length > 0"
+      @update:open="(v: boolean) => onOpenChange(menu.id, v)"
     >
-      <button
-        type="button"
-        class="ide-menu-trigger"
-        :class="{ 'is-active': openMenuId === menu.id }"
-        :disabled="menu.items.length === 0"
-      >
-        {{ menu.label }}
-      </button>
-    </Dropdown>
+      <template #trigger>
+        <button
+          type="button"
+          class="ide-menu-trigger"
+          :class="{ 'is-active': openMenuId === menu.id }"
+          :disabled="menu.items.length === 0"
+        >
+          {{ menu.label }}
+        </button>
+      </template>
+
+      <template v-for="(item, idx) in menu.items" :key="idx">
+        <DropdownMenuSeparator v-if="item.separator" />
+        <DropdownMenuItem
+          v-else
+          :disabled="item.disabled"
+          @click="onItemClick(item.action)"
+        >
+          <span class="flex-1">{{ item.label }}</span>
+          <span v-if="item.shortcut" class="ml-8 text-xs text-[var(--text-muted)]">{{ item.shortcut }}</span>
+        </DropdownMenuItem>
+      </template>
+    </DropdownMenu>
 
     <div class="flex-1" />
 
@@ -171,3 +165,30 @@ defineExpose({ syncMaximizedState })
     </span>
   </div>
 </template>
+
+<style scoped>
+.ide-menu-trigger {
+  height: 100%;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s;
+  -webkit-app-region: no-drag;
+}
+.ide-menu-trigger:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+.ide-menu-trigger.is-active {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+.ide-menu-trigger:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+</style>

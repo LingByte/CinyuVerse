@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import { Dropdown, Button } from '@kousum/semi-ui-vue'
-import type { DropDownMenuItem } from '@kousum/semi-ui-vue'
-import { IconMoon, IconSetting } from '@kousum/semi-icons-vue'
+import { Moon, Settings } from 'lucide-vue-next'
+import DropdownMenu from '@/components/ui/DropdownMenu.vue'
+import DropdownMenuItem from '@/components/ui/DropdownMenuItem.vue'
+import DropdownMenuSeparator from '@/components/ui/DropdownMenuSeparator.vue'
+import Button from '@/components/ui/Button.vue'
 import { useThemeStore } from '@/stores/themeStore'
 
 const emit = defineEmits<{
@@ -13,77 +15,75 @@ const emit = defineEmits<{
 const theme = useThemeStore()
 const { lightPresets, darkPresets, customThemes, activeThemeValue, activeThemeLabel } = storeToRefs(theme)
 const open = ref(false)
-
-const menu = computed<DropDownMenuItem[]>(() => {
-  const items: DropDownMenuItem[] = []
-  for (const p of lightPresets.value) {
-    items.push({
-      node: 'item',
-      name: p.name,
-      active: activeThemeValue.value === p.id,
-      onClick: () => { theme.selectTheme(p.id); open.value = false },
-    })
-  }
-  items.push({ node: 'divider' })
-  for (const p of darkPresets.value) {
-    items.push({
-      node: 'item',
-      name: p.name,
-      active: activeThemeValue.value === p.id,
-      onClick: () => { theme.selectTheme(p.id); open.value = false },
-    })
-  }
-  if (customThemes.value.length > 0) {
-    items.push({ node: 'divider' })
-    for (const c of customThemes.value) {
-      const value = `custom:${c.id}`
-      items.push({
-        node: 'item',
-        name: c.name,
-        active: activeThemeValue.value === value,
-        onClick: () => { theme.selectTheme(value); open.value = false },
-      })
-    }
-  }
-  items.push({ node: 'divider' })
-  items.push({
-    node: 'item',
-    name: '更多主题设置…',
-    onClick: () => { open.value = false; emit('openSettings') },
-  })
-  return items
-})
 </script>
 
 <template>
   <div class="flex items-center gap-1 [-webkit-app-region:no-drag]">
-    <Dropdown
-      trigger="click"
-      position="bottomRight"
-      :menu="menu"
-      :visible="open"
-      @visible-change="(v: boolean) => { open = v }"
-    >
-      <Button
-        theme="light"
-        type="tertiary"
-        size="small"
-        class="!max-w-[180px]"
-        :class="{ 'is-active': open }"
+    <DropdownMenu @update:open="(v: boolean) => open = v">
+      <template #trigger>
+        <Button
+          variant="ghost"
+          size="sm"
+          class="!max-w-[180px] h-6 px-2 text-[11px] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+          :class="{ 'text-[var(--accent)]': open }"
+          as="div"
+        >
+          <span class="flex min-w-0 items-center gap-1.5">
+            <Moon class="h-3.5 w-3.5 shrink-0 text-[var(--accent)]" />
+            <span class="truncate">{{ activeThemeLabel }}</span>
+          </span>
+        </Button>
+      </template>
+
+      <!-- Light presets -->
+      <DropdownMenuItem
+        v-for="p in lightPresets"
+        :key="p.id"
+        :class="{ 'text-[var(--accent)]': activeThemeValue === p.id }"
+        @click="theme.selectTheme(p.id)"
       >
-        <span class="flex min-w-0 items-center gap-1.5">
-          <IconMoon :size="'small'" class="shrink-0 text-[var(--accent)]" />
-          <span class="truncate text-[11px]">{{ activeThemeLabel }}</span>
-        </span>
-      </Button>
-    </Dropdown>
+        {{ p.name }}
+      </DropdownMenuItem>
+
+      <DropdownMenuSeparator />
+
+      <!-- Dark presets -->
+      <DropdownMenuItem
+        v-for="p in darkPresets"
+        :key="p.id"
+        :class="{ 'text-[var(--accent)]': activeThemeValue === p.id }"
+        @click="theme.selectTheme(p.id)"
+      >
+        {{ p.name }}
+      </DropdownMenuItem>
+
+      <!-- Custom themes -->
+      <template v-if="customThemes.length > 0">
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          v-for="c in customThemes"
+          :key="c.id"
+          :class="{ 'text-[var(--accent)]': activeThemeValue === `custom:${c.id}` }"
+          @click="theme.selectTheme(`custom:${c.id}`)"
+        >
+          {{ c.name }}
+        </DropdownMenuItem>
+      </template>
+
+      <DropdownMenuSeparator />
+      <DropdownMenuItem @click="emit('openSettings')">
+        更多主题设置…
+      </DropdownMenuItem>
+    </DropdownMenu>
+
     <Button
-      theme="borderless"
-      type="tertiary"
-      size="small"
-      :icon="IconSetting"
+      variant="ghost"
+      size="sm"
+      class="h-6 w-6 p-0 text-[var(--text-muted)] hover:text-[var(--text-main)]"
       title="更多主题设置"
       @click="emit('openSettings')"
-    />
+    >
+      <Settings class="h-3.5 w-3.5" />
+    </Button>
   </div>
 </template>

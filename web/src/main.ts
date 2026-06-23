@@ -1,6 +1,5 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import '@kousum/semi-ui-vue/dist/_base/base.css'
 import '@/style/global.css'
 import '@/assets/themes.css'
 import App from '@/App.vue'

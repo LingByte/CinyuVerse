@@ -237,8 +237,6 @@ export const useThemeStore = defineStore('theme', () => {
     root.setAttribute('data-theme', mode)
     root.classList.toggle('theme-light', activeCategory.value === 'light')
     root.classList.toggle('theme-dark', activeCategory.value === 'dark')
-    // Semi Design 明暗模式
-    document.body.setAttribute('theme-mode', mode)
   }
 
   function applyTheme() {

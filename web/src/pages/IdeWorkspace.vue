@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { Spin, Button, Toast } from '@kousum/semi-ui-vue'
+import { toast } from 'vue-sonner'
+import Button from '@/components/ui/Button.vue'
+import Spinner from '@/components/ui/Spinner.vue'
 import LeftSidebar from '@/components/ide/LeftSidebar.vue'
 import EditorPanel from '@/components/ide/EditorPanel.vue'
 import StatusBar from '@/components/ide/StatusBar.vue'
@@ -50,7 +52,7 @@ const wordCount = computed(() => {
 
 watch(menuError, (msg) => {
   if (msg) {
-    Toast.error({ content: msg, duration: 4 })
+    toast.error(msg, { duration: 4000 })
     setTimeout(() => { menuError.value = '' }, 4000)
   }
 })
@@ -346,10 +348,9 @@ onUnmounted(() => {
 
     <Button
       v-if="focusMode.typewriterMode"
-      theme="light"
-      type="tertiary"
-      size="small"
-      class="!fixed right-4 bottom-4 z-[100]"
+      variant="outline"
+      size="sm"
+      class="!fixed right-4 bottom-4 z-[100] border-[var(--border)] text-[var(--text-sub)] hover:bg-[var(--bg-hover)]"
       @click="exitTypewriter"
     >
       退出专注模式 (Esc)
@@ -364,9 +365,10 @@ onUnmounted(() => {
 
     <div
       v-if="menuLoading"
-      class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40"
+      class="fixed inset-0 z-[9999] flex items-center justify-center gap-3 bg-black/40"
     >
-      <Spin size="large" tip="处理中..." />
+      <Spinner size="lg" class="text-white" />
+      <span class="text-sm text-white">处理中...</span>
     </div>
 
     <ThemeSettings :visible="showPreferences" @close="showPreferences = false" />
