@@ -1,0 +1,45 @@
+/* Semi Design ↔ CinyuVerse 主题桥接（组件 CSS 由按需导入自动加载） */
+
+/* 让 Semi 组件继承应用字体与圆角 */
+.semi-button,
+.semi-dropdown-item,
+.semi-modal,
+.semi-tabs-tab,
+.semi-empty {
+  font-family: inherit;
+}
+
+/* IDE 菜单栏内 Semi 下拉触发器 */
+.ide-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ide-menu-trigger:hover,
+.ide-menu-trigger.is-active {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+
+/* 文件树 Semi 按钮紧凑样式 */
+.ide-tree-icon-btn.semi-button {
+  padding: 2px 6px;
+  min-width: unset;
+  height: 22px;
+}
+
+/* 状态栏 Typography 微调 */
+.ide-status-bar .semi-typography {
+  color: inherit;
+  font-size: inherit;
+}

@@ -1,24 +1,21 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu, globalShortcut } from 'electron'
-import { spawn, ChildProcess } from 'child_process'
 import path from 'node:path'
 import fs from 'node:fs'
+import { DIST, PRELOAD } from './paths.js'
+import { buildDirTree, isEditableFile, isBinaryFile } from './fsTree.js'
 
 let mainWindow: BrowserWindow | null = null
-let goProcess: ChildProcess | null = null
 const childWindows = new Map<string, BrowserWindow>()
 let pendingOpenFile: string | null = null
 
 const isDev = !app.isPackaged
-const DEV_URL = 'http://localhost:9090'
-const GO_BINARY = isDev
-  ? path.join(__dirname, '..', '..', 'cmd', 'server', 'server.exe')
-  : path.join(process.resourcesPath, 'bin', 'server')
+const DEV_URL = 'http://127.0.0.1:9090'
 
 function loadURL(win: BrowserWindow, pathQuery = '') {
   if (isDev) {
     win.loadURL(DEV_URL + pathQuery)
   } else {
-    const indexHtml = path.join(__dirname, '..', 'dist', 'index.html')
+    const indexHtml = path.join(DIST, 'index.html')
     if (pathQuery.startsWith('?')) {
       win.loadFile(indexHtml, { search: pathQuery })
     } else {
@@ -37,14 +34,13 @@ function createWindow() {
     frame: true,
     autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: PRELOAD,
       contextIsolation: true,
       nodeIntegration: false,
     },
     backgroundColor: '#0d1117',
   })
 
-  // Hide native OS menu bar; editor MenuBar.vue is the single menu layer
   mainWindow.setMenuBarVisibility(false)
   mainWindow.setAutoHideMenuBar(true)
 
@@ -52,7 +48,7 @@ function createWindow() {
     mainWindow.loadURL(DEV_URL)
     mainWindow.webContents.openDevTools({ mode: 'detach' })
   } else {
-    mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
+    mainWindow.loadFile(path.join(DIST, 'index.html'))
   }
 
   if (pendingOpenFile) {
@@ -67,64 +63,6 @@ function createWindow() {
   })
 }
 
-function startGoBackend(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (!fs.existsSync(GO_BINARY)) {
-      if (isDev) {
-        console.warn('[electron] Go binary not found, skipping backend auto-start (dev mode)')
-        resolve()
-        return
-      }
-      reject(new Error(`Go binary not found: ${GO_BINARY}`))
-      return
-    }
-
-    const dataDir = path.join(app.getPath('userData'), 'data')
-    const workspaceDir = path.join(app.getPath('userData'), 'workspace')
-    fs.mkdirSync(dataDir, { recursive: true })
-    fs.mkdirSync(workspaceDir, { recursive: true })
-
-    goProcess = spawn(GO_BINARY, [], {
-      env: {
-        ...process.env,
-        ADDR: ':8080',
-        DSN: path.join(dataDir, 'cinyuverse.db'),
-        WORKSPACE_DIR: workspaceDir,
-        MODE: isDev ? 'development' : 'production',
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-
-    goProcess.stdout?.on('data', (data: Buffer) => {
-      console.log(`[go] ${data.toString().trim()}`)
-    })
-
-    goProcess.stderr?.on('data', (data: Buffer) => {
-      console.error(`[go:err] ${data.toString().trim()}`)
-    })
-
-    goProcess.on('error', (err) => {
-      console.error('[electron] Go process error:', err)
-      reject(err)
-    })
-
-    goProcess.on('exit', (code) => {
-      console.log(`[electron] Go process exited with code ${code}`)
-      goProcess = null
-    })
-
-    // Wait a moment for the server to start
-    setTimeout(resolve, 1000)
-  })
-}
-
-function stopGoBackend() {
-  if (goProcess) {
-    goProcess.kill('SIGTERM')
-    goProcess = null
-  }
-}
-
 // ── IPC Handlers ────────────────────────────────────────────
 
 ipcMain.handle('dialog:openFile', async (_event, options?: { filters?: Electron.FileFilter[] }) => {
@@ -132,20 +70,26 @@ ipcMain.handle('dialog:openFile', async (_event, options?: { filters?: Electron.
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openFile', 'multiSelections'],
     filters: options?.filters || [
-      { name: 'Markdown / 文本', extensions: ['md', 'txt'] },
+      { name: '所有支持的文件', extensions: ['md', 'txt', 'json', 'js', 'ts', 'html', 'css', 'py', 'go', 'rs', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'pdf', 'csv', 'tsv', 'xlsx', 'xls', 'xml', 'yaml', 'yml'] },
+      { name: 'Markdown / 文本', extensions: ['md', 'txt', 'markdown'] },
+      { name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'] },
+      { name: 'PDF', extensions: ['pdf'] },
+      { name: '表格', extensions: ['csv', 'tsv', 'xlsx', 'xls'] },
+      { name: '代码', extensions: ['js', 'ts', 'jsx', 'tsx', 'vue', 'html', 'css', 'py', 'go', 'rs', 'java'] },
+      { name: '所有文件', extensions: ['*'] },
     ],
   })
   if (result.canceled || result.filePaths.length === 0) return []
   return result.filePaths.map(fp => {
     const ext = path.extname(fp).toLowerCase()
-    const isBinary = ['.jar', '.zip', '.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(ext)
+    const binary = isBinaryFile(fp)
     return {
       path: fp,
       name: path.basename(fp),
-      content: isBinary
+      content: binary
         ? fs.readFileSync(fp).toString('base64')
         : fs.readFileSync(fp, 'utf-8'),
-      encoding: isBinary ? 'base64' as const : 'utf8' as const,
+      encoding: binary ? 'base64' as const : 'utf8' as const,
     }
   })
 })
@@ -160,11 +104,13 @@ ipcMain.handle('dialog:saveFile', async (_event, options?: {
   const result = await dialog.showSaveDialog(mainWindow, {
     defaultPath: options?.defaultPath,
     filters: isBinary
-      ? [{ name: '主题插件', extensions: ['jar', 'zip'] }]
+      ? [{ name: '文件', extensions: ['*'] }]
       : [
-          { name: 'Markdown', extensions: ['md'] },
+          { name: 'Markdown', extensions: ['md', 'markdown'] },
           { name: '纯文本', extensions: ['txt'] },
-          { name: '主题文件', extensions: ['cin-theme', 'cin-scheme', 'json'] },
+          { name: '代码', extensions: ['js', 'ts', 'jsx', 'tsx', 'vue', 'html', 'css', 'json', 'py', 'go', 'rs', 'java'] },
+          { name: '配置', extensions: ['yaml', 'yml', 'toml', 'ini', 'xml', 'ciny-theme', 'cin-scheme'] },
+          { name: '全部', extensions: ['*'] },
         ],
   })
   if (result.canceled || !result.filePath) return null
@@ -186,70 +132,74 @@ ipcMain.handle('dialog:openFolder', async () => {
   return result.canceled ? null : result.filePaths[0]
 })
 
-ipcMain.handle('fs:scanFolder', async (_event, folderPath: string) => {
-  if (!folderPath || !fs.existsSync(folderPath)) return []
-  type FileEntry = { name: string; path: string; relativePath: string; content: string }
-  const results: FileEntry[] = []
-
-  function walkDir(dir: string, basePath: string) {
-    const entries = fs.readdirSync(dir, { withFileTypes: true })
-    // Sort: directories first, then files alphabetically
-    entries.sort((a, b) => {
-      if (a.isDirectory() && !b.isDirectory()) return -1
-      if (!a.isDirectory() && b.isDirectory()) return 1
-      return a.name.localeCompare(b.name, undefined, { numeric: true })
-    })
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name)
-      if (entry.isDirectory()) {
-        if (!entry.name.startsWith('.') && entry.name !== 'node_modules' && entry.name !== '__pycache__') {
-          walkDir(fullPath, basePath)
-        }
-      } else if (entry.isFile()) {
-        const ext = path.extname(entry.name).toLowerCase()
-        if (['.md', '.txt'].includes(ext)) {
-          try {
-            const content = fs.readFileSync(fullPath, 'utf-8')
-            results.push({
-              name: entry.name,
-              path: fullPath,
-              relativePath: path.relative(basePath, fullPath).replace(/\\/g, '/'),
-              content,
-            })
-          } catch {
-            // skip unreadable files
-          }
-        }
-      }
-    }
-  }
-
-  walkDir(folderPath, folderPath)
-  return results
+ipcMain.handle('fs:listDirTree', async (_event, folderPath: string) => {
+  if (!folderPath || !fs.existsSync(folderPath)) return null
+  return buildDirTree(folderPath)
 })
+
+ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
+  if (!filePath || !fs.existsSync(filePath)) {
+    throw new Error('文件不存在')
+  }
+  const binary = isBinaryFile(filePath)
+  return {
+    content: binary
+      ? fs.readFileSync(filePath).toString('base64')
+      : fs.readFileSync(filePath, 'utf-8'),
+    encoding: binary ? 'base64' as const : 'utf8' as const,
+  }
+})
+
+ipcMain.handle('fs:writeFile', async (_event, filePath: string, content: string) => {
+  if (!filePath || !isEditableFile(filePath)) {
+    throw new Error('无法写入该文件')
+  }
+  fs.writeFileSync(filePath, content, 'utf-8')
+})
+
+ipcMain.handle('fs:createFile', async (_event, parentPath: string, fileName: string) => {
+  const safeName = path.basename(fileName)
+  if (!safeName || !parentPath) throw new Error('无效的文件名')
+  const fullPath = path.join(parentPath, safeName)
+  if (fs.existsSync(fullPath)) throw new Error('文件已存在')
+  fs.writeFileSync(fullPath, '', 'utf-8')
+  return fullPath
+})
+
+ipcMain.handle('fs:createDir', async (_event, parentPath: string, dirName: string) => {
+  const safeName = path.basename(dirName)
+  if (!safeName || !parentPath) throw new Error('无效的文件夹名')
+  const fullPath = path.join(parentPath, safeName)
+  if (fs.existsSync(fullPath)) throw new Error('文件夹已存在')
+  fs.mkdirSync(fullPath)
+  return fullPath
+})
+
+ipcMain.handle('fs:deletePath', async (_event, targetPath: string) => {
+  if (!targetPath || !fs.existsSync(targetPath)) return
+  const stat = fs.statSync(targetPath)
+  if (stat.isDirectory()) {
+    fs.rmdirSync(targetPath)
+  } else {
+    fs.unlinkSync(targetPath)
+  }
+})
+
+ipcMain.handle('fs:dirname', async (_event, filePath: string) => path.dirname(filePath))
 
 ipcMain.handle('getAppPath', () => app.getPath('userData'))
-
 ipcMain.handle('platform', () => process.platform)
 
-ipcMain.handle('window:minimize', () => {
-  mainWindow?.minimize()
-})
+ipcMain.handle('window:minimize', () => { mainWindow?.minimize() })
 
 ipcMain.handle('window:toggleMaximize', () => {
   if (!mainWindow) return false
-  if (mainWindow.isMaximized()) {
-    mainWindow.unmaximize()
-  } else {
-    mainWindow.maximize()
-  }
+  if (mainWindow.isMaximized()) mainWindow.unmaximize()
+  else mainWindow.maximize()
   return mainWindow.isMaximized()
 })
 
-ipcMain.handle('window:close', () => {
-  mainWindow?.close()
-})
-
+ipcMain.handle('window:close', () => { mainWindow?.close() })
 ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false)
 
 // ── Inspiration drafts ──────────────────────────────────────
@@ -298,7 +248,7 @@ function createInspirationWindow(wsId: string) {
     title: '灵感草稿箱',
     autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: PRELOAD,
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -312,35 +262,7 @@ ipcMain.handle('window:openInspiration', (_e, wsId: string) => {
   createInspirationWindow(wsId || 'default')
 })
 
-function createDetachedPanel(panel: 'ai' | 'outline', wsId: string) {
-  const key = `detach-${panel}-${wsId}`
-  if (childWindows.has(key)) {
-    childWindows.get(key)?.focus()
-    return
-  }
-  const win = new BrowserWindow({
-    width: panel === 'ai' ? 420 : 520,
-    height: 800,
-    title: panel === 'ai' ? 'CinyuVerse AI' : 'CinyuVerse 大纲',
-    autoHideMenuBar: true,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  })
-  loadURL(win, `?mode=detach&panel=${panel}&wsId=${encodeURIComponent(wsId)}`)
-  childWindows.set(key, win)
-  win.on('closed', () => childWindows.delete(key))
-}
-
-ipcMain.handle('window:openDetached', (_e, panel: 'ai' | 'outline', wsId: string) => {
-  createDetachedPanel(panel, wsId)
-})
-
 function handleOpenFile(filePath: string) {
-  const ext = path.extname(filePath).toLowerCase()
-  if (!['.md', '.txt', '.cinv'].includes(ext)) return
   if (mainWindow) {
     mainWindow.webContents.send('app:open-file', filePath)
     mainWindow.focus()
@@ -356,7 +278,7 @@ if (!gotLock) {
   app.quit()
 } else {
   app.on('second-instance', (_e, argv) => {
-    const fileArg = argv.find((a) => /\.(md|txt|cinv)$/i.test(a))
+    const fileArg = argv.find((a) => !a.startsWith('-') && /\.\w+$/i.test(a))
     if (fileArg) handleOpenFile(fileArg)
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore()
@@ -365,24 +287,15 @@ if (!gotLock) {
   })
 }
 
-app.whenReady().then(async () => {
-  // Remove Electron default application menu (File/Edit/View/Window/Help)
+app.whenReady().then(() => {
   Menu.setApplicationMenu(null)
-  if (!isDev) {
-    try {
-      await startGoBackend()
-    } catch (err) {
-      console.error('Failed to start Go backend:', err)
-    }
-  }
   createWindow()
 
   globalShortcut.register('CommandOrControl+Shift+I', () => {
     createInspirationWindow('default')
   })
 
-  // Windows 文件关联：启动参数中的文件路径
-  const startupFile = process.argv.find((a) => /\.(md|txt|cinv)$/i.test(a))
+  const startupFile = process.argv.find((a) => !a.startsWith('-') && /\.\w+$/i.test(a))
   if (startupFile) handleOpenFile(startupFile)
 
   if (process.platform === 'win32') {
@@ -390,18 +303,9 @@ app.whenReady().then(async () => {
   }
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
-    }
+    if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
-app.on('window-all-closed', () => {
-  stopGoBackend()
-  app.quit()
-})
-
-app.on('before-quit', () => {
-  globalShortcut.unregisterAll()
-  stopGoBackend()
-})
+app.on('window-all-closed', () => { app.quit() })
+app.on('before-quit', () => { globalShortcut.unregisterAll() })

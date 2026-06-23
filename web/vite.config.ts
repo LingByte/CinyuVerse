@@ -10,6 +10,7 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
+    dedupe: ['date-fns', 'date-fns-tz'],
   },
   server: {
     host: '0.0.0.0',
@@ -38,6 +39,11 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ['vue'],
+    include: [
+      'vue',
+      '@kousum/semi-ui-vue',
+      'date-fns',
+      'date-fns-tz',
+    ],
   },
 })

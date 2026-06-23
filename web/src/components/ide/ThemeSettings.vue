@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { Modal, Tabs, TabPane, Button, Switch, Banner } from '@kousum/semi-ui-vue'
 import { useThemeStore, type AccentColor } from '@/stores/themeStore'
 import { useEditorSchemeStore } from '@/stores/editorSchemeStore'
 import { EDITABLE_THEME_KEYS } from '@/config/themePresets'
@@ -410,27 +411,34 @@ function saveCustomScheme() {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="visible" class="theme-overlay" @click.self="emit('close')">
-      <div class="theme-modal">
-        <div class="theme-modal-header">
-          <span class="theme-modal-title">外观与主题</span>
-          <button class="theme-modal-close" @click="emit('close')">&times;</button>
-        </div>
+  <Modal
+    :visible="visible"
+    title="外观与主题"
+    :width="540"
+    :footer="undefined"
+    :body-style="{ padding: 0, maxHeight: '72vh', overflow: 'auto' }"
+    @cancel="emit('close')"
+  >
+    <Tabs v-model:active-key="settingsTab" type="button" class="px-4 pt-2">
+      <TabPane tab="界面主题" item-key="ui">
+        <template #tab>
+          <span class="flex flex-col items-start gap-0.5 text-left">
+            <span>界面主题</span>
+            <span class="text-[10px] font-normal text-[var(--text-muted)]">侧边栏 · 按钮 · 窗口</span>
+          </span>
+        </template>
+      </TabPane>
+      <TabPane tab="编辑器配色" item-key="editor">
+        <template #tab>
+          <span class="flex flex-col items-start gap-0.5 text-left">
+            <span>编辑器配色</span>
+            <span class="text-[10px] font-normal text-[var(--text-muted)]">语法高亮 · 背景</span>
+          </span>
+        </template>
+      </TabPane>
+    </Tabs>
 
-        <!-- IDEA 式双体系 Tab -->
-        <div class="settings-tabs">
-          <button :class="{ active: settingsTab === 'ui' }" @click="settingsTab = 'ui'">
-            界面主题
-            <span class="tab-hint">侧边栏 · 按钮 · 窗口</span>
-          </button>
-          <button :class="{ active: settingsTab === 'editor' }" @click="settingsTab = 'editor'">
-            编辑器配色
-            <span class="tab-hint">语法高亮 · 背景</span>
-          </button>
-        </div>
-
-        <div class="theme-modal-body">
+    <div class="theme-modal-body">
           <!-- ═══ 界面主题（对标 .theme.json / .cin-theme） ═══ -->
           <template v-if="settingsTab === 'ui'">
             <div class="theme-section">
@@ -554,10 +562,10 @@ function saveCustomScheme() {
             <div class="theme-section">
               <label class="toggle-row">
                 <span>跟随系统明暗</span>
-                <span class="toggle-switch" :class="{ on: theme.followSystem }">
-                  <input type="checkbox" :checked="theme.followSystem" @change="theme.followSystem ? theme.disableSystemFollow() : theme.enableSystemFollow()" />
-                  <span class="toggle-track"/>
-                </span>
+                <Switch
+                  :checked="theme.followSystem"
+                  @change="(v: boolean) => v ? theme.enableSystemFollow() : theme.disableSystemFollow()"
+                />
               </label>
             </div>
           </template>
@@ -637,8 +645,8 @@ function saveCustomScheme() {
             </div>
           </template>
 
-          <p v-if="importError" class="error-hint">{{ importError }}</p>
-          <p v-if="importInfo" class="info-hint">{{ importInfo }}</p>
+          <Banner v-if="importError" type="danger" :description="importError" class="mx-4 mb-2" />
+          <Banner v-if="importInfo && !importError" type="success" :description="importInfo" class="mx-4 mb-2" />
 
           <!-- 主题插件包（对标 IDEA .jar） -->
           <div class="theme-section plugin-section">
@@ -653,18 +661,16 @@ function saveCustomScheme() {
           </div>
         </div>
 
-        <div class="theme-modal-footer">
-          <button
-            class="reset-btn"
-            @click="settingsTab === 'ui' ? (theme.resetTheme(), runContrastCheck()) : scheme.resetScheme()"
-          >
-            恢复默认
-          </button>
-          <button class="done-btn" @click="emit('close')">完成</button>
-        </div>
-      </div>
+    <div class="flex items-center justify-between border-t border-[var(--border)] px-4 py-3">
+      <Button
+        type="tertiary"
+        @click="settingsTab === 'ui' ? (theme.resetTheme(), runContrastCheck()) : scheme.resetScheme()"
+      >
+        恢复默认
+      </Button>
+      <Button theme="solid" type="primary" @click="emit('close')">完成</Button>
     </div>
-  </Teleport>
+  </Modal>
 </template>
 
 <style scoped>

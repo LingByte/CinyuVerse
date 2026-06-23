@@ -1,121 +1,81 @@
 <script setup lang="ts">
-defineProps<{
+import { computed } from 'vue'
+import { TypographyText } from '@kousum/semi-ui-vue'
+import { IconFile } from '@kousum/semi-icons-vue'
+import { detectFileType } from '@/utils/fileTypes'
+
+const props = defineProps<{
   wordCount: number
-  chapterCount: number
-  volumeCount: number
-  connected: boolean
-  streaming: boolean
+  filePath: string | null
   saveStatus: string
 }>()
 
-const emit = defineEmits<{
-  exportTxt: []
-  exportMd: []
-  openDashboard: []
-}>()
+const fileTypeLabel = computed(() => {
+  if (!props.filePath) return null
+  const ft = detectFileType(props.filePath)
+  if (ft.category === 'text') return `${props.wordCount.toLocaleString()} 字`
+  return ft.extension.toUpperCase()
+})
 </script>
 
 <template>
-  <div class="status-bar">
+  <div class="ide-status-bar">
     <div class="status-left">
-      <span class="status-item">
-        <span class="status-dot" :class="{ connected }"/>{{ connected ? '已连接' : '未连接' }}
-      </span>
-      <span v-if="streaming" class="status-item streaming"><span class="spinner-sm"/>AI 生成中…</span>
-      <button class="status-item status-clickable" @click="emit('openDashboard')">{{ wordCount.toLocaleString() }} 字</button>
-      <span class="status-item">{{ volumeCount }} 卷 / {{ chapterCount }} 章</span>
+      <TypographyText v-if="fileTypeLabel" class="status-label">
+        {{ fileTypeLabel }}
+      </TypographyText>
+      <TypographyText
+        v-if="filePath"
+        class="status-path"
+        :ellipsis="{ showTooltip: true }"
+      >
+        <IconFile :size="'small'" />
+        {{ filePath }}
+      </TypographyText>
     </div>
-    <div class="status-right">
-      <span class="status-item save-status">{{ saveStatus }}</span>
-      <button class="status-btn" title="导出 TXT" @click="$emit('exportTxt')">导出 TXT</button>
-      <button class="status-btn" title="导出 Markdown" @click="$emit('exportMd')">导出 MD</button>
-    </div>
+    <TypographyText class="status-save">
+      {{ saveStatus }}
+    </TypographyText>
   </div>
 </template>
 
 <style scoped>
-.status-bar {
+.ide-status-bar {
+  height: 24px;
+  min-height: 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 24px;
-  padding: 0 12px;
-  background: var(--bg-primary);
   border-top: 1px solid var(--border);
+  background: var(--bg-primary);
+  padding: 0 12px;
   font-size: 11px;
   color: var(--text-sub);
 }
 
-.status-left, .status-right {
+.status-left {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
-.status-item {
+.status-label {
   white-space: nowrap;
+}
+
+.status-path {
   display: flex;
   align-items: center;
   gap: 4px;
+  max-width: 50vw;
+  min-width: 0;
+  color: var(--text-muted);
 }
 
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--danger);
+.status-save {
   flex-shrink: 0;
-}
-.status-dot.connected {
-  background: var(--success);
-}
-
-.spinner-sm {
-  width: 10px;
-  height: 10px;
-  border: 1.5px solid color-mix(in oklab, currentColor 25%, transparent);
-  border-top-color: currentColor;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  display: inline-block;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.status-item.streaming {
-  color: var(--warning);
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-.save-status {
   font-style: italic;
+  opacity: 0.8;
 }
-
-.status-btn {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--text-sub);
-  padding: 1px 8px;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 10px;
-}
-.status-btn:hover { border-color: var(--accent); color: var(--text-main); }
-
-.status-clickable {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-  padding: 0;
-}
-.status-clickable:hover { color: var(--accent); }
 </style>

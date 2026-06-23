@@ -1,49 +1,31 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { Dropdown } from '@kousum/semi-ui-vue'
+import type { DropDownMenuItem } from '@kousum/semi-ui-vue'
 import ThemeSelector from '@/components/ide/ThemeSelector.vue'
 
-defineProps<{
-  workspaceName?: string
-}>()
+defineProps<{ folderName?: string }>()
 
 const emit = defineEmits<{
   openFile: []
   openFolder: []
   save: []
-  exportTxt: []
-  exportMd: []
-  exportEpub: []
-  exportDocx: []
-  exportFanqie: []
-  exportQidian: []
-  exportJinjiang: []
-  closeWorkspace: []
-  newWorkspace: []
-  newVolume: []
-  newChapter: []
+  closeFolder: []
   toggleSidebar: []
-  toggleAiPanel: []
   zoomIn: []
   zoomOut: []
   zoomReset: []
-  resetLayout: []
   openPreferences: []
   toggleTypewriter: []
-  openDashboard: []
-  openChapterHistory: []
   openInspiration: []
-  detachPanel: [panel: 'ai' | 'outline']
   minimizeWindow: []
   toggleMaximize: []
   closeWindow: []
 }>()
 
-// ── Menu State ──────────────────────────────────────────────
-
-type MenuId = 'file' | 'edit' | 'view' | 'window' | null
-const activeMenu = ref<MenuId>(null)
 const isDesktop = computed(() => typeof window !== 'undefined' && !!window.electronAPI)
 const isMaximized = ref(false)
+const openMenuId = ref<string | null>(null)
 
 interface MenuItem {
   label?: string
@@ -54,32 +36,19 @@ interface MenuItem {
 }
 
 interface MenuDef {
-  id: Exclude<MenuId, null>
+  id: string
   label: string
   items: MenuItem[]
 }
 
 const fileMenuItems = computed<MenuItem[]>(() => {
   const items: MenuItem[] = [
-    { label: '新建工作区', shortcut: 'Ctrl+Shift+N', action: () => emit('newWorkspace') },
-    { label: '新建卷', action: () => emit('newVolume') },
-    { label: '新建章节', action: () => emit('newChapter') },
-    { separator: true },
     { label: '打开文件...', shortcut: 'Ctrl+O', action: () => emit('openFile') },
     { label: '打开文件夹...', shortcut: 'Ctrl+K Ctrl+O', action: () => emit('openFolder') },
     { separator: true },
     { label: '保存', shortcut: 'Ctrl+S', action: () => emit('save') },
     { separator: true },
-    { label: '导出为 TXT', action: () => emit('exportTxt') },
-    { label: '导出为 Markdown', action: () => emit('exportMd') },
-    { label: '导出 EPUB', action: () => emit('exportEpub') },
-    { label: '导出 Word (.docx)', action: () => emit('exportDocx') },
-    { separator: true },
-    { label: '导出·番茄小说', action: () => emit('exportFanqie') },
-    { label: '导出·起点中文网', action: () => emit('exportQidian') },
-    { label: '导出·晋江文学城', action: () => emit('exportJinjiang') },
-    { separator: true },
-    { label: '关闭工作区', action: () => emit('closeWorkspace') },
+    { label: '关闭文件夹', action: () => emit('closeFolder') },
   ]
 
   if (isDesktop.value) {
@@ -88,23 +57,15 @@ const fileMenuItems = computed<MenuItem[]>(() => {
       { label: '偏好设置...', action: () => emit('openPreferences') },
       { separator: true },
       { label: '最小化', action: () => emit('minimizeWindow') },
-      {
-        label: isMaximized.value ? '还原窗口' : '最大化',
-        action: () => emit('toggleMaximize'),
-      },
+      { label: isMaximized.value ? '还原窗口' : '最大化', action: () => emit('toggleMaximize') },
       { label: '关闭窗口', shortcut: 'Alt+F4', action: () => emit('closeWindow') },
     )
   }
-
   return items
 })
 
 const menus = computed<MenuDef[]>(() => [
-  {
-    id: 'file',
-    label: '文件',
-    items: fileMenuItems.value,
-  },
+  { id: 'file', label: '文件', items: fileMenuItems.value },
   {
     id: 'edit',
     label: '编辑',
@@ -115,8 +76,6 @@ const menus = computed<MenuDef[]>(() => [
       { label: '剪切', shortcut: 'Ctrl+X', action: () => document.execCommand('cut') },
       { label: '复制', shortcut: 'Ctrl+C', action: () => document.execCommand('copy') },
       { label: '粘贴', shortcut: 'Ctrl+V', action: () => document.execCommand('paste') },
-      { separator: true },
-      { label: '查找替换...', shortcut: 'Ctrl+H', action: () => {} },
     ],
   },
   {
@@ -124,15 +83,9 @@ const menus = computed<MenuDef[]>(() => [
     label: '视图',
     items: [
       { label: '切换侧边栏', shortcut: 'Ctrl+B', action: () => emit('toggleSidebar') },
-      { label: '切换 AI 面板', shortcut: 'Ctrl+J', action: () => emit('toggleAiPanel') },
       { separator: true },
       { label: '打字机专注模式', action: () => emit('toggleTypewriter') },
-      { label: '写作数据看板', action: () => emit('openDashboard') },
-      { label: '章节历史版本…', action: () => emit('openChapterHistory') },
-      { separator: true },
       { label: '灵感草稿箱', shortcut: 'Ctrl+Shift+I', action: () => emit('openInspiration') },
-      { label: '拆出 AI 面板', action: () => emit('detachPanel', 'ai') },
-      { label: '拆出大纲面板', action: () => emit('detachPanel', 'outline') },
       { separator: true },
       { label: '放大字体', shortcut: 'Ctrl+=', action: () => emit('zoomIn') },
       { label: '缩小字体', shortcut: 'Ctrl+-', action: () => emit('zoomOut') },
@@ -141,27 +94,32 @@ const menus = computed<MenuDef[]>(() => [
       { label: '外观与主题...', shortcut: 'Ctrl+,', action: () => emit('openPreferences') },
     ],
   },
-  {
-    id: 'window',
-    label: '窗口',
-    items: [
-      { label: '重置面板布局', action: () => emit('resetLayout') },
-    ],
-  },
+  { id: 'window', label: '窗口', items: [] },
 ])
 
-function toggleMenu(id: MenuId) {
-  activeMenu.value = activeMenu.value === id ? null : id
+function toSemiMenu(items: MenuItem[]): DropDownMenuItem[] {
+  const result: DropDownMenuItem[] = []
+  for (const item of items) {
+    if (item.separator) {
+      result.push({ node: 'divider' })
+      continue
+    }
+    const label = item.shortcut ? `${item.label}    ${item.shortcut}` : (item.label ?? '')
+    result.push({
+      node: 'item',
+      name: label,
+      disabled: item.disabled,
+      onClick: () => {
+        openMenuId.value = null
+        item.action?.()
+      },
+    })
+  }
+  return result
 }
 
-function clickItem(item: MenuItem) {
-  if (item.disabled || !item.action) return
-  activeMenu.value = null
-  item.action()
-}
-
-function onDocClick() {
-  activeMenu.value = null
+function onMenuVisibleChange(id: string, visible: boolean) {
+  openMenuId.value = visible ? id : (openMenuId.value === id ? null : openMenuId.value)
 }
 
 async function syncMaximizedState() {
@@ -171,166 +129,45 @@ async function syncMaximizedState() {
 }
 
 onMounted(() => {
-  document.addEventListener('click', onDocClick)
   syncMaximizedState()
 })
-onUnmounted(() => document.removeEventListener('click', onDocClick))
 
 defineExpose({ syncMaximizedState })
 </script>
 
 <template>
-  <div class="menu-bar" @click.stop>
-    <button
+  <div
+    class="flex h-7 shrink-0 items-center border-b border-[var(--border)] bg-[var(--bg-secondary)] px-1 text-xs select-none [-webkit-app-region:drag]"
+    @click.stop
+  >
+    <Dropdown
       v-for="menu in menus"
       :key="menu.id"
-      class="menu-trigger"
-      :class="{ active: activeMenu === menu.id }"
-      @click="toggleMenu(menu.id)"
-      @mouseenter="activeMenu = activeMenu ? menu.id : null"
+      trigger="click"
+      position="bottomLeft"
+      :menu="toSemiMenu(menu.items)"
+      :disabled="menu.items.length === 0"
+      :visible="openMenuId === menu.id"
+      @visible-change="(v: boolean) => onMenuVisibleChange(menu.id, v)"
     >
-      {{ menu.label }}
-    </button>
-
-    <div class="menu-spacer"></div>
-    <ThemeSelector class="menu-theme-select" @open-settings="emit('openPreferences')" />
-    <span v-if="workspaceName" class="menu-ws-name">{{ workspaceName }}</span>
-
-    <!-- Dropdowns -->
-    <Teleport to="body">
-      <div
-        v-for="menu in menus"
-        :key="menu.id"
-        v-show="activeMenu === menu.id"
-        class="menu-dropdown"
-        :style="{ left: menus.findIndex(m => m.id === menu.id) * 52 + 4 + 'px', top: '28px' }"
-        @click.stop
+      <button
+        type="button"
+        class="ide-menu-trigger"
+        :class="{ 'is-active': openMenuId === menu.id }"
+        :disabled="menu.items.length === 0"
       >
-        <template v-for="(item, idx) in menu.items" :key="idx">
-          <div v-if="item.separator" class="menu-separator"></div>
-          <div
-            v-else
-            class="menu-item"
-            :class="{ disabled: item.disabled }"
-            @click="clickItem(item)"
-          >
-            <span class="menu-item-label">{{ item.label }}</span>
-            <span v-if="item.shortcut" class="menu-item-shortcut">{{ item.shortcut }}</span>
-          </div>
-        </template>
-      </div>
-    </Teleport>
+        {{ menu.label }}
+      </button>
+    </Dropdown>
+
+    <div class="flex-1" />
+
+    <ThemeSelector class="mr-2 shrink-0" @open-settings="emit('openPreferences')" />
+    <span
+      v-if="folderName"
+      class="mr-2 max-w-[200px] truncate text-[11px] text-[var(--text-muted)] [-webkit-app-region:no-drag]"
+    >
+      {{ folderName }}
+    </span>
   </div>
 </template>
-
-<style scoped>
-.menu-bar {
-  display: flex;
-  align-items: center;
-  height: 28px;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
-  padding: 0 4px;
-  font-size: 12px;
-  user-select: none;
-  -webkit-app-region: drag;
-}
-
-.menu-trigger {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  padding: 2px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
-  -webkit-app-region: no-drag;
-  transition: background 0.15s;
-}
-.menu-trigger:hover {
-  background: var(--bg-hover);
-  color: var(--text-main);
-}
-.menu-trigger.active {
-  background: var(--bg-hover);
-  color: var(--text-main);
-}
-
-.menu-spacer {
-  flex: 1;
-}
-
-.menu-theme-select {
-  margin-right: 8px;
-  flex-shrink: 0;
-}
-
-.menu-ws-name {
-  color: var(--text-muted);
-  font-size: 11px;
-  margin-right: 8px;
-  -webkit-app-region: no-drag;
-}
-
-/* ── Dropdown ───────────────────────────────────────────── */
-.menu-dropdown {
-  position: fixed;
-  z-index: 10000;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 4px 0;
-  min-width: 220px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
-  animation: menuIn 0.1s ease;
-}
-
-@keyframes menuIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.menu-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 5px 12px;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--text-main);
-  transition: background 0.1s;
-}
-.menu-item:hover {
-  background: var(--accent);
-  color: #fff;
-}
-.menu-item:hover .menu-item-shortcut {
-  color: rgba(255,255,255,0.6);
-}
-.menu-item.disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.menu-item.disabled:hover {
-  background: none;
-  color: var(--text-main);
-}
-
-.menu-item-label {
-  white-space: nowrap;
-}
-
-.menu-item-shortcut {
-  margin-left: 24px;
-  font-size: 11px;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.menu-separator {
-  height: 1px;
-  background: var(--border);
-  margin: 4px 8px;
-}
-</style>

@@ -229,13 +229,16 @@ export const useThemeStore = defineStore('theme', () => {
   function syncDomAttributes() {
     if (typeof document === 'undefined') return
     const root = document.documentElement
+    const mode = activeCategory.value === 'light' ? 'light' : 'dark'
     root.setAttribute('data-preset', presetId.value)
     root.setAttribute('data-mode', activeCategory.value)
     root.setAttribute('data-accent', accentColor.value)
     // 兼容旧 CSS，保留 data-theme 为明暗标识
-    root.setAttribute('data-theme', activeCategory.value === 'light' ? 'light' : 'dark')
+    root.setAttribute('data-theme', mode)
     root.classList.toggle('theme-light', activeCategory.value === 'light')
     root.classList.toggle('theme-dark', activeCategory.value === 'dark')
+    // Semi Design 明暗模式
+    document.body.setAttribute('theme-mode', mode)
   }
 
   function applyTheme() {
