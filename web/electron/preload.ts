@@ -1,32 +1,47 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { ElectronAPI, FileContent, FsNode, InspirationNote, OpenFileResult } from './types'
 
-contextBridge.exposeInMainWorld('electronAPI', {
+const electronAPI: ElectronAPI = {
   platform: () => ipcRenderer.invoke('platform'),
   getAppPath: () => ipcRenderer.invoke('getAppPath'),
-  openFile: (options?: { filters?: { name: string; extensions: string[] }[] }) =>
-    ipcRenderer.invoke('dialog:openFile', options),
-  saveFile: (options?: { defaultPath?: string; content?: string; encoding?: 'utf8' | 'base64' }) =>
-    ipcRenderer.invoke('dialog:saveFile', options),
-  openFiles: (options?: { filters?: { name: string; extensions: string[] }[] }) =>
-    ipcRenderer.invoke('dialog:openFile', options),
-  openFolder: () => ipcRenderer.invoke('dialog:openFolder'),
-  listDirTree: (folderPath: string) => ipcRenderer.invoke('fs:listDirTree', folderPath),
-  readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
-  writeFile: (filePath: string, content: string) => ipcRenderer.invoke('fs:writeFile', filePath, content),
-  createFile: (parentPath: string, fileName: string) => ipcRenderer.invoke('fs:createFile', parentPath, fileName),
-  createDir: (parentPath: string, dirName: string) => ipcRenderer.invoke('fs:createDir', parentPath, dirName),
-  deletePath: (targetPath: string) => ipcRenderer.invoke('fs:deletePath', targetPath),
-  dirname: (filePath: string) => ipcRenderer.invoke('fs:dirname', filePath),
+  openFile: (options) => ipcRenderer.invoke('dialog:openFile', options),
+  saveFile: (options) => ipcRenderer.invoke('dialog:saveFile', options),
+  openFiles: (options) =>
+    ipcRenderer.invoke('dialog:openFile', options) as Promise<OpenFileResult[]>,
+  openFolder: () => ipcRenderer.invoke('dialog:openFolder') as Promise<string | null>,
+  listDirTree: (folderPath) =>
+    ipcRenderer.invoke('fs:listDirTree', folderPath) as Promise<FsNode | null>,
+  readFile: (filePath) =>
+    ipcRenderer.invoke('fs:readFile', filePath) as Promise<FileContent>,
+  writeFile: (filePath, content) =>
+    ipcRenderer.invoke('fs:writeFile', filePath, content) as Promise<void>,
+  createFile: (parentPath, fileName) =>
+    ipcRenderer.invoke('fs:createFile', parentPath, fileName) as Promise<string>,
+  createDir: (parentPath, dirName) =>
+    ipcRenderer.invoke('fs:createDir', parentPath, dirName) as Promise<string>,
+  deletePath: (targetPath) =>
+    ipcRenderer.invoke('fs:deletePath', targetPath) as Promise<void>,
+  dirname: (filePath) =>
+    ipcRenderer.invoke('fs:dirname', filePath) as Promise<string>,
+  scanFolder: (folderPath) =>
+    ipcRenderer.invoke('fs:scanFolder', folderPath),
   minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
-  toggleMaximizeWindow: () => ipcRenderer.invoke('window:toggleMaximize'),
+  toggleMaximizeWindow: () =>
+    ipcRenderer.invoke('window:toggleMaximize') as Promise<boolean>,
   closeWindow: () => ipcRenderer.invoke('window:close'),
-  isWindowMaximized: () => ipcRenderer.invoke('window:isMaximized'),
-  openInspirationWindow: (wsId: string) => ipcRenderer.invoke('window:openInspiration', wsId),
-  listInspiration: (wsId: string) => ipcRenderer.invoke('inspiration:list', wsId),
-  addInspiration: (wsId: string, note: { id: string; content: string; created_at: string }) =>
-    ipcRenderer.invoke('inspiration:add', wsId, note),
-  onInspirationSaved: (cb: () => void) => { ipcRenderer.on('inspiration:saved', cb) },
-  onOpenFile: (cb: (filePath: string) => void) => {
+  isWindowMaximized: () => ipcRenderer.invoke('window:isMaximized') as Promise<boolean>,
+  openInspirationWindow: (wsId) => ipcRenderer.invoke('window:openInspiration', wsId),
+  openDetachedPanel: (panel, wsId) => ipcRenderer.invoke('window:openDetached', panel, wsId),
+  listInspiration: (wsId) =>
+    ipcRenderer.invoke('inspiration:list', wsId) as Promise<InspirationNote[]>,
+  addInspiration: (wsId, note) =>
+    ipcRenderer.invoke('inspiration:add', wsId, note) as Promise<InspirationNote[]>,
+  onInspirationSaved: (cb) => {
+    ipcRenderer.on('inspiration:saved', cb)
+  },
+  onOpenFile: (cb) => {
     ipcRenderer.on('app:open-file', (_e, fp: string) => cb(fp))
   },
-})
+}
+
+contextBridge.exposeInMainWorld('electronAPI', electronAPI)

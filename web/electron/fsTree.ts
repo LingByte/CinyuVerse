@@ -10,7 +10,6 @@ export interface FsNode {
 
 /** Supported extensions for all viewable file types */
 export const VIEWABLE_EXTS = new Set([
-  // Text / Markdown
   '.md', '.txt', '.markdown', '.mdown',
   '.json', '.xml', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf',
   '.js', '.ts', '.jsx', '.tsx', '.vue', '.svelte',
@@ -19,14 +18,10 @@ export const VIEWABLE_EXTS = new Set([
   '.c', '.cpp', '.h', '.hpp', '.cs',
   '.sh', '.bash', '.zsh', '.ps1',
   '.sql', '.graphql',
-  // Images
   '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico',
-  // Documents
   '.pdf',
-  // Spreadsheets / Data
   '.csv', '.tsv',
   '.xlsx', '.xls',
-  // Config
   '.env', '.gitignore', '.editorconfig', '.prettierrc', '.eslintrc',
 ])
 

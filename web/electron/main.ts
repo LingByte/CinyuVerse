@@ -1,8 +1,8 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu, globalShortcut } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
-import { DIST, PRELOAD } from './paths.js'
-import { buildDirTree, isEditableFile, isBinaryFile } from './fsTree.js'
+import { DIST, PRELOAD } from './paths'
+import { buildDirTree, isEditableFile, isBinaryFile } from './fsTree'
 
 let mainWindow: BrowserWindow | null = null
 const childWindows = new Map<string, BrowserWindow>()
@@ -81,7 +81,6 @@ ipcMain.handle('dialog:openFile', async (_event, options?: { filters?: Electron.
   })
   if (result.canceled || result.filePaths.length === 0) return []
   return result.filePaths.map(fp => {
-    const ext = path.extname(fp).toLowerCase()
     const binary = isBinaryFile(fp)
     return {
       path: fp,
@@ -109,7 +108,7 @@ ipcMain.handle('dialog:saveFile', async (_event, options?: {
           { name: 'Markdown', extensions: ['md', 'markdown'] },
           { name: '纯文本', extensions: ['txt'] },
           { name: '代码', extensions: ['js', 'ts', 'jsx', 'tsx', 'vue', 'html', 'css', 'json', 'py', 'go', 'rs', 'java'] },
-          { name: '配置', extensions: ['yaml', 'yml', 'toml', 'ini', 'xml', 'ciny-theme', 'cin-scheme'] },
+          { name: '配置', extensions: ['yaml', 'yml', 'toml', 'ini', 'xml', 'cin-theme', 'cin-scheme'] },
           { name: '全部', extensions: ['*'] },
         ],
   })
@@ -154,6 +153,8 @@ ipcMain.handle('fs:writeFile', async (_event, filePath: string, content: string)
   if (!filePath || !isEditableFile(filePath)) {
     throw new Error('无法写入该文件')
   }
+  const dir = path.dirname(filePath)
+  fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(filePath, content, 'utf-8')
 })
 
@@ -186,6 +187,48 @@ ipcMain.handle('fs:deletePath', async (_event, targetPath: string) => {
 })
 
 ipcMain.handle('fs:dirname', async (_event, filePath: string) => path.dirname(filePath))
+
+/** Legacy: scan .md/.txt for workspace metadata building */
+ipcMain.handle('fs:scanFolder', async (_event, folderPath: string) => {
+  if (!folderPath || !fs.existsSync(folderPath)) return []
+  type FileEntry = { name: string; path: string; relativePath: string; content: string }
+  const results: FileEntry[] = []
+
+  function walkDir(dir: string, basePath: string) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
+    entries.sort((a, b) => {
+      if (a.isDirectory() && !b.isDirectory()) return -1
+      if (!a.isDirectory() && b.isDirectory()) return 1
+      return a.name.localeCompare(b.name, undefined, { numeric: true })
+    })
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        if (!entry.name.startsWith('.') && entry.name !== 'node_modules' && entry.name !== '__pycache__') {
+          walkDir(fullPath, basePath)
+        }
+      } else if (entry.isFile()) {
+        const ext = path.extname(entry.name).toLowerCase()
+        if (['.md', '.txt'].includes(ext)) {
+          try {
+            const content = fs.readFileSync(fullPath, 'utf-8')
+            results.push({
+              name: entry.name,
+              path: fullPath,
+              relativePath: path.relative(basePath, fullPath).replace(/\\/g, '/'),
+              content,
+            })
+          } catch {
+            // skip unreadable files
+          }
+        }
+      }
+    }
+  }
+
+  walkDir(folderPath, folderPath)
+  return results
+})
 
 ipcMain.handle('getAppPath', () => app.getPath('userData'))
 ipcMain.handle('platform', () => process.platform)
@@ -262,6 +305,32 @@ ipcMain.handle('window:openInspiration', (_e, wsId: string) => {
   createInspirationWindow(wsId || 'default')
 })
 
+function createDetachedPanel(panel: 'ai' | 'outline', wsId: string) {
+  const key = `detach-${panel}-${wsId}`
+  if (childWindows.has(key)) {
+    childWindows.get(key)?.focus()
+    return
+  }
+  const win = new BrowserWindow({
+    width: panel === 'ai' ? 420 : 520,
+    height: 800,
+    title: panel === 'ai' ? 'CinyuVerse AI' : 'CinyuVerse 大纲',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: PRELOAD,
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+  loadURL(win, `?mode=detach&panel=${panel}&wsId=${encodeURIComponent(wsId)}`)
+  childWindows.set(key, win)
+  win.on('closed', () => childWindows.delete(key))
+}
+
+ipcMain.handle('window:openDetached', (_e, panel: 'ai' | 'outline', wsId: string) => {
+  createDetachedPanel(panel, wsId)
+})
+
 function handleOpenFile(filePath: string) {
   if (mainWindow) {
     mainWindow.webContents.send('app:open-file', filePath)
@@ -287,6 +356,11 @@ if (!gotLock) {
   })
 }
 
+app.on('open-file', (event, filePath) => {
+  event.preventDefault()
+  handleOpenFile(filePath)
+})
+
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null)
   createWindow()
@@ -307,5 +381,8 @@ app.whenReady().then(() => {
   })
 })
 
-app.on('window-all-closed', () => { app.quit() })
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit()
+})
+
 app.on('before-quit', () => { globalShortcut.unregisterAll() })

@@ -1,372 +1,225 @@
-# CinyuVerse 项目文档
+# CinyuVerse
 
-> AI 驱动的小说创作 IDE —— 三栏布局（资源管理器 / Markdown 编辑器 / AI 助手），支持 Electron 桌面端与 Web 开发模式。
+本地优先的 AI 小说创作 IDE（Electron 桌面应用）。不依赖 Go 后端，所有文件读写通过 Electron IPC 直接操作本地磁盘。
 
----
-
-## 1. 项目简介
-
-CinyuVerse 是一个面向**长篇小说创作**的集成环境：
-
-- 以**工作区**为单位管理分卷、分章 Markdown 正文
-- 通过 **WebSocket** 与 AI 实时对话、流式续写；**Session API** 持久化对话历史
-- 创作模式下 AI 可**自主读取/写入**项目文件（世界观、大纲、章节等）
-- 人物卡、世界观词条、三级大纲、时间线、回收站、章节快照
-- 多格式导出（TXT / MD / EPUB / DOCX / 网文平台）
-- 16 套 UI 主题、壁纸玻璃化、编辑器配色、打字机专注模式
-
-**技术栈**
+## 技术栈
 
 | 层级 | 技术 |
 |------|------|
-| 后端 | Go 1.25、Gin、GORM、SQLite |
-| 前端 | Vue 3、Pinia、Vite、CodeMirror 6 |
-| 桌面 | Electron |
-| AI | OpenAI 兼容 API（通义千问 / Ollama 等，环境变量配置） |
+| 桌面壳 | Electron 41 + contextBridge IPC |
+| 前端 | Vue 3 + TypeScript + Pinia |
+| 编辑器 | CodeMirror 6（Markdown / 纯文本） |
+| 样式 | Tailwind CSS v4 + 自定义 CSS 变量主题 |
+| 构建 | Vite 8 + vue-tsc + electron-builder |
 
----
-
-## 2. 目录结构
+## 项目结构
 
 ```
 CinyuVerse/
-├── cmd/server/                 # Go 服务入口
-├── internal/
-│   ├── handlers/               # HTTP / WebSocket 处理器
-│   ├── models/                 # 数据库模型（Session、Message 等）
-│   └── service/
-│       ├── workspace/          # 工作区文件、AI 工具、大纲、回收站
-│       └── export/             # TXT / MD / EPUB / DOCX / 网文平台导出
-├── pkg/
-│   ├── config/                 # 配置加载
-│   ├── lingo/                  # 日志、响应封装
-│   └── llm/                    # LLM 流式调用与工具
-├── workspace/                  # 本地工作区数据（开发时，已 gitignore）
+├── PROJECT.md          # 本文档
+├── LICENSE
 └── web/
-    ├── electron/               # Electron 主进程（多窗口、灵感箱、文件关联）
-    └── src/
-        ├── pages/              # Landing、IdeWorkspace、InspirationPage
-        ├── components/ide/     # 编辑器、AI 面板、大纲、设定、回收站等
-        ├── composables/        # useWorkspace、useWebSocket、useChatSession
-        ├── stores/             # themeStore、focusModeStore、llmStore 等
-        └── api/                # ide.ts、chat.ts
+    ├── electron/       # 主进程：IPC、文件系统、窗口管理
+    │   ├── main.ts
+    │   ├── preload.ts
+    │   ├── fsTree.ts   # 目录树构建与文件类型判断
+    │   ├── build.ts    # 编译脚本
+    │   ├── watch.ts    # 开发热编译
+    │   └── run.ts      # 启动 Electron（处理 ELECTRON_RUN_AS_NODE）
+    ├── src/
+    │   ├── pages/      # Landing、IdeWorkspace、InspirationPage
+    │   ├── components/ide/  # IDE 面板与预览器
+    │   ├── composables/     # useWorkspace、useLocalChat
+    │   ├── stores/          # 主题、写作统计、LLM 配置等
+    │   └── utils/           # 文件类型、导出、localStorage 数据
+    └── package.json
 ```
 
----
+## 快速开始
 
-## 3. 快速启动
+### 环境要求
 
-### 3.1 环境要求
+- Node.js ≥ 20（推荐 24+）
+- npm
 
-- Go 1.21+（项目 go.mod 为 1.25）
-- Node.js 18+
-- LLM API Key（见 §4）
+### 安装依赖
 
-### 3.2 开发模式（推荐 Electron 桌面端）
-
-**终端 1 — 后端**
-
-```powershell
-cd C:\Users\17793\Desktop\CinyuVerse
-go run ./cmd/server
+```bash
+cd web
+npm install
 ```
 
-默认：`http://localhost:8080`
+### 开发模式（Electron 桌面）
 
-**终端 2 — 前端 + Electron**
-
-```powershell
-cd C:\Users\17793\Desktop\CinyuVerse\web
-npx tsc -p electron/tsconfig.json
+```bash
+cd web
 npm run dev:electron
 ```
 
-- 前端 Dev Server：`http://localhost:9090`
-- Electron 窗口应自动弹出
+启动后：
+- Vite 开发服务器：`http://127.0.0.1:9090`
+- Electron 窗口自动打开，并附带 DevTools
 
-> 开发模式下需**手动启动 Go 后端**；生产打包后 Electron 会自动启动内嵌 `bin/server`。
+### 仅 Web 预览（无文件系统能力）
 
-### 3.3 仅 Web 浏览器
-
-```powershell
+```bash
 cd web
-npm install
 npm run dev
 ```
 
-浏览器模式不支持：打开本地文件夹、灵感悬浮窗、拆出独立窗口、部分文件关联。
+浏览器模式下打开文件夹/文件会提示「仅桌面端支持」。
 
-### 3.4 生产打包
+### 类型检查
 
-```powershell
+```bash
 cd web
-npm run build:electron
+npm run typecheck
+```
+
+### 打包发布
+
+```bash
+cd web
 npm run dist
 ```
 
----
+产物输出到 `web/release/`（Windows NSIS / macOS DMG / Linux AppImage）。
 
-## 4. 配置说明
+## 架构概览
 
-| 变量 | 说明 | 默认 |
-|------|------|------|
-| `ADDR` | HTTP 监听 | `:8080` |
-| `WORKSPACE_DIR` | 工作区根目录 | `./workspace` |
-| `DSN` | SQLite 连接串 | 见 config |
-| `LLM_API_KEY` | 大模型 API Key | — |
-| `LLM_BASE_URL` | OpenAI 兼容 Base URL | — |
-| `LLM_MODEL` | 默认模型名 | — |
-| `LLM_PROVIDER` | 提供方标识 | `openai` |
+```
+┌─────────────────────────────────────────────────────────┐
+│  Renderer (Vue 3)                                       │
+│  IdeWorkspace → useWorkspace → window.electronAPI       │
+│  EditorPanel  → fileTypes.detectFileType → 预览器分发    │
+└──────────────────────────┬──────────────────────────────┘
+                           │ IPC (invoke/handle)
+┌──────────────────────────▼──────────────────────────────┐
+│  Main Process (Electron)                                │
+│  fsTree.buildDirTree / readFile / writeFile / dialog    │
+└──────────────────────────┬──────────────────────────────┘
+                           │ node:fs
+┌──────────────────────────▼──────────────────────────────┐
+│  用户本地磁盘（任意文件夹）                               │
+└─────────────────────────────────────────────────────────┘
+```
 
-桌面端（Electron 生产）数据目录：
+### 数据持久化
 
-| 路径 | 内容 |
+| 数据 | 存储位置 |
+|------|----------|
+| 章节/文件内容 | 用户选择的本地文件夹 |
+| 角色卡、词条、大纲、聊天记录 | `localStorage`（按 workspace id 隔离） |
+| 灵感草稿（Electron） | `{userData}/inspiration/{wsId}.json` |
+| 主题、写作统计、LLM 配置 | `localStorage` |
+| 上次打开的文件夹/文件 | `localStorage`（`cinyuverse:lastFolder` 等） |
+
+## Electron IPC 接口
+
+| 通道 | 说明 |
 |------|------|
-| `userData/data/` | SQLite 数据库 |
-| `userData/workspace/` | 小说工作区 |
-| `userData/inspiration/` | 灵感草稿 JSON |
+| `dialog:openFile` | 打开文件对话框，返回内容（utf8/base64） |
+| `dialog:saveFile` | 保存文件对话框 |
+| `dialog:openFolder` | 选择文件夹 |
+| `fs:listDirTree` | 递归构建可浏览文件树 |
+| `fs:readFile` | 读取单个文件 |
+| `fs:writeFile` | 写入可编辑文本文件 |
+| `fs:createFile` / `fs:createDir` | 新建文件/文件夹 |
+| `fs:deletePath` | 删除文件或空目录 |
+| `fs:scanFolder` | 扫描 `.md`/`.txt`（用于导出字数统计） |
+| `window:*` | 最小化、最大化、关闭 |
+| `window:openInspiration` | 打开灵感草稿子窗口 |
+| `window:openDetached` | 拆出 AI / 大纲独立窗口 |
+| `inspiration:list` / `inspiration:add` | 灵感草稿 CRUD |
 
----
+Preload 通过 `contextBridge` 暴露为 `window.electronAPI`。
 
-## 5. 功能一览
+## 文件预览
 
-### 5.1 IDE 工作区
+`EditorPanel` 根据扩展名自动选择渲染方式：
 
-- 创建 / 打开 / 关闭工作区；分卷、分章树形目录
-- Markdown 章节编辑（CodeMirror 语法高亮）
-- `Ctrl+S` 保存、**30 秒自动保存**
-- 左右栏拖拽宽度；`Ctrl+B` / `Ctrl+J` 切换侧栏与 AI 面板
-- 编辑器字体缩放（`Ctrl+±` / `Ctrl+0`）
-- **左侧栏四标签**：目录 · 设定 · 大纲 · 回收站
+| 类型 | 扩展名示例 | 组件 |
+|------|-----------|------|
+| 文本（可编辑） | `.md` `.txt` `.json` `.js` `.py` `.csv` 等 | CodeMirror 6 |
+| 图片 | `.png` `.jpg` `.gif` `.webp` `.svg` | ImageViewer |
+| PDF | `.pdf` | PdfViewer |
+| 表格 | `.xlsx` `.xls` | SpreadsheetViewer（CSV/TSV 在编辑器中以文本打开） |
+| 其他二进制 | — | BinaryPlaceholder |
 
-### 5.2 设定面板（人物 / 世界观）
+## IDE 布局
 
-- **人物卡**：姓名、年龄、身份、性格、关系、故事线、对话风格
-- **世界观词条库**：分类、可检索词条
-- 数据存 `characters.json` / `glossary.json`，自动同步到 `meta.json` 供 AI 读取
+三栏可调整宽度：
 
-### 5.3 大纲面板
+- **左栏**：目录（LocalFileTree）/ 设定（MetaPanel）/ 大纲（OutlinePanel）
+- **中栏**：编辑器或多格式预览
+- **右栏**：AI 对话面板
 
-- **三级结构**：全书总纲 → 分卷大纲 → 章节小节
-- **时间线视图**：事件、时间、人物、描述
-- 点击章节节点**跳转编辑器**；导出 / 导入 Markdown 思维导图
-- 数据存 `outline.json`
+另有 MenuBar、StatusBar、主题设置、写作看板、灵感草稿独立窗口。
 
-### 5.4 回收站与章节快照
+## 已实现功能
 
-- 删除卷/章节移入回收站，**7 天内可恢复**
-- 每次保存前自动创建章节快照（最多 30 个/章）
-- **视图 → 章节历史版本**：diff 对比 + 一键回滚
+### 文件与 workspace
 
-### 5.5 写作数据看板
+- [x] 打开本地文件夹 / 单文件
+- [x] VS Code 风格文件树（折叠、新建、删除、右键菜单）
+- [x] 多格式文件预览（文本、图片、PDF、表格占位）
+- [x] 文本文件编辑与自动保存（30 秒间隔）
+- [x] 上次会话恢复（文件夹 + 文件）
+- [x] 系统文件关联打开（`.md` `.txt` 等）
+- [x] 导出 TXT / MD（合并 workspace 内章节）
 
-- 点击状态栏**字数**或 **视图 → 写作数据看板**
-- 总字数 / 有效正文 / 今日新增 / 目标进度 / 分卷统计 / 近 14 日柱状图
+### 小说创作辅助
 
-### 5.6 AI 助手
+- [x] 角色卡 / 词条管理（MetaPanel，localStorage）
+- [x] 大纲树 + 时间线（OutlinePanel，localStorage）
+- [x] 大纲跳转章节
+- [x] 写作数据看板（字数统计、目标进度）
+- [x] 打字机专注模式
+- [x] 灵感草稿箱（Electron 子窗口）
 
-| 模式 | 说明 |
-|------|------|
-| **对话** | REST `POST /api/ai/chat`，不读文件；Session 持久化 |
-| **创作** | WebSocket 流式；AI 调用工具读写工作区 |
+### 界面与主题
 
-**创作子模式**：续写、剧情推演、冲突、伏笔、对话优化、摘要、查重、改写、扩写、缩写、润色
+- [x] 多套预设主题 + 自定义 accent
+- [x] 编辑器配色方案（ICLS / IDEA JSON 导入导出）
+- [x] 主题插件包（`.jar` / `.zip`）
+- [x] 背景图 / 玻璃面板
+- [x] 面板布局重置、字体缩放
 
-**其他**：多模型切换（含 Ollama 预设）、Prompt 文风模板、全局设定注入 systemPrompt、历史会话切换、插入正文
+### 窗口
 
-### 5.7 导入 / 导出
+- [x] 自定义 MenuBar（隐藏系统菜单）
+- [x] 窗口最小化 / 最大化 / 关闭
+- [x] AI / 大纲面板拆出为独立窗口
 
-| 格式 | 入口 |
-|------|------|
-| TXT / Markdown | 文件菜单 / 状态栏 |
-| EPUB / DOCX | 文件菜单 |
-| 番茄 / 起点 / 晋江 | 文件菜单（分卷排版 + 基础违禁词过滤） |
-| 大纲 Markdown | 大纲面板「导出」 |
+## 尚未实现 / 已知限制
 
-桌面端：打开 `.md` / `.txt` 文件或文件夹批量导入。
+- [ ] **AI 对话与创作**：UI 完整，但未接入 Ollama / OpenAI 等 LLM 直连
+- [ ] **EPUB / DOCX / 平台导出**：菜单存在，功能待前端实现
+- [ ] **`.xlsx` 预览**：分类为 spreadsheet 但内容为 base64，表格预览实际不可用
+- [ ] **项目元数据落盘**：角色、大纲、聊天等仍在 localStorage，未写入项目文件夹
+- [ ] **文件监听**：外部修改文件不会自动刷新树
+- [ ] **Web 模式**：仅 Landing 可浏览，IDE 文件操作需 Electron
 
-### 5.8 主题与外观
-
-- 16 套 UI 主题 + 5 强调色；8 套壁纸；7 套编辑器配色
-- 壁纸亮度 / 面板透明度 / 纯色专注模式 / 主题联动
-- **打字机专注模式**（视图菜单）：隐藏侧栏、AI、菜单栏、状态栏
-
-### 5.9 Electron 桌面专属
-
-| 功能 | 快捷键 / 入口 |
-|------|----------------|
-| 灵感草稿箱 | `Ctrl+Shift+I` 或 视图菜单 |
-| 拆出 AI 面板 | 视图 → 拆出 AI 面板 |
-| 拆出大纲面板 | 视图 → 拆出大纲面板 |
-| 文件关联 | 双击 `.md` / `.txt` / `.cinv` |
-| 窗口控制 | 文件菜单（最小化 / 最大化 / 关闭） |
-
----
-
-## 6. 后端 API 概览
-
-前缀：`/api`
-
-### 工作区
-
-```
-POST/GET/PUT/DELETE  /workspace[...]
-POST/DELETE          /workspace/:id/volumes[...]
-POST/GET/PUT/DELETE  /workspace/:id/volumes/:volId/chapters/:chId
-GET/POST             /workspace/:id/volumes/:volId/chapters/:chId/snapshots[...]
-GET/PUT              /workspace/:id/characters
-GET/PUT              /workspace/:id/glossary
-GET/PUT              /workspace/:id/outline
-POST                 /workspace/:id/outline/import-md
-GET                  /workspace/:id/trash
-POST                 /workspace/:id/trash/:trashId/restore
-GET                  /workspace/:id/stats?target=
-GET                  /workspace/:id/wordcount
-```
-
-### AI
-
-```
-WS                   /ws/ai/stream
-POST                 /ai/chat
-POST/GET/DELETE      /ai/sessions[...]
-POST                 /ai/sessions/:id/messages
-```
-
-### 导出
-
-```
-GET  /export/:id/txt
-GET  /export/:id/md
-GET  /export/:id/epub
-GET  /export/:id/docx
-GET  /export/:id/platform/:platform   # fanqie | qidian | jjwxc
-GET  /export/:id/outline-md
-```
-
-### 遗留（待清理）
-
-```
-GET  /novels/*
-POST /recognize
-```
-
----
-
-## 7. 工作区文件格式
-
-```
-workspace/
-└── {书名}_novel_{id}/
-    ├── meta.json           # 书名、类型、世界观、人物、大纲、文风、卷章索引
-    ├── characters.json     # 人物卡结构化数据
-    ├── glossary.json       # 世界观词条
-    ├── outline.json        # 三级大纲 + 时间线
-    ├── .snapshots/           # 章节历史快照
-    ├── vol001/
-    │   └── chapter_001.md
-    └── vol002/
-        └── chapter_001.md
-
-workspace/.trash/             # 全局回收站（7 天过期）
-```
-
----
-
-## 8. AI 对话与记忆
-
-| 项目 | 行为 |
-|------|------|
-| 对话模式 | `POST /api/ai/chat` → SQLite Session；刷新后恢复 |
-| 创作模式 | WebSocket 流式 → 完成后 `POST .../messages` 追加历史 |
-| 工作区隔离 | `workspaceId` 查询 Session；活跃 ID 存 localStorage |
-| 全局记忆 | 世界观 / 人物 / 大纲 / Prompt 模板注入 systemPrompt |
-| 对话流式 | 暂未实现（显示「AI 正在思考…」后一次性展示） |
-
-前端：`web/src/api/chat.ts`、`web/src/composables/useChatSession.ts`
-
-### 创作模式 AI 工具（后端）
-
-`ReadProjectFiles` · `WriteChapter` · `AppendChapterContent` · `UpdateProjectSetting` · `SearchProject` · `ListProjectStructure` · `CreateVolume` · `PreparePlotBranches` · `RecallForeshadowing` · `GetDialogueStyleGuide` · `ScanDuplicateContent`
-
----
-
-## 9. 快捷键
+## 快捷键（部分）
 
 | 快捷键 | 功能 |
 |--------|------|
-| `Ctrl+S` | 保存当前章节 |
+| `Ctrl+S` | 保存当前文件 |
 | `Ctrl+B` | 切换侧边栏 |
 | `Ctrl+J` | 切换 AI 面板 |
-| `Ctrl+,` | 主题设置 |
-| `Ctrl+Enter` | 发送 AI 消息 |
-| `Ctrl+0` | 重置编辑器缩放 |
-| `Ctrl+Shift+I` | 灵感草稿箱（Electron） |
-| `Esc` | 退出打字机专注模式 |
+| `Ctrl+,` | 外观与主题 |
+| `Ctrl+Shift+I` | 灵感草稿箱 |
+| `Esc` | 退出专注模式 |
 
----
+（macOS 下 Ctrl 对应 Cmd，见 `utils/platform.ts`）
 
-## 10. 已知限制
+## 开发说明
 
-- 浏览器模式无法打开本地文件夹；无 Electron 多窗口 / 灵感箱
-- 对话模式非流式输出
-- 大纲暂不支持拖拽排序、`.xmind` 导入
-- PDF 导出、云同步、插件生态未实现
-- `/api/novels` 冗余 API 待清理
+- Electron 主进程编译为 **CommonJS**（`electron/tsconfig.json`）
+- Preload 单独编译并重命名为 `preload.cjs`
+- 开发时 `watch.ts` 监听 `electron/` 变更并自动重编译
+- 类型定义单一来源：`electron/types.ts`，渲染进程通过 `src/types/electron.ts` 重导出
 
----
+## 版本
 
-## 11. 相关文件索引
-
-| 功能 | 路径 |
-|------|------|
-| IDE 主界面 | `web/src/pages/IdeWorkspace.vue` |
-| 左侧栏（目录/设定/大纲/回收站） | `web/src/components/ide/LeftSidebar.vue` |
-| AI 面板 | `web/src/components/ide/AiChatPanel.vue` |
-| 大纲 | `web/src/components/ide/OutlinePanel.vue` |
-| 人物/词条 | `web/src/components/ide/MetaPanel.vue` |
-| WebSocket | `web/src/composables/useWebSocket.ts` |
-| Session | `web/src/composables/useChatSession.ts` |
-| 工作区 | `web/src/composables/useWorkspace.ts` |
-| 主题 | `web/src/stores/themeStore.ts` |
-| Electron 主进程 | `web/electron/main.ts` |
-| WS 后端 | `internal/handlers/ws_stream.go` |
-| 工作区服务 | `internal/service/workspace/` |
-| 导出 | `internal/service/export/` |
-| 会话 API | `internal/handlers/chat.go` |
-
----
-
-## 12. 产品路线图（规划中）
-
-> 已实现项见 §5–§8；以下为后续迭代方向。
-
-| 模块 | 状态 | 说明 |
-|------|------|------|
-| 核心创作增强 | 部分 ✅ | 待：批量章节工具、批注书签、拖拽大纲 |
-| AI 能力升级 | 部分 ✅ | 待：校对、会话分组、记忆裁剪 |
-| 桌面体验 | 部分 ✅ | 待：布局预设记忆、.cinv 完整格式 |
-| 主题美化 | 部分 ✅ | 待：动态壁纸、主题社区 |
-| 工程打包 | 规划中 | 自动更新、便携版 |
-| 协作 / Web / 性能 / 生态 | 规划中 | 见历史路线图 §12 详细条目 |
-
-### 短期迭代完成情况
-
-| # | 任务 | 状态 |
-|---|------|------|
-| 1 | 卷/章 DELETE + 回收站 | ✅ |
-| 2 | 人物卡 + 世界观词条 | ✅ |
-| 3 | Ollama 模型预设 | ✅ |
-| 4 | 打字机专注模式 | ✅ |
-| 5 | EPUB / DOCX / 网文平台导出 | ✅ |
-| 6 | Prompt 模板 | ✅ |
-| 7 | 章节快照与对比 | ✅ |
-| 8 | 写作数据看板 | ✅ |
-| 9 | Session 全局记忆 | ✅ |
-| 10 | 灵感箱 + 多窗口拆分 | ✅ |
-| 11 | 三级大纲 + 时间线 | ✅ |
-| 12 | AI 创作工具集（推演/伏笔/查重等） | ✅ |
-
----
-
-*文档版本：2026-06-23 · 与当前 dev-chenjie 分支功能同步*
+当前版本：**0.1.0**（本地优先 Electron 重构版）

@@ -7,7 +7,6 @@ const require = createRequire(import.meta.url)
 const electronPath = require('electron') as string
 const webRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-// Cursor / CI may set this — Electron then runs as plain Node and `import from 'electron'` fails.
 const env = { ...process.env }
 delete env.ELECTRON_RUN_AS_NODE
 

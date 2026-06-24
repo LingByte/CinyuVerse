@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { detectMacPlatform, isModKey, modEnterLabel } from '@/utils/platform'
 
 const notes = ref<{ id: string; content: string; created_at: string }[]>([])
 const draft = ref('')
 const wsId = ref('default')
+const saveShortcutLabel = ref(modEnterLabel())
 
 async function load() {
   if (window.electronAPI?.listInspiration) {
@@ -29,9 +31,17 @@ async function save() {
   draft.value = ''
 }
 
-onMounted(() => {
+function onDraftKeydown(e: KeyboardEvent) {
+  if (isModKey(e) && e.key === 'Enter') {
+    e.preventDefault()
+    save()
+  }
+}
+
+onMounted(async () => {
   const p = new URLSearchParams(window.location.search)
   wsId.value = p.get('wsId') || 'default'
+  saveShortcutLabel.value = modEnterLabel(await detectMacPlatform())
   load()
   window.electronAPI?.onInspirationSaved?.(() => load())
 })
@@ -40,8 +50,8 @@ onMounted(() => {
 <template>
   <div class="inspiration-page">
     <h3>灵感草稿箱</h3>
-    <textarea v-model="draft" class="draft" placeholder="随手记录灵感…" @keydown.ctrl.enter="save" />
-    <button class="save-btn" @click="save">保存 (Ctrl+Enter)</button>
+    <textarea v-model="draft" class="draft" placeholder="随手记录灵感…" @keydown="onDraftKeydown" />
+    <button class="save-btn" @click="save">保存 ({{ saveShortcutLabel }})</button>
     <div class="list">
       <div v-for="n in notes" :key="n.id" class="note">{{ n.content }}</div>
       <div v-if="notes.length === 0" class="empty">暂无灵感记录</div>

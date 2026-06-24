@@ -22,16 +22,25 @@ export function buildEditorSchemeExtensions(colors: EditorSchemeColors): Extensi
 
   const editorTheme = EditorView.theme({
     '&': {
-      background: colors.background,
-      color: colors.text,
+      background: 'var(--editor-bg)',
+      color: 'var(--editor-fg)',
     },
-    '.cm-content': { color: colors.text },
+    '.cm-scroller': {
+      background: 'var(--editor-bg)',
+    },
+    '.cm-content': {
+      color: 'var(--editor-fg)',
+      caretColor: colors.cursor,
+    },
+    '.cm-line': {
+      color: 'var(--editor-fg)',
+    },
     '.cm-cursor': { borderLeftColor: colors.cursor },
-    '.cm-activeLine': { background: `${colors.activeLine} !important` },
+    '.cm-activeLine': { background: 'var(--editor-active-line) !important' },
     '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
-      background: `${colors.selection} !important`,
+      background: 'var(--editor-selection, ' + colors.selection + ') !important',
     },
-    '.cm-placeholder': { color: `${colors.lineNumber} !important` },
+    '.cm-placeholder': { color: 'var(--editor-placeholder) !important' },
   })
 
   return [syntaxHighlighting(highlight), editorTheme]

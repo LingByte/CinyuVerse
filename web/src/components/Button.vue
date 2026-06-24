@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { Button as UiButton } from '@/components/ui/button'
 
 interface Props {
   variant?: 'solid' | 'soft' | 'outline'
@@ -28,8 +29,15 @@ const props = withDefaults(defineProps<Props>(), {
   block: false,
 })
 
+const uiSize = computed(() => {
+  if (props.size === 'sm') return 'sm' as const
+  if (props.size === 'lg') return 'lg' as const
+  return 'default' as const
+})
+
 const buttonClass = computed(() => [
-  'relative inline-flex items-center justify-center gap-2 border font-bold leading-none transition-all duration-200 ease-out active:translate-y-px active:scale-[0.985]',
+  'cv-btn relative gap-2 border font-bold leading-none transition-all duration-200 ease-out active:translate-y-px active:scale-[0.985]',
+  'hover:bg-transparent dark:hover:bg-transparent',
   props.size === 'sm' ? 'min-h-9 px-4 py-2 text-sm' : '',
   props.size === 'md' ? 'min-h-10 px-4.5 py-2.5 text-[0.95rem]' : '',
   props.size === 'lg' ? 'min-h-12 px-5.5 py-3 text-base' : '',
@@ -104,30 +112,27 @@ const buttonStyle = computed<Record<string, string>>(() => {
 
 const waveKey = ref(0)
 
-const triggerWave = () => {
+function triggerWave() {
   waveKey.value += 1
 }
 
-const onPointerDown = () => {
-  if (props.disabled || props.loading) return
-  triggerWave()
-}
-
-const onMouseDown = () => {
+function onPointerDown() {
   if (props.disabled || props.loading) return
   triggerWave()
 }
 </script>
 
 <template>
-  <button
+  <UiButton
     type="button"
+    variant="ghost"
+    :size="uiSize"
     :class="buttonClass"
     :style="buttonStyle"
     :disabled="disabled || loading"
     :aria-busy="loading"
     @pointerdown="onPointerDown"
-    @mousedown="onMouseDown"
+    @mousedown="onPointerDown"
   >
     <span
       :key="waveKey"
@@ -136,7 +141,7 @@ const onMouseDown = () => {
     />
     <span v-if="loading" class="spinner" aria-hidden="true" />
     <slot />
-  </button>
+  </UiButton>
 </template>
 
 <style scoped>

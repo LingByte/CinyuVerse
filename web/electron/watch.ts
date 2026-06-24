@@ -9,7 +9,7 @@ function finalizePreload() {
 
 function compile() {
   for (const project of ['electron/tsconfig.json', 'electron/tsconfig.preload.json']) {
-    const result = spawnSync('npx', ['tsc', '-p', project], { stdio: 'inherit' })
+    const result = spawnSync('npx', ['tsc', '-p', project], { stdio: 'inherit', shell: true })
     if (result.status !== 0) throw new Error(`tsc failed: ${project}`)
   }
   finalizePreload()

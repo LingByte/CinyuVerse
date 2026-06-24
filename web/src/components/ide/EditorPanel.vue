@@ -5,6 +5,8 @@ import { EditorState, Compartment } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { useEditorSchemeStore } from '@/stores/editorSchemeStore'
+import { isModKey } from '@/utils/platform'
+import { useThemeStore } from '@/stores/themeStore'
 import { detectFileType, type FileTypeInfo } from '@/utils/fileTypes'
 import ImageViewer from './ImageViewer.vue'
 import PdfViewer from './PdfViewer.vue'
@@ -32,11 +34,11 @@ watch(
   (path) => {
     fileType.value = path ? detectFileType(path) : { category: 'text', extension: '', mimeType: 'text/plain', editable: true }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
-// ---- CodeMirror (text files only) ----
 const schemeStore = useEditorSchemeStore()
+const themeStore = useThemeStore()
 const editorRef = ref<HTMLDivElement>()
 let view: EditorView | null = null
 const schemeCompartment = new Compartment()
@@ -46,12 +48,20 @@ const chromeTheme = EditorView.theme({
     height: '100%',
     fontSize: '15px',
     lineHeight: '1.8',
+    background: 'var(--editor-bg)',
+    color: 'var(--editor-fg)',
+  },
+  '.cm-scroller': {
+    background: 'var(--editor-bg)',
   },
   '.cm-content': {
     padding: '24px 32px',
     fontFamily: '"JetBrains Mono", "Source Han Serif SC", "Noto Serif CJK SC", serif',
+    maxWidth: '780px',
+    margin: '0 auto',
+    color: 'var(--editor-fg)',
   },
-  '.cm-line': { padding: '2px 0' },
+  '.cm-line': { padding: '2px 0', color: 'var(--editor-fg)' },
   '.cm-gutters': { display: 'none' },
   '.cm-scroller::-webkit-scrollbar-thumb': {
     background: 'var(--scrollbar-thumb)',
@@ -120,8 +130,39 @@ watch(() => props.content, (val) => {
 })
 
 watch(() => schemeStore.revision, () => {
+  applyEditorChromeFromTheme()
   applyScheme()
 })
+
+watch(
+  () => [themeStore.activeCategory, themeStore.presetId, themeStore.activeCustomId] as const,
+  () => {
+    applyEditorChromeFromTheme()
+    applyScheme()
+  },
+)
+
+function applyEditorChromeFromTheme() {
+  if (typeof document === 'undefined') return
+  const colors = themeStore.activeColors
+  const root = document.documentElement
+  const hasEditorOverride =
+    schemeStore.isCustomActive || Object.keys(schemeStore.editorOverrides).length > 0
+  if (hasEditorOverride) {
+    const c = schemeStore.activeColors
+    root.style.setProperty('--editor-bg', c.background)
+    root.style.setProperty('--editor-fg', c.text)
+    root.style.setProperty('--editor-placeholder', c.lineNumber)
+    root.style.setProperty('--editor-active-line', c.activeLine)
+    root.style.setProperty('--editor-selection', c.selection)
+  } else {
+    root.style.setProperty('--editor-bg', colors['--bg-primary'] ?? '')
+    root.style.setProperty('--editor-fg', colors['--text-main'] ?? '')
+    root.style.setProperty('--editor-placeholder', colors['--text-muted'] ?? '')
+    root.style.setProperty('--editor-active-line', colors['--bg-hover'] ?? '')
+    root.style.setProperty('--editor-selection', colors['--accent-light'] ?? '')
+  }
+}
 
 let editorMounted = false
 
@@ -131,9 +172,25 @@ function initTextEditor() {
     setContent(props.content)
     return
   }
-  nextTick(createEditor)
+  nextTick(() => {
+    applyEditorChromeFromTheme()
+    createEditor()
+  })
   editorMounted = true
 }
+
+watch(fileType, (newType) => {
+  if (newType.category === 'text') {
+    view?.destroy()
+    view = null
+    editorMounted = false
+    nextTick(initTextEditor)
+  } else {
+    view?.destroy()
+    view = null
+    editorMounted = false
+  }
+})
 
 onMounted(() => {
   if (fileType.value.category === 'text') initTextEditor()
@@ -143,17 +200,8 @@ onUnmounted(() => {
   view?.destroy()
 })
 
-watch(fileType, (newType) => {
-  if (newType.category === 'text') {
-    view?.destroy()
-    view = null
-    editorMounted = false
-    nextTick(initTextEditor)
-  }
-})
-
 function handleKeydown(e: KeyboardEvent) {
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+  if (isModKey(e) && e.key === 's') {
     e.preventDefault()
     if (fileType.value.editable) emit('save')
   }
@@ -177,15 +225,13 @@ onUnmounted(() => {
       </div>
       <div class="tab-info">
         <span v-if="fileType.category === 'text'" class="word-count">{{ wordCount.toLocaleString() }} 字</span>
-        <span v-else class="word-count">{{ fileType.extension.toUpperCase() }}</span>
+        <span v-else class="word-count">{{ fileType.extension.toUpperCase() || '预览' }}</span>
         <button v-if="dirty && fileType.editable" class="save-btn" @click="$emit('save')">保存</button>
       </div>
     </div>
 
-    <!-- Text Editor (CodeMirror) -->
     <div v-if="fileType.category === 'text'" ref="editorRef" class="editor-area"></div>
 
-    <!-- Image Viewer -->
     <ImageViewer
       v-else-if="fileType.category === 'image'"
       :base64="content"
@@ -193,21 +239,18 @@ onUnmounted(() => {
       :file-name="title"
     />
 
-    <!-- PDF Viewer -->
     <PdfViewer
       v-else-if="fileType.category === 'pdf'"
       :base64="content"
       :file-name="title"
     />
 
-    <!-- Spreadsheet Viewer -->
     <SpreadsheetViewer
       v-else-if="fileType.category === 'spreadsheet'"
       :content="content"
       :file-name="title"
     />
 
-    <!-- Binary Placeholder -->
     <BinaryPlaceholder
       v-else
       :file-name="title"
@@ -229,7 +272,6 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   height: 36px;
-  min-height: 36px;
   padding: 0 12px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);

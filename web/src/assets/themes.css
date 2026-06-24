@@ -129,7 +129,12 @@ html[data-mode]:not([data-has-bg-image]) body {
   color: var(--text-main) !important;
 }
 
-/* ── 背景图模式：壁纸由 BackgroundLayer.vue 渲染，UI 面板透明以透出背景 ── */
+/* ── 背景图模式：三栏统一半透明遮罩（无 blur，--wp-panel-alpha 由 themeStore 注入） ── */
+html[data-has-bg-image] {
+  --wp-panel-surface: color-mix(in srgb, var(--bg-primary) calc(var(--wp-panel-alpha, 0.72) * 100%), transparent);
+  --wp-panel-chrome: color-mix(in srgb, var(--bg-secondary) calc(var(--wp-panel-alpha, 0.72) * 100%), transparent);
+}
+
 html[data-has-bg-image] body {
   background: transparent !important;
 }
@@ -138,94 +143,69 @@ html[data-has-bg-image] #app {
   background: transparent !important;
   position: relative;
   z-index: 1;
-  isolation: isolate;
 }
 
 html[data-has-bg-image] .ide-workspace,
-html[data-has-bg-image] .ide-main,
-html[data-has-bg-image] .panel {
+html[data-has-bg-image] .ide-main {
   background: transparent !important;
+}
+
+/* 三栏 + 拖拽条同一遮罩，避免中间 4px 透明缝露出壁纸 */
+html[data-has-bg-image] .left-panel,
+html[data-has-bg-image] .center-panel,
+html[data-has-bg-image] .right-panel,
+html[data-has-bg-image] .resize-handle {
+  background: var(--wp-panel-surface) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 html[data-has-bg-image] .menu-bar,
 html[data-has-bg-image] .menu-bar-top,
-html[data-has-bg-image] .status-bar,
-html[data-has-bg-image] .editor-panel,
-html[data-has-bg-image] .chat-panel-wrap,
-html[data-has-bg-image] .file-tree,
+html[data-has-bg-image] .status-bar {
+  background: var(--wp-panel-chrome) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* 栏内子区域透明，由外层 column 统一承担遮罩色 */
 html[data-has-bg-image] .left-sidebar,
 html[data-has-bg-image] .sidebar-tabs,
 html[data-has-bg-image] .sidebar-body,
+html[data-has-bg-image] .file-tree,
 html[data-has-bg-image] .meta-panel,
 html[data-has-bg-image] .outline-panel,
-html[data-has-bg-image] .recycle-panel,
-html[data-has-bg-image] .left-panel,
-html[data-has-bg-image] .right-panel,
-html[data-has-bg-image] .center-panel,
+html[data-has-bg-image] .editor-panel,
 html[data-has-bg-image] .tab-bar,
-html[data-has-bg-image] .chat-tab-header,
-html[data-has-bg-image] .chat-message-scroll,
-html[data-has-bg-image] .tree-header,
+html[data-has-bg-image] .editor-area,
 html[data-has-bg-image] .cm-editor,
-html[data-has-bg-image] .cm-scroller {
+html[data-has-bg-image] .cm-scroller,
+html[data-has-bg-image] .chat-panel-wrap,
+html[data-has-bg-image] .chat-tab-header,
+html[data-has-bg-image] .mode-switch-bar,
+html[data-has-bg-image] .chat-message-scroll,
+html[data-has-bg-image] .chat-input-footer {
   background: transparent !important;
-  background-color: transparent !important;
+}
+
+html[data-has-bg-image] .cm-content,
+html[data-has-bg-image] .cm-line {
+  color: var(--text-main) !important;
+}
+
+html[data-has-bg-image] .cm-placeholder {
+  color: var(--text-muted) !important;
 }
 
 html[data-has-bg-image] .cm-activeLine {
-  background: rgba(128, 128, 128, 0.12) !important;
-}
-
-/* AI 面板：欢迎卡片 / 模式条 / 输入区也透出壁纸 */
-html[data-has-bg-image] .mode-switch-bar,
-html[data-has-bg-image] .mode-switch-card,
-html[data-has-bg-image] .mode-switch-tabs,
-html[data-has-bg-image] .input-card,
-html[data-has-bg-image] .cursor-input-box,
-html[data-has-bg-image] .welcome-tip-card,
-html[data-has-bg-image] .tool-progress-bar,
-html[data-has-bg-image] .mode-chip {
-  background: transparent !important;
-  background-color: transparent !important;
+  background: color-mix(in srgb, var(--bg-hover) 80%, transparent) !important;
 }
 
 html[data-has-bg-image] .tab-item,
-html[data-has-bg-image] .chat-input-footer,
 html[data-has-bg-image] .welcome-bubble,
 html[data-has-bg-image] .message-bubble,
-html[data-has-bg-image] .mode-switch-card,
-html[data-has-bg-image] .input-card,
-html[data-has-bg-image] .cursor-input-box,
-html[data-has-bg-image] .welcome-tip-card {
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-html[data-has-bg-image][data-mode="light"] .tab-item,
-html[data-has-bg-image][data-mode="light"] .chat-input-footer,
-html[data-has-bg-image][data-mode="light"] .welcome-bubble,
-html[data-has-bg-image][data-mode="light"] .message-bubble,
-html[data-has-bg-image][data-mode="light"] .mode-switch-card,
-html[data-has-bg-image][data-mode="light"] .input-card,
-html[data-has-bg-image][data-mode="light"] .cursor-input-box,
-html[data-has-bg-image][data-mode="light"] .welcome-tip-card {
-  background: rgba(255, 255, 255, 0.22) !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
-}
-
-html[data-has-bg-image][data-mode="dark"] .tab-item,
-html[data-has-bg-image][data-mode="dark"] .chat-input-footer,
-html[data-has-bg-image][data-mode="dark"] .welcome-bubble,
-html[data-has-bg-image][data-mode="dark"] .message-bubble,
-html[data-has-bg-image][data-mode="dark"] .mode-switch-card,
-html[data-has-bg-image][data-mode="dark"] .input-card,
-html[data-has-bg-image][data-mode="dark"] .cursor-input-box,
-html[data-has-bg-image][data-mode="dark"] .welcome-tip-card {
-  background: rgba(20, 22, 28, 0.28) !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-}
-
-html[data-has-bg-image] .model-control {
-  background: rgba(128, 128, 128, 0.15) !important;
-  backdrop-filter: blur(8px);
+html[data-has-bg-image] .mode-switch-tabs,
+html[data-has-bg-image] .cursor-input-box {
+  background: color-mix(in srgb, var(--bg-card) calc(min(var(--wp-panel-alpha, 0.72) + 0.12, 0.95) * 100%), transparent) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 55%, transparent);
 }

@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, renameSync } from 'node:fs'
 
 function tsc(project: string) {
-  const result = spawnSync('npx', ['tsc', '-p', project], { stdio: 'inherit' })
+  const result = spawnSync('npx', ['tsc', '-p', project], { stdio: 'inherit', shell: true })
   if (result.status !== 0) process.exit(result.status ?? 1)
 }
 

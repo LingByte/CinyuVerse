@@ -27,6 +27,8 @@ const ACTIVE_CUSTOM_KEY = 'cinyuverse-active-custom'
 const BG_IMAGE_KEY = 'cinyuverse-bg-image'
 const BG_SIZE_KEY = 'cinyuverse-bg-size'
 const BG_OVERLAY_KEY = 'cinyuverse-bg-overlay'
+const PANEL_GLASS_ALPHA_KEY = 'cinyuverse-panel-glass-alpha'
+const PANEL_GLASS_BLUR_KEY = 'cinyuverse-panel-glass-blur'
 
 function loadSaved<T>(key: string, fallback: T): T {
   try {
@@ -82,6 +84,8 @@ export interface SavedCustomTheme {
   backgroundImage?: string
   backgroundSize?: 'cover' | 'contain' | 'auto'
   backgroundOverlay?: string
+  panelGlassAlpha?: number
+  panelGlassBlur?: number
 }
 
 function generateId(): string {
@@ -100,6 +104,8 @@ export const useThemeStore = defineStore('theme', () => {
   const backgroundImage = ref<string | null>(loadSaved<string | null>(BG_IMAGE_KEY, null))
   const backgroundSize = ref<'cover' | 'contain' | 'auto'>(loadSaved(BG_SIZE_KEY, 'cover'))
   const backgroundOverlay = ref<string>(loadSaved(BG_OVERLAY_KEY, 'rgba(0,0,0,0.18)'))
+  const panelGlassAlpha = ref<number>(loadSaved(PANEL_GLASS_ALPHA_KEY, 0.72))
+  const panelGlassBlur = ref<number>(loadSaved(PANEL_GLASS_BLUR_KEY, 12))
 
   function validateState() {
     if (presetId.value === 'custom') {
@@ -157,6 +163,8 @@ export const useThemeStore = defineStore('theme', () => {
         localStorage.setItem(BG_IMAGE_KEY, JSON.stringify(backgroundImage.value))
         localStorage.setItem(BG_SIZE_KEY, JSON.stringify(backgroundSize.value))
         localStorage.setItem(BG_OVERLAY_KEY, JSON.stringify(backgroundOverlay.value))
+        localStorage.setItem(PANEL_GLASS_ALPHA_KEY, JSON.stringify(panelGlassAlpha.value))
+        localStorage.setItem(PANEL_GLASS_BLUR_KEY, JSON.stringify(panelGlassBlur.value))
       } else {
         localStorage.removeItem(BG_IMAGE_KEY)
         localStorage.removeItem(BG_SIZE_KEY)
@@ -167,10 +175,23 @@ export const useThemeStore = defineStore('theme', () => {
     }
   }
 
+  function applyWallpaperPanelVars() {
+    if (typeof document === 'undefined') return
+    const root = document.documentElement
+    if (!backgroundImage.value) {
+      root.style.removeProperty('--wp-panel-alpha')
+      root.style.removeProperty('--wp-panel-blur')
+      return
+    }
+    root.style.setProperty('--wp-panel-alpha', String(panelGlassAlpha.value))
+    root.style.setProperty('--wp-panel-blur', `${panelGlassBlur.value}px`)
+  }
+
   function applyBackgroundToDOM() {
     if (typeof document === 'undefined') return
     const root = document.documentElement
     root.toggleAttribute('data-has-bg-image', !!backgroundImage.value)
+    applyWallpaperPanelVars()
   }
 
   /** 切换界面主题时，编辑器配色跟随明暗（非自定义配色时） */
@@ -224,6 +245,12 @@ export const useThemeStore = defineStore('theme', () => {
     root.style.setProperty('--chat-hover-bg', colors['--bg-hover'] ?? '')
     root.style.setProperty('--chat-bubble-fill', colors['--bg-card'] ?? '')
     root.style.setProperty('--chat-tip-fill', colors['--bg-hover'] ?? '')
+    // 编辑器正文区跟随界面主题
+    root.style.setProperty('--editor-bg', colors['--bg-primary'] ?? '')
+    root.style.setProperty('--editor-fg', colors['--text-main'] ?? '')
+    root.style.setProperty('--editor-placeholder', colors['--text-muted'] ?? '')
+    root.style.setProperty('--editor-active-line', colors['--bg-hover'] ?? '')
+    root.style.setProperty('--editor-selection', colors['--accent-light'] ?? '')
   }
 
   function syncDomAttributes() {
@@ -255,6 +282,8 @@ export const useThemeStore = defineStore('theme', () => {
       backgroundImage.value,
       backgroundSize.value,
       backgroundOverlay.value,
+      panelGlassAlpha.value,
+      panelGlassBlur.value,
     ] as const,
     () => {
       applyTheme()
@@ -310,6 +339,18 @@ export const useThemeStore = defineStore('theme', () => {
 
   function updateBackgroundOverlay(overlay: string) {
     backgroundOverlay.value = overlay
+    persistBackground()
+    applyTheme()
+  }
+
+  function updatePanelGlassAlpha(alpha: number) {
+    panelGlassAlpha.value = Math.min(0.95, Math.max(0.35, alpha))
+    persistBackground()
+    applyTheme()
+  }
+
+  function updatePanelGlassBlur(blur: number) {
+    panelGlassBlur.value = Math.min(24, Math.max(4, blur))
     persistBackground()
     applyTheme()
   }
@@ -489,6 +530,8 @@ export const useThemeStore = defineStore('theme', () => {
     backgroundImage,
     backgroundSize,
     backgroundOverlay,
+    panelGlassAlpha,
+    panelGlassBlur,
     isCustomActive,
     activeCategory,
     activeColors,
@@ -510,6 +553,8 @@ export const useThemeStore = defineStore('theme', () => {
     setBackgroundImage,
     clearBackgroundImage,
     updateBackgroundOverlay,
+    updatePanelGlassAlpha,
+    updatePanelGlassBlur,
     validateCinTheme,
     checkContrast,
     resetTheme,

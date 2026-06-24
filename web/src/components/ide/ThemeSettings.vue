@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import Dialog from '@/components/ui/Dialog.vue'
-import Button from '@/components/ui/Button.vue'
-import Switch from '@/components/ui/Switch.vue'
-import Alert from '@/components/ui/Alert.vue'
 import { useThemeStore, type AccentColor } from '@/stores/themeStore'
 import { useEditorSchemeStore } from '@/stores/editorSchemeStore'
 import { EDITABLE_THEME_KEYS } from '@/config/themePresets'
@@ -295,6 +291,10 @@ function onOverlayChange(e: Event) {
   theme.updateBackgroundOverlay(`rgba(0,0,0,${v.toFixed(2)})`)
 }
 
+function onPanelGlassAlphaChange(e: Event) {
+  theme.updatePanelGlassAlpha(Number((e.target as HTMLInputElement).value) / 100)
+}
+
 async function importThemeFile() {
   importError.value = ''
   const picked = await pickFile([
@@ -414,276 +414,334 @@ function saveCustomScheme() {
 </script>
 
 <template>
-  <Dialog
-    :open="visible"
-    title="外观与主题"
-    class="!max-w-[540px]"
-    @update:open="(v) => !v && emit('close')"
-  >
-    <!-- Tab Buttons -->
-    <div class="flex gap-1.5 px-4 pb-2 border-b border-[var(--border)]">
-      <button
-        class="settings-tab-btn"
-        :class="{ active: settingsTab === 'ui' }"
-        @click="settingsTab = 'ui'"
-      >
-        <span>界面主题</span>
-        <span class="tab-hint">侧边栏 · 按钮 · 窗口</span>
-      </button>
-      <button
-        class="settings-tab-btn"
-        :class="{ active: settingsTab === 'editor' }"
-        @click="settingsTab = 'editor'"
-      >
-        <span>编辑器配色</span>
-        <span class="tab-hint">语法高亮 · 背景</span>
-      </button>
-    </div>
+  <Teleport to="body">
+    <div v-if="visible" class="theme-overlay" @click.self="emit('close')">
+      <div class="theme-modal">
+        <div class="theme-modal-header">
+          <span class="theme-modal-title">外观与主题</span>
+          <button class="theme-modal-close" @click="emit('close')">&times;</button>
+        </div>
 
-    <div class="theme-modal-body">
-      <!-- ═══ 界面主题 ═══ -->
-      <template v-if="settingsTab === 'ui'">
-        <div class="theme-section">
-          <label class="theme-section-label">预设界面主题</label>
-          <p class="section-desc">基于 Light / Dark 基底增量覆盖，未修改项自动继承默认色</p>
-          <div class="preset-tabs">
-            <button :class="{ active: presetTab === 'all' }" @click="presetTab = 'all'">全部</button>
-            <button :class="{ active: presetTab === 'light' }" @click="presetTab = 'light'">浅色</button>
-            <button :class="{ active: presetTab === 'dark' }" @click="presetTab = 'dark'">深色</button>
-            <button :class="{ active: presetTab === 'custom' }" @click="presetTab = 'custom'">自定义</button>
-          </div>
-          <div v-if="presetTab !== 'custom'" class="preset-grid">
-            <button
-              v-for="p in filteredPresets"
-              :key="p.id"
-              class="preset-chip"
-              :class="{ active: presetId === p.id && !isCustomActive }"
-              @click="selectPreset(p)"
-            >
-              <span class="preset-swatch" :style="{ background: p.colors['--bg-card'], borderColor: p.colors['--border'] }"/>
-              <span class="preset-name">{{ p.name }}</span>
-            </button>
-          </div>
-          <div v-else class="custom-list">
-            <button
-              v-for="c in theme.customThemes"
-              :key="c.id"
-              class="preset-chip"
-              :class="{ active: isCustomActive && activeCustomId === c.id }"
-              @click="theme.selectCustomTheme(c.id); runContrastCheck()"
-            >
-              <span class="preset-swatch" :style="{ background: c.colors['--bg-card'] || '#333' }"/>
-              <span class="preset-name">{{ c.name }}</span>
-            </button>
-            <p v-if="theme.customThemes.length === 0" class="empty-hint">暂无自定义界面主题</p>
+        <!-- IDEA 式双体系 Tab -->
+        <div class="settings-tabs">
+          <button :class="{ active: settingsTab === 'ui' }" @click="settingsTab = 'ui'">
+            界面主题
+            <span class="tab-hint">侧边栏 · 按钮 · 窗口</span>
+          </button>
+          <button :class="{ active: settingsTab === 'editor' }" @click="settingsTab = 'editor'">
+            编辑器配色
+            <span class="tab-hint">语法高亮 · 背景</span>
+          </button>
+        </div>
+
+        <div class="theme-modal-body">
+          <!-- ═══ 界面主题（对标 .theme.json / .cin-theme） ═══ -->
+          <template v-if="settingsTab === 'ui'">
+            <div class="theme-section">
+              <label class="theme-section-label">预设界面主题</label>
+              <p class="section-desc">基于 Light / Dark 基底增量覆盖，未修改项自动继承默认色</p>
+              <div class="preset-tabs">
+                <button :class="{ active: presetTab === 'all' }" @click="presetTab = 'all'">全部</button>
+                <button :class="{ active: presetTab === 'light' }" @click="presetTab = 'light'">浅色</button>
+                <button :class="{ active: presetTab === 'dark' }" @click="presetTab = 'dark'">深色</button>
+                <button :class="{ active: presetTab === 'custom' }" @click="presetTab = 'custom'">自定义</button>
+              </div>
+              <div v-if="presetTab !== 'custom'" class="preset-grid">
+                <button
+                  v-for="p in filteredPresets"
+                  :key="p.id"
+                  class="preset-chip"
+                  :class="{ active: presetId === p.id && !isCustomActive }"
+                  @click="selectPreset(p)"
+                >
+                  <span class="preset-swatch" :style="{ background: p.colors['--bg-card'], borderColor: p.colors['--border'] }"/>
+                  <span class="preset-name">{{ p.name }}</span>
+                </button>
+              </div>
+              <div v-else class="custom-list">
+                <button
+                  v-for="c in theme.customThemes"
+                  :key="c.id"
+                  class="preset-chip"
+                  :class="{ active: isCustomActive && activeCustomId === c.id }"
+                  @click="theme.selectCustomTheme(c.id); runContrastCheck()"
+                >
+                  <span class="preset-swatch" :style="{ background: c.colors['--bg-card'] || '#333' }"/>
+                  <span class="preset-name">{{ c.name }}</span>
+                </button>
+                <p v-if="theme.customThemes.length === 0" class="empty-hint">暂无自定义界面主题</p>
+              </div>
+            </div>
+
+            <div class="theme-section">
+              <label class="theme-section-label">UI 预览</label>
+              <div
+                class="preview-card"
+                :style="{ background: previewColors['--bg-card'], color: previewColors['--text-main'], borderColor: previewColors['--border'] }"
+              >
+                <div class="preview-tag" :style="{ color: previewColors['--text-muted'] }">对话卡片</div>
+                <p class="preview-title">欢迎来到 CinyuVerse</p>
+                <p class="preview-body" :style="{ color: previewColors['--text-sub'] }">界面主题控制侧边栏、按钮、弹窗等全局 UI 配色。</p>
+              </div>
+              <p class="contrast-hint" :class="{ warn: !contrastOk }">{{ contrastMsg }}</p>
+            </div>
+
+            <div class="theme-section">
+              <label class="theme-section-label">界面调色</label>
+              <div class="color-grid">
+                <label v-for="key in EDITABLE_THEME_KEYS" :key="key" class="color-row">
+                  <span class="color-label">{{ COLOR_LABELS[key] ?? key }}</span>
+                  <input type="color" :value="previewColors[key] ?? '#000000'" @input="onColorInput(key, $event)" />
+                  <span class="color-hex">{{ previewColors[key] }}</span>
+                </label>
+              </div>
+              <div v-if="showSaveInput" class="save-row">
+                <input v-model="saveName" class="save-input" placeholder="主题名称" @keyup.enter="saveCustomTheme" />
+                <button class="mini-btn" @click="saveCustomTheme">保存</button>
+              </div>
+              <button v-else class="link-btn" @click="showSaveInput = true">保存为自定义界面主题</button>
+            </div>
+
+            <div class="theme-section">
+              <label class="theme-section-label">强调色</label>
+              <div class="accent-options">
+                <button
+                  v-for="(label, key) in theme.accentLabels"
+                  :key="key"
+                  class="accent-btn"
+                  :class="{ active: theme.accentColor === key }"
+                  @click="selectAccent(key as AccentColor)"
+                >
+                  <span class="accent-swatch" :style="{ background: theme.accentColors[key as AccentColor] }"/>
+                  <span>{{ label }}</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="theme-section">
+              <label class="theme-section-label">界面主题文件 (.cin-theme)</label>
+              <div class="file-actions">
+                <button class="action-btn" @click="importThemeFile">导入 .cin-theme</button>
+                <button class="action-btn" @click="importIdeaThemeJson">导入 IDEA theme.json</button>
+                <button class="action-btn" @click="exportThemeFile">导出</button>
+              </div>
+              <input ref="fileInputRef" type="file" accept=".cin-theme,.json" class="hidden-input" @change="onFileSelected" />
+              <input ref="themeJsonInputRef" type="file" accept=".json,.theme.json" class="hidden-input" @change="onThemeJsonSelected" />
+            </div>
+
+            <div class="theme-section">
+              <label class="theme-section-label">页面背景图</label>
+              <p class="section-desc">导入图片作为全局背景（可配合遮罩保证文字可读）</p>
+              <div class="file-actions">
+                <button type="button" class="action-btn" @click="openBgImagePicker">选择图片</button>
+                <button v-if="theme.backgroundImage" type="button" class="action-btn" @click="theme.clearBackgroundImage(); importInfo = '已清除背景图'">清除背景</button>
+              </div>
+              <p v-if="theme.backgroundImage" class="empty-hint">背景图已加载，关闭设置后即可预览</p>
+              <div
+                v-if="theme.backgroundImage"
+                class="bg-preview"
+                :style="{ backgroundImage: `url('${theme.backgroundImage}')` }"
+              />
+              <label class="color-row" style="margin-top:8px">
+                <span class="color-label">遮罩透明度</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="80"
+                  :value="Math.round(parseFloat(String(theme.backgroundOverlay).match(/[\d.]+$/)?.[0] ?? '0.18') * 100)"
+                  @input="onOverlayChange"
+                />
+              </label>
+              <label class="color-row">
+                <span class="color-label">三栏遮罩透明度</span>
+                <input
+                  type="range"
+                  min="35"
+                  max="95"
+                  :value="Math.round(theme.panelGlassAlpha * 100)"
+                  @input="onPanelGlassAlphaChange"
+                />
+              </label>
+              <input ref="bgImageInputRef" type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden-input" @change="onBackgroundImageSelected" />
+            </div>
+
+            <div class="theme-section">
+              <label class="toggle-row">
+                <span>跟随系统明暗</span>
+                <span class="toggle-switch" :class="{ on: theme.followSystem }">
+                  <input type="checkbox" :checked="theme.followSystem" @change="theme.followSystem ? theme.disableSystemFollow() : theme.enableSystemFollow()" />
+                  <span class="toggle-track"/>
+                </span>
+              </label>
+            </div>
+          </template>
+
+          <!-- ═══ 编辑器配色（对标 .icls / .cin-scheme） ═══ -->
+          <template v-else>
+            <div class="theme-section">
+              <label class="theme-section-label">预设编辑器配色</label>
+              <p class="section-desc">独立于界面主题，控制正文区语法高亮与编辑器背景（对标 IDEA Color Scheme）</p>
+              <div class="preset-tabs">
+                <button :class="{ active: schemeTab === 'all' }" @click="schemeTab = 'all'">全部</button>
+                <button :class="{ active: schemeTab === 'light' }" @click="schemeTab = 'light'">浅色</button>
+                <button :class="{ active: schemeTab === 'dark' }" @click="schemeTab = 'dark'">深色</button>
+                <button :class="{ active: schemeTab === 'custom' }" @click="schemeTab = 'custom'">自定义</button>
+              </div>
+              <div v-if="schemeTab !== 'custom'" class="preset-grid">
+                <button
+                  v-for="s in filteredSchemes"
+                  :key="s.id"
+                  class="preset-chip"
+                  :class="{ active: schemePresetId === s.id && !schemeCustomActive }"
+                  @click="scheme.setPreset(s.id)"
+                >
+                  <span class="preset-swatch" :style="{ background: s.colors.background, borderColor: s.colors.lineNumber }"/>
+                  <span class="preset-name">{{ s.name }}</span>
+                </button>
+              </div>
+              <div v-else class="custom-list">
+                <button
+                  v-for="c in scheme.customSchemes"
+                  :key="c.id"
+                  class="preset-chip"
+                  :class="{ active: schemeCustomActive && schemeCustomId === c.id }"
+                  @click="scheme.selectCustomScheme(c.id)"
+                >
+                  <span class="preset-swatch" :style="{ background: c.colors.background || '#333' }"/>
+                  <span class="preset-name">{{ c.name }}</span>
+                </button>
+                <p v-if="scheme.customSchemes.length === 0" class="empty-hint">暂无自定义编辑器配色</p>
+              </div>
+            </div>
+
+            <div class="theme-section">
+              <label class="theme-section-label">编辑器预览</label>
+              <div class="editor-preview" :style="{ background: previewScheme.background, color: previewScheme.text }">
+                <p><span :style="{ color: previewScheme.heading, fontWeight: 'bold' }"># 第一章</span></p>
+                <p>这是正文文字，<span :style="{ color: previewScheme.bold, fontWeight: 'bold' }">加粗</span>与<span :style="{ color: previewScheme.italic, fontStyle: 'italic' }">斜体</span>。</p>
+                <p :style="{ color: previewScheme.quote, fontStyle: 'italic' }">&gt; 引用段落示例</p>
+                <p><span :style="{ color: previewScheme.code }">`行内代码`</span> · <span :style="{ color: previewScheme.link, textDecoration: 'underline' }">链接</span></p>
+                <p :style="{ color: previewScheme.comment }">&lt;!-- 注释 --&gt;</p>
+              </div>
+            </div>
+
+            <div class="theme-section">
+              <label class="theme-section-label">编辑器调色</label>
+              <div class="color-grid">
+                <label v-for="key in EDITABLE_SCHEME_KEYS" :key="key" class="color-row">
+                  <span class="color-label">{{ SCHEME_LABELS[key] }}</span>
+                  <input type="color" :value="previewScheme[key]" @input="onSchemeColorInput(key, $event)" />
+                  <span class="color-hex">{{ previewScheme[key] }}</span>
+                </label>
+              </div>
+              <div v-if="showSchemeSaveInput" class="save-row">
+                <input v-model="schemeSaveName" class="save-input" placeholder="配色名称" @keyup.enter="saveCustomScheme" />
+                <button class="mini-btn" @click="saveCustomScheme">保存</button>
+              </div>
+              <button v-else class="link-btn" @click="showSchemeSaveInput = true">保存为自定义编辑器配色</button>
+            </div>
+
+            <div class="theme-section">
+              <label class="theme-section-label">编辑器配色文件</label>
+              <div class="file-actions">
+                <button class="action-btn" @click="importSchemeFile">导入 .cin-scheme / .icls</button>
+                <button class="action-btn" @click="exportSchemeFile">导出 .cin-scheme</button>
+              </div>
+              <input ref="schemeFileInputRef" type="file" accept=".cin-scheme,.icls,.json,.xml" class="hidden-input" @change="onSchemeFileSelected" />
+            </div>
+          </template>
+
+          <p v-if="importError" class="error-hint">{{ importError }}</p>
+          <p v-if="importInfo" class="info-hint">{{ importInfo }}</p>
+
+          <!-- 主题插件包（对标 IDEA .jar） -->
+          <div class="theme-section plugin-section">
+            <label class="theme-section-label">主题插件包 (.jar)</label>
+            <p class="section-desc">打包/导入完整主题：界面 .cin-theme + IDEA theme.json + 编辑器 .icls/.cin-scheme + 背景图</p>
+            <input v-model="pluginAuthor" class="save-input" placeholder="作者名（导出时使用）" style="margin-bottom:8px" />
+            <div class="file-actions">
+              <button class="action-btn" @click="importPluginJar">导入 .jar / .zip</button>
+              <button class="action-btn" @click="exportPluginJar">导出主题插件</button>
+            </div>
+            <input ref="pluginInputRef" type="file" accept=".jar,.zip" class="hidden-input" @change="onPluginFileSelected" />
           </div>
         </div>
 
-        <div class="theme-section">
-          <label class="theme-section-label">UI 预览</label>
-          <div
-            class="preview-card"
-            :style="{ background: previewColors['--bg-card'], color: previewColors['--text-main'], borderColor: previewColors['--border'] }"
+        <div class="theme-modal-footer">
+          <button
+            class="reset-btn"
+            @click="settingsTab === 'ui' ? (theme.resetTheme(), runContrastCheck()) : scheme.resetScheme()"
           >
-            <div class="preview-tag" :style="{ color: previewColors['--text-muted'] }">对话卡片</div>
-            <p class="preview-title">欢迎来到 CinyuVerse</p>
-            <p class="preview-body" :style="{ color: previewColors['--text-sub'] }">界面主题控制侧边栏、按钮、弹窗等全局 UI 配色。</p>
-          </div>
-          <p class="contrast-hint" :class="{ warn: !contrastOk }">{{ contrastMsg }}</p>
+            恢复默认
+          </button>
+          <button class="done-btn" @click="emit('close')">完成</button>
         </div>
-
-        <div class="theme-section">
-          <label class="theme-section-label">界面调色</label>
-          <div class="color-grid">
-            <label v-for="key in EDITABLE_THEME_KEYS" :key="key" class="color-row">
-              <span class="color-label">{{ COLOR_LABELS[key] ?? key }}</span>
-              <input type="color" :value="previewColors[key] ?? '#000000'" @input="onColorInput(key, $event)" />
-              <span class="color-hex">{{ previewColors[key] }}</span>
-            </label>
-          </div>
-          <div v-if="showSaveInput" class="save-row">
-            <input v-model="saveName" class="save-input" placeholder="主题名称" @keyup.enter="saveCustomTheme" />
-            <button class="mini-btn" @click="saveCustomTheme">保存</button>
-          </div>
-          <button v-else class="link-btn" @click="showSaveInput = true">保存为自定义界面主题</button>
-        </div>
-
-        <div class="theme-section">
-          <label class="theme-section-label">强调色</label>
-          <div class="accent-options">
-            <button
-              v-for="(label, key) in theme.accentLabels"
-              :key="key"
-              class="accent-btn"
-              :class="{ active: theme.accentColor === key }"
-              @click="selectAccent(key as AccentColor)"
-            >
-              <span class="accent-swatch" :style="{ background: theme.accentColors[key as AccentColor] }"/>
-              <span>{{ label }}</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="theme-section">
-          <label class="theme-section-label">界面主题文件 (.cin-theme)</label>
-          <div class="file-actions">
-            <button class="action-btn" @click="importThemeFile">导入 .cin-theme</button>
-            <button class="action-btn" @click="importIdeaThemeJson">导入 IDEA theme.json</button>
-            <button class="action-btn" @click="exportThemeFile">导出</button>
-          </div>
-          <input ref="fileInputRef" type="file" accept=".cin-theme,.json" class="hidden-input" @change="onFileSelected" />
-          <input ref="themeJsonInputRef" type="file" accept=".json,.theme.json" class="hidden-input" @change="onThemeJsonSelected" />
-        </div>
-
-        <div class="theme-section">
-          <label class="theme-section-label">页面背景图</label>
-          <p class="section-desc">导入图片作为全局背景（可配合遮罩保证文字可读）</p>
-          <div class="file-actions">
-            <button type="button" class="action-btn" @click="openBgImagePicker">选择图片</button>
-            <button v-if="theme.backgroundImage" type="button" class="action-btn" @click="theme.clearBackgroundImage(); importInfo = '已清除背景图'">清除背景</button>
-          </div>
-          <p v-if="theme.backgroundImage" class="empty-hint">背景图已加载，关闭设置后即可预览</p>
-          <div
-            v-if="theme.backgroundImage"
-            class="bg-preview"
-            :style="{ backgroundImage: `url('${theme.backgroundImage}')` }"
-          />
-          <label class="color-row" style="margin-top:8px">
-            <span class="color-label">遮罩透明度</span>
-            <input
-              type="range"
-              min="0"
-              max="80"
-              :value="Math.round(parseFloat(String(theme.backgroundOverlay).match(/[\d.]+$/)?.[0] ?? '0.18') * 100)"
-              @input="onOverlayChange"
-            />
-          </label>
-          <input ref="bgImageInputRef" type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden-input" @change="onBackgroundImageSelected" />
-        </div>
-
-        <div class="theme-section">
-          <label class="toggle-row">
-            <span>跟随系统明暗</span>
-            <Switch
-              :checked="theme.followSystem"
-              @update:checked="(v: boolean) => v ? theme.enableSystemFollow() : theme.disableSystemFollow()"
-            />
-          </label>
-        </div>
-      </template>
-
-      <!-- ═══ 编辑器配色 ═══ -->
-      <template v-else>
-        <div class="theme-section">
-          <label class="theme-section-label">预设编辑器配色</label>
-          <p class="section-desc">独立于界面主题，控制正文区语法高亮与编辑器背景（对标 IDEA Color Scheme）</p>
-          <div class="preset-tabs">
-            <button :class="{ active: schemeTab === 'all' }" @click="schemeTab = 'all'">全部</button>
-            <button :class="{ active: schemeTab === 'light' }" @click="schemeTab = 'light'">浅色</button>
-            <button :class="{ active: schemeTab === 'dark' }" @click="schemeTab = 'dark'">深色</button>
-            <button :class="{ active: schemeTab === 'custom' }" @click="schemeTab = 'custom'">自定义</button>
-          </div>
-          <div v-if="schemeTab !== 'custom'" class="preset-grid">
-            <button
-              v-for="s in filteredSchemes"
-              :key="s.id"
-              class="preset-chip"
-              :class="{ active: schemePresetId === s.id && !schemeCustomActive }"
-              @click="scheme.setPreset(s.id)"
-            >
-              <span class="preset-swatch" :style="{ background: s.colors.background, borderColor: s.colors.lineNumber }"/>
-              <span class="preset-name">{{ s.name }}</span>
-            </button>
-          </div>
-          <div v-else class="custom-list">
-            <button
-              v-for="c in scheme.customSchemes"
-              :key="c.id"
-              class="preset-chip"
-              :class="{ active: schemeCustomActive && schemeCustomId === c.id }"
-              @click="scheme.selectCustomScheme(c.id)"
-            >
-              <span class="preset-swatch" :style="{ background: c.colors.background || '#333' }"/>
-              <span class="preset-name">{{ c.name }}</span>
-            </button>
-            <p v-if="scheme.customSchemes.length === 0" class="empty-hint">暂无自定义编辑器配色</p>
-          </div>
-        </div>
-
-        <div class="theme-section">
-          <label class="theme-section-label">编辑器预览</label>
-          <div class="editor-preview" :style="{ background: previewScheme.background, color: previewScheme.text }">
-            <p><span :style="{ color: previewScheme.heading, fontWeight: 'bold' }"># 第一章</span></p>
-            <p>这是正文文字，<span :style="{ color: previewScheme.bold, fontWeight: 'bold' }">加粗</span>与<span :style="{ color: previewScheme.italic, fontStyle: 'italic' }">斜体</span>。</p>
-            <p :style="{ color: previewScheme.quote, fontStyle: 'italic' }">&gt; 引用段落示例</p>
-            <p><span :style="{ color: previewScheme.code }">`行内代码`</span> · <span :style="{ color: previewScheme.link, textDecoration: 'underline' }">链接</span></p>
-            <p :style="{ color: previewScheme.comment }">&lt;!-- 注释 --&gt;</p>
-          </div>
-        </div>
-
-        <div class="theme-section">
-          <label class="theme-section-label">编辑器调色</label>
-          <div class="color-grid">
-            <label v-for="key in EDITABLE_SCHEME_KEYS" :key="key" class="color-row">
-              <span class="color-label">{{ SCHEME_LABELS[key] }}</span>
-              <input type="color" :value="previewScheme[key]" @input="onSchemeColorInput(key, $event)" />
-              <span class="color-hex">{{ previewScheme[key] }}</span>
-            </label>
-          </div>
-          <div v-if="showSchemeSaveInput" class="save-row">
-            <input v-model="schemeSaveName" class="save-input" placeholder="配色名称" @keyup.enter="saveCustomScheme" />
-            <button class="mini-btn" @click="saveCustomScheme">保存</button>
-          </div>
-          <button v-else class="link-btn" @click="showSchemeSaveInput = true">保存为自定义编辑器配色</button>
-        </div>
-
-        <div class="theme-section">
-          <label class="theme-section-label">编辑器配色文件</label>
-          <div class="file-actions">
-            <button class="action-btn" @click="importSchemeFile">导入 .cin-scheme / .icls</button>
-            <button class="action-btn" @click="exportSchemeFile">导出 .cin-scheme</button>
-          </div>
-          <input ref="schemeFileInputRef" type="file" accept=".cin-scheme,.icls,.json,.xml" class="hidden-input" @change="onSchemeFileSelected" />
-        </div>
-      </template>
-
-      <Alert v-if="importError" variant="destructive" class="mx-4 mb-2">{{ importError }}</Alert>
-      <Alert v-if="importInfo && !importError" variant="success" class="mx-4 mb-2">{{ importInfo }}</Alert>
-
-      <!-- 主题插件包 -->
-      <div class="theme-section plugin-section">
-        <label class="theme-section-label">主题插件包 (.jar)</label>
-        <p class="section-desc">打包/导入完整主题：界面 .cin-theme + IDEA theme.json + 编辑器 .icls/.cin-scheme + 背景图</p>
-        <input v-model="pluginAuthor" class="save-input" placeholder="作者名（导出时使用）" style="margin-bottom:8px" />
-        <div class="file-actions">
-          <button class="action-btn" @click="importPluginJar">导入 .jar / .zip</button>
-          <button class="action-btn" @click="exportPluginJar">导出主题插件</button>
-        </div>
-        <input ref="pluginInputRef" type="file" accept=".jar,.zip" class="hidden-input" @change="onPluginFileSelected" />
       </div>
     </div>
-
-    <!-- Footer -->
-    <template #footer>
-      <div class="flex items-center justify-between border-t border-[var(--border)] px-4 py-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          class="text-[var(--text-sub)] hover:text-[var(--text-main)]"
-          @click="settingsTab === 'ui' ? (theme.resetTheme(), runContrastCheck()) : scheme.resetScheme()"
-        >
-          恢复默认
-        </Button>
-        <Button variant="default" size="sm" class="bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]" @click="emit('close')">
-          完成
-        </Button>
-      </div>
-    </template>
-  </Dialog>
+  </Teleport>
 </template>
 
 <style scoped>
-.settings-tab-btn {
+.theme-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.theme-modal {
+  width: 520px;
+  max-height: 92vh;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+}
+
+.theme-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px 8px;
+  flex-shrink: 0;
+}
+
+.theme-modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.theme-modal-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-sub);
+  font-size: 20px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.theme-modal-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 18px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.settings-tabs button {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -699,7 +757,8 @@ function saveCustomScheme() {
   cursor: pointer;
   text-align: left;
 }
-.settings-tab-btn.active {
+
+.settings-tabs button.active {
   border-color: var(--accent);
   background: var(--accent-light);
   color: var(--text-main);
@@ -932,6 +991,18 @@ function saveCustomScheme() {
 
 .hidden-input { display: none; }
 
+.error-hint {
+  font-size: 11px;
+  color: var(--danger);
+  margin: 0 18px 10px;
+}
+
+.info-hint {
+  font-size: 11px;
+  color: var(--success);
+  margin: 0 18px 10px;
+}
+
 .plugin-section {
   border-top: 1px solid var(--border);
   margin-top: 4px;
@@ -979,4 +1050,73 @@ function saveCustomScheme() {
   color: var(--text-secondary);
   cursor: pointer;
 }
+
+.toggle-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+}
+.toggle-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.toggle-track {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--border);
+  border-radius: 10px;
+  position: relative;
+  transition: background 0.2s;
+}
+.toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.toggle-switch.on .toggle-track { background: var(--accent); }
+.toggle-switch.on .toggle-track::after { transform: translateX(16px); }
+
+.theme-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px 14px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.reset-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-sub);
+  font-size: 12px;
+  cursor: pointer;
+}
+.reset-btn:hover {
+  border-color: var(--text-sub);
+  color: var(--text-main);
+}
+
+.done-btn {
+  padding: 6px 20px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.done-btn:hover { background: var(--accent-hover); }
 </style>

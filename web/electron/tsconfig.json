@@ -1,16 +1,16 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "commonjs",
+    "moduleResolution": "node10",
+    "esModuleInterop": true,
     "strict": true,
     "outDir": "../dist-electron",
     "rootDir": ".",
     "skipLibCheck": true,
-    "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "ignoreDeprecations": "6.0"
   },
-  "include": ["main.ts", "paths.ts", "run.ts", "fsTree.ts"],
-  "exclude": ["preload.ts", "build.ts", "watch.ts"]
+  "include": ["main.ts", "paths.ts", "fsTree.ts"],
+  "exclude": ["preload.ts", "build.ts", "watch.ts", "run.ts"]
 }

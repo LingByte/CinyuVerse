@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import LocalFileTreeNode from './LocalFileTreeNode.vue'
-import type { FsNode } from '@/composables/useLocalWorkspace'
+import type { FsNode } from '@/types/electron'
 import { getFileColor, getFolderColor } from '@/utils/fileIcons'
 
 const props = defineProps<{
