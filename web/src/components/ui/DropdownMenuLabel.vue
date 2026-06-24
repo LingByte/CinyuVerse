@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { cn } from '@/lib/utils'
 
-defineProps<{
+const props = defineProps<{
   class?: string
 }>()
 </script>

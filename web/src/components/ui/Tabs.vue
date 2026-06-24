@@ -1,10 +1,6 @@
 <script setup lang="ts">
-import { cn } from '@/lib/utils'
 import {
   TabsRoot,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
 } from 'radix-vue'
 
 defineOptions({ inheritAttrs: false })

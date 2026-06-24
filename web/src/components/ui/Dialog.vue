@@ -6,7 +6,6 @@ import {
   DialogOverlay,
   DialogContent,
   DialogTitle,
-  DialogDescription,
   DialogClose,
 } from 'radix-vue'
 import { X } from 'lucide-vue-next'

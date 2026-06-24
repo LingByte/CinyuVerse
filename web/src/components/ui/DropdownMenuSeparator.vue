@@ -4,7 +4,7 @@ import {
   DropdownMenuSeparator as RadixDropdownMenuSeparator,
 } from 'radix-vue'
 
-defineProps<{
+const props = defineProps<{
   class?: string
 }>()
 </script>

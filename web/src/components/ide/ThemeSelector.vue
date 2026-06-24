@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Moon, Settings } from 'lucide-vue-next'
 import DropdownMenu from '@/components/ui/DropdownMenu.vue'
 import DropdownMenuItem from '@/components/ui/DropdownMenuItem.vue'
 import DropdownMenuSeparator from '@/components/ui/DropdownMenuSeparator.vue'
 import Button from '@/components/ui/Button.vue'
+import { cn } from '@/lib/utils'
 import { useThemeStore } from '@/stores/themeStore'
 
 const emit = defineEmits<{
@@ -25,7 +26,7 @@ const open = ref(false)
           variant="ghost"
           size="sm"
           class="!max-w-[180px] h-6 px-2 text-[11px] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
-          :class="{ 'text-[var(--accent)]': open }"
+          :class="cn(open && 'text-[var(--accent)]')"
           as="div"
         >
           <span class="flex min-w-0 items-center gap-1.5">
@@ -39,7 +40,7 @@ const open = ref(false)
       <DropdownMenuItem
         v-for="p in lightPresets"
         :key="p.id"
-        :class="{ 'text-[var(--accent)]': activeThemeValue === p.id }"
+        :class="cn(activeThemeValue === p.id && 'text-[var(--accent)]')"
         @click="theme.selectTheme(p.id)"
       >
         {{ p.name }}
@@ -51,7 +52,7 @@ const open = ref(false)
       <DropdownMenuItem
         v-for="p in darkPresets"
         :key="p.id"
-        :class="{ 'text-[var(--accent)]': activeThemeValue === p.id }"
+        :class="cn(activeThemeValue === p.id && 'text-[var(--accent)]')"
         @click="theme.selectTheme(p.id)"
       >
         {{ p.name }}
@@ -63,7 +64,7 @@ const open = ref(false)
         <DropdownMenuItem
           v-for="c in customThemes"
           :key="c.id"
-          :class="{ 'text-[var(--accent)]': activeThemeValue === `custom:${c.id}` }"
+          :class="cn(activeThemeValue === `custom:${c.id}` && 'text-[var(--accent)]')"
           @click="theme.selectTheme(`custom:${c.id}`)"
         >
           {{ c.name }}
