@@ -1,0 +1,63 @@
+{
+  "name": "gopilot",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "GoPilot - A modern code editor for Go development, inspired by GoLand",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "type-check": "vue-tsc --noEmit",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build && npm run fix-info-plist",
+    "fix-info-plist": "node src-tauri/scripts/fix-info-plist.cjs",
+    "setup-ai": "node src-tauri/setup-ai.js"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^1.6.0",
+    "@vueuse/core": "^14.3.0",
+    "axios": "^1.12.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.0.0",
+    "date-fns": "^4.1.0",
+    "dompurify": "^3.3.0",
+    "highlight.js": "^11.11.1",
+    "jszip": "^3.10.1",
+    "lucide-vue-next": "^0.294.0",
+    "marked": "^15.0.12",
+    "monaco-editor": "^0.54.0",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^4.8.69",
+    "pinia": "^2.1.7",
+    "radix-vue": "^1.9.17",
+    "tailwind-merge": "^2.2.0",
+    "tailwindcss-animate": "^1.0.7",
+    "vue": "^3.4.0",
+    "vue-router": "^4.2.5",
+    "ws": "^8.18.3",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^1.5.0",
+    "@types/node": "^24.4.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "terser": "^5.44.0",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.8",
+    "vue-tsc": "^2.0.0"
+  },
+  "keywords": [
+    "vue",
+    "tauri",
+    "editor",
+    "tailwindcss"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
