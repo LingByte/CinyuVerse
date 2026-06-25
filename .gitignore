@@ -15,8 +15,8 @@ dist-ssr
 /src-tauri/target/
 
 # Build
-web/dist-electron/
-web/release/
+dist-electron/
+release/
 *.exe
 build/
 packages/

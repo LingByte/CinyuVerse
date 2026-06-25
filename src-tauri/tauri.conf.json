@@ -1,9 +1,9 @@
 {
   "build": {
-    "beforeDevCommand": "npm run dev --prefix web",
-    "beforeBuildCommand": "npm run build --prefix web",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
     "devPath": "http://localhost:9090",
-    "distDir": "../web/dist",
+    "distDir": "../dist",
     "withGlobalTauri": false
   },
   "package": {
