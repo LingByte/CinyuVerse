@@ -1,20 +1,18 @@
 [package]
-name = "gopilot"
-version = "1.0.0"
-description = "A Tauri App"
-authors = ["you"]
-license = ""
+name = "cinyuverse"
+version = "0.1.0"
+description = "CinyuVerse - AI 小说创作 IDE"
+authors = ["LingByte"]
+license = "MIT"
 repository = ""
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
-name = "gopilot"
+name = "cinyuverse"
 path = "src/lib.rs"
 
 [[bin]]
-name = "gopilot"
+name = "cinyuverse"
 path = "src/main.rs"
 
 [[bin]]

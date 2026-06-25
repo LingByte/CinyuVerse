@@ -591,6 +591,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "cinyuverse"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64 0.21.7",
+ "bytes",
+ "chrono",
+ "dotenvy",
+ "futures-util",
+ "libc",
+ "plist",
+ "portable-pty",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-single-instance",
+ "tokio",
+ "tokio-test",
+ "uuid",
+ "zip",
+]
+
+[[package]]
 name = "cipher"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1641,32 +1667,6 @@ dependencies = [
  "glib-sys",
  "libc",
  "system-deps 6.2.2",
-]
-
-[[package]]
-name = "gopilot"
-version = "1.0.0"
-dependencies = [
- "async-trait",
- "base64 0.21.7",
- "bytes",
- "chrono",
- "dotenvy",
- "futures-util",
- "libc",
- "plist",
- "portable-pty",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-single-instance",
- "tokio",
- "tokio-test",
- "uuid",
- "zip",
 ]
 
 [[package]]

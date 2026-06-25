@@ -1,0 +1,27 @@
+:root {
+  --cv-color-bg: var(--bg);
+  --cv-color-surface: var(--surface);
+  --cv-color-surface-soft: var(--surface-strong);
+  --cv-color-text: var(--text);
+  --cv-color-text-muted: var(--text-muted);
+  --cv-color-primary: var(--theme);
+  --cv-color-primary-strong: var(--theme-strong);
+  --cv-color-primary-soft: var(--theme-soft);
+  --cv-color-border: var(--border);
+  --cv-color-ring: var(--ring);
+
+  --cv-radius-sm: 8px;
+  --cv-radius-md: 12px;
+  --cv-radius-lg: 16px;
+  --cv-radius-pill: 999px;
+
+  --cv-space-1: 4px;
+  --cv-space-2: 8px;
+  --cv-space-3: 12px;
+  --cv-space-4: 16px;
+  --cv-space-5: 20px;
+  --cv-space-6: 24px;
+
+  --cv-shadow-sm: 0 8px 24px -20px color-mix(in oklab, var(--cv-color-ring) 85%, #fff);
+  --cv-shadow-md: 0 14px 34px -22px color-mix(in oklab, var(--cv-color-ring) 86%, #fff);
+}

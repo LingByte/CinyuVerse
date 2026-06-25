@@ -1,14 +1,14 @@
 {
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
-    "devPath": "http://localhost:3535",
-    "distDir": "../dist",
+    "beforeDevCommand": "npm run dev --prefix web",
+    "beforeBuildCommand": "npm run build --prefix web",
+    "devPath": "http://localhost:9090",
+    "distDir": "../web/dist",
     "withGlobalTauri": false
   },
   "package": {
-    "productName": "GoPilot",
-    "version": "1.0.0"
+    "productName": "CinyuVerse",
+    "version": "0.1.0"
   },
   "tauri": {
     "allowlist": {
@@ -43,7 +43,7 @@
     "bundle": {
       "active": true,
       "targets": "all",
-      "identifier": "com.cetiprobe.desktop",
+      "identifier": "com.lingbyte.cinyuverse",
       "icon": [
         "icons/32x32.png",
         "icons/128x128.png",
@@ -54,9 +54,9 @@
       "resources": [],
       "externalBin": [],
       "copyright": "",
-      "category": "DeveloperTool",
-      "shortDescription": "GoPilot - A modern code editor for Go",
-      "longDescription": "GoPilot is a powerful code editor designed for Go development, featuring syntax highlighting, IntelliSense, debugging, and more",
+      "category": "Productivity",
+      "shortDescription": "CinyuVerse - AI 小说创作 IDE",
+      "longDescription": "本地优先的 AI 小说创作 IDE，支持多格式预览、大纲管理与 AI 辅助写作",
       "macOS": {
         "frameworks": [],
         "minimumSystemVersion": "10.13",
@@ -72,19 +72,19 @@
       }
     },
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost:; media-src 'self' asset: http://asset.localhost:;"
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost: data: blob:; media-src 'self' asset: http://asset.localhost: data: blob:;"
     },
     "macOSPrivateApi": true,
     "windows": [
       {
         "fullscreen": false,
         "resizable": true,
-        "title": "GoPilot",
-        "width": 1200,
-        "height": 800,
-        "minWidth": 800,
-        "minHeight": 600,
-        "decorations": false,
+        "title": "CinyuVerse - AI 小说编辑器",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 680,
+        "decorations": true,
         "transparent": false
       }
     ]

@@ -1,0 +1,211 @@
+/* ================================================================
+   CinyuVerse Global Theme System
+   颜色由 themeStore 通过 CSS 变量注入；此处为别名与强调色覆盖
+   ================================================================ */
+
+/* 默认回退（JS 加载前） */
+:root {
+  --bg-primary: #24272E;
+  --bg-secondary: #2C2F36;
+  --bg-card: #2C2F36;
+  --bg-input: #363A42;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(255, 255, 255, 0.08);
+  --text-main: #E5E7EB;
+  --text-secondary: #D1D3D9;
+  --text-sub: #B0B8C4;
+  --text-muted: #7C8490;
+  --border: #3E424B;
+  --border-light: #323640;
+  --accent: #28A745;
+  --accent-hover: #2EA043;
+  --accent-light: rgba(40, 167, 69, 0.15);
+  --danger: #DA3633;
+  --danger-hover: #F85149;
+  --warning: #D29922;
+  --success: #3FB950;
+  --info: #58A6FF;
+  --scrollbar-thumb: #3A3E47;
+  --scrollbar-thumb-hover: #4A4F59;
+  --shadow: 0 0 0 transparent;
+  --btn-primary-bg: #238636;
+  --btn-primary-hover: #2EA043;
+  --btn-primary-text: #FFFFFF;
+  --btn-primary-disabled-bg: #2D3532;
+  --btn-primary-disabled-text: #6B7280;
+  --btn-secondary-bg: #3B404A;
+  --btn-secondary-hover-bg: #464C58;
+  --btn-secondary-border: #4A505A;
+  --btn-icon-hover-bg: rgba(35, 134, 54, 0.15);
+  --btn-icon-hover-color: #3FB950;
+
+  /* AI 面板跟随全局主题，禁止组件内硬编码深色 */
+  --chat-text-primary: var(--text-main);
+  --chat-text-secondary: var(--text-sub);
+  --chat-text-hint: var(--text-muted);
+  --chat-card-bg: var(--bg-card);
+  --chat-hover-bg: var(--bg-hover);
+  --chat-mode-chat: var(--info);
+  --chat-mode-create: #5cb8a8;
+  --chat-insert-bg: var(--btn-primary-bg);
+  --chat-insert-hover: var(--btn-primary-hover);
+  --chat-transition: 0.25s ease;
+  --chat-bubble-fill: var(--bg-card);
+  --chat-tip-fill: var(--bg-hover);
+  --chat-input-shadow: color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+/* 强调色微调（深色基底按钮） */
+:root[data-mode="dark"][data-accent="green"] {
+  --btn-primary-bg: #238636;
+  --btn-primary-hover: #2EA043;
+  --btn-icon-hover-color: #3FB950;
+}
+
+:root[data-mode="dark"][data-accent="blue"] {
+  --btn-primary-bg: #1D4ED8;
+  --btn-primary-hover: #2563EB;
+  --btn-icon-hover-color: #3B82F6;
+}
+
+:root[data-mode="dark"][data-accent="violet"] {
+  --btn-primary-bg: #6D3CC9;
+  --btn-primary-hover: #7C3AED;
+  --btn-icon-hover-color: #8B5CF6;
+}
+
+:root[data-mode="dark"][data-accent="orange"] {
+  --btn-primary-bg: #B8450A;
+  --btn-primary-hover: #D15E13;
+  --btn-icon-hover-color: #F97316;
+}
+
+:root[data-mode="dark"][data-accent="graphite"] {
+  --btn-primary-bg: #475569;
+  --btn-primary-hover: #556678;
+  --btn-icon-hover-color: #64748B;
+}
+
+/* 平滑过渡 */
+*,
+*::before,
+*::after {
+  transition:
+    background-color 0.25s ease,
+    color 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+html:not([data-has-bg-image]),
+html:not([data-has-bg-image]) body,
+html:not([data-has-bg-image]) #app {
+  background: var(--bg-primary);
+  color: var(--text-main);
+}
+
+/* 覆盖 global.css 的渐变背景，确保主题切换全局生效 */
+html[data-preset]:not([data-has-bg-image]) body,
+html[data-mode]:not([data-has-bg-image]) body {
+  background: var(--bg-primary) !important;
+  color: var(--text-main) !important;
+}
+
+/* ── 背景图模式：三栏统一半透明遮罩（无 blur，--wp-panel-alpha 由 themeStore 注入） ── */
+html[data-has-bg-image] {
+  --wp-panel-surface: color-mix(in srgb, var(--bg-primary) calc(var(--wp-panel-alpha, 0.72) * 100%), transparent);
+  --wp-panel-chrome: color-mix(in srgb, var(--bg-secondary) calc(var(--wp-panel-alpha, 0.72) * 100%), transparent);
+}
+
+html[data-has-bg-image] body {
+  background: transparent !important;
+}
+
+html[data-has-bg-image] #app {
+  background: transparent !important;
+  position: relative;
+  z-index: 1;
+}
+
+html[data-has-bg-image] .ide-workspace,
+html[data-has-bg-image] .ide-main {
+  background: transparent !important;
+}
+
+/* 三栏 + 拖拽条同一遮罩，避免中间 4px 透明缝露出壁纸 */
+html[data-has-bg-image] .left-panel,
+html[data-has-bg-image] .center-panel,
+html[data-has-bg-image] .right-panel,
+html[data-has-bg-image] .resize-handle {
+  background: var(--wp-panel-surface) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-has-bg-image] .menu-bar,
+html[data-has-bg-image] .menu-bar-top,
+html[data-has-bg-image] .status-bar {
+  background: var(--wp-panel-chrome) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* 栏内子区域透明，由外层 column 统一承担遮罩色 */
+html[data-has-bg-image] .left-sidebar,
+html[data-has-bg-image] .sidebar-tabs,
+html[data-has-bg-image] .sidebar-body,
+html[data-has-bg-image] .file-tree,
+html[data-has-bg-image] .meta-panel,
+html[data-has-bg-image] .outline-panel,
+html[data-has-bg-image] .editor-panel,
+html[data-has-bg-image] .tab-bar,
+html[data-has-bg-image] .editor-area,
+html[data-has-bg-image] .cm-editor,
+html[data-has-bg-image] .cm-scroller,
+html[data-has-bg-image] .chat-panel-wrap,
+html[data-has-bg-image] .chat-tab-header,
+html[data-has-bg-image] .mode-switch-bar,
+html[data-has-bg-image] .chat-message-scroll,
+html[data-has-bg-image] .chat-input-footer {
+  background: transparent !important;
+}
+
+html[data-has-bg-image] .cm-content,
+html[data-has-bg-image] .cm-line {
+  color: var(--text-main) !important;
+}
+
+html[data-has-bg-image] .cm-placeholder {
+  color: var(--text-muted) !important;
+}
+
+html[data-has-bg-image] .cm-activeLine {
+  background: color-mix(in srgb, var(--bg-hover) 80%, transparent) !important;
+}
+
+html[data-has-bg-image] .tab-item,
+html[data-has-bg-image] .welcome-bubble,
+html[data-has-bg-image] .message-bubble,
+html[data-has-bg-image] .mode-switch-tabs,
+html[data-has-bg-image] .cursor-input-box {
+  background: color-mix(in srgb, var(--bg-card) calc(min(var(--wp-panel-alpha, 0.72) + 0.12, 0.95) * 100%), transparent) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 55%, transparent);
+}

@@ -23,6 +23,7 @@ mod ai;
 mod config;
 mod task_decomposition;
 mod conversation;
+mod cinyuverse_fs;
 
 use extension_host::{ExtensionHostState, start_extension_host, stop_extension_host, activate_extension, deactivate_extension, extension_host_execute_command};
 use ai::{
@@ -359,9 +360,9 @@ fn greet(name: &str) -> String {
 #[tauri::command]
 fn get_app_info() -> serde_json::Value {
     serde_json::json!({
-        "name": "GoPilot",
-        "version": "1.0.0",
-        "description": "A modern code editor for Go development"
+        "name": "CinyuVerse",
+        "version": "0.1.0",
+        "description": "AI 小说创作 IDE"
     })
 }
 
@@ -1854,7 +1855,7 @@ fn main() {
         }))
         .manage(AppState {
             theme: "dark".to_string(),
-            window_title: "GoPilot".to_string(),
+            window_title: "CinyuVerse".to_string(),
         })
         .manage(ProcessMap::default())
         .manage(TerminalSessionMap::default())
@@ -1922,6 +1923,14 @@ fn main() {
             conversation_list,
             conversation_delete,
             conversation_cleanup,
+            cinyuverse_fs::cv_list_dir_tree,
+            cinyuverse_fs::cv_read_file,
+            cinyuverse_fs::cv_write_file,
+            cinyuverse_fs::cv_create_file,
+            cinyuverse_fs::cv_create_dir,
+            cinyuverse_fs::cv_delete_path,
+            cinyuverse_fs::cv_dirname,
+            cinyuverse_fs::cv_scan_folder,
         ])
         .setup(move |app| {
             // 自动设置 AI 配置
