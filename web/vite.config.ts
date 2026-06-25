@@ -32,6 +32,8 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (id.includes('node_modules/xterm')) return 'xterm'
+          if (id.includes('node_modules/@codemirror')) return 'codemirror'
           if (id.includes('node_modules/vue')) return 'vue'
           return undefined
         },

@@ -1,0 +1,12 @@
+{
+  "name": "cinyuverse-root",
+  "private": true,
+  "scripts": {
+    "tauri": "tauri",
+    "dev:tauri": "tauri dev",
+    "build:tauri": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^1.6.0"
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "build": {
+    "beforeDevCommand": "npm run dev --prefix web",
+    "beforeBuildCommand": "npm run build --prefix web",
+    "devPath": "http://localhost:9090",
+    "distDir": "../web/dist",
+    "withGlobalTauri": false
+  },
+  "package": {
+    "productName": "CinyuVerse",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": true,
+      "fs": {
+        "all": true,
+        "scope": [
+          "$APPDATA/**",
+          "$DESKTOP/**",
+          "$HOME/**",
+          "$RESOURCE/**",
+          "**"
+        ]
+      },
+      "path": {
+        "all": true
+      },
+      "http": {
+        "all": true,
+        "request": true
+      }
+    },
+    "cli": {
+      "args": [
+        {
+          "name": "file",
+          "takesValue": true,
+          "multiple": true
+        }
+      ]
+    },
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "com.lingbyte.cinyuverse",
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ],
+      "resources": [],
+      "externalBin": [],
+      "copyright": "",
+      "category": "Productivity",
+      "shortDescription": "CinyuVerse - AI 小说创作 IDE",
+      "longDescription": "本地优先的 AI 小说创作 IDE，支持多格式预览、大纲管理与 AI 辅助写作",
+      "macOS": {
+        "frameworks": [],
+        "minimumSystemVersion": "10.13",
+        "exceptionDomain": "",
+        "signingIdentity": null,
+        "providerShortName": null,
+        "entitlements": null
+      },
+      "windows": {
+        "certificateThumbprint": null,
+        "digestAlgorithm": "sha256",
+        "timestampUrl": ""
+      }
+    },
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost: data: blob:; media-src 'self' asset: http://asset.localhost: data: blob:;"
+    },
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "fullscreen": false,
+        "resizable": true,
+        "title": "CinyuVerse - AI 小说编辑器",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 680,
+        "decorations": true,
+        "transparent": false
+      }
+    ]
+  }
+}

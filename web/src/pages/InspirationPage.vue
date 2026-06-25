@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { detectMacPlatform, isModKey, modEnterLabel } from '@/utils/platform'
+import { detectMacPlatform, isModKey, modEnterLabel } from '@/core/platform'
+import { desktopApi } from '@/services/desktopApi'
+import { isDesktop } from '@/services/runtime'
 
 const notes = ref<{ id: string; content: string; created_at: string }[]>([])
 const draft = ref('')
@@ -8,8 +10,8 @@ const wsId = ref('default')
 const saveShortcutLabel = ref(modEnterLabel())
 
 async function load() {
-  if (window.electronAPI?.listInspiration) {
-    notes.value = await window.electronAPI.listInspiration(wsId.value)
+  if (isDesktop() && desktopApi.listInspiration) {
+    notes.value = await desktopApi.listInspiration(wsId.value)
   } else {
     try {
       const raw = localStorage.getItem('cinyuverse-inspiration-' + wsId.value)
@@ -22,8 +24,8 @@ async function save() {
   const text = draft.value.trim()
   if (!text) return
   const note = { id: String(Date.now()), content: text, created_at: new Date().toISOString() }
-  if (window.electronAPI?.addInspiration) {
-    notes.value = await window.electronAPI.addInspiration(wsId.value, note)
+  if (isDesktop() && desktopApi.addInspiration) {
+    notes.value = await desktopApi.addInspiration(wsId.value, note)
   } else {
     notes.value.unshift(note)
     localStorage.setItem('cinyuverse-inspiration-' + wsId.value, JSON.stringify(notes.value))
@@ -43,7 +45,7 @@ onMounted(async () => {
   wsId.value = p.get('wsId') || 'default'
   saveShortcutLabel.value = modEnterLabel(await detectMacPlatform())
   load()
-  window.electronAPI?.onInspirationSaved?.(() => load())
+  desktopApi.onInspirationSaved?.(() => load())
 })
 </script>
 

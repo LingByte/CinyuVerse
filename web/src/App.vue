@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import Landing from '@/pages/Landing.vue'
-import IdeWorkspace from '@/pages/IdeWorkspace.vue'
+import IdeShell from '@/pages/IdeShell.vue'
 import InspirationPage from '@/pages/InspirationPage.vue'
-import BackgroundLayer from '@/components/ide/BackgroundLayer.vue'
+import BackgroundLayer from '@/components/theme/BackgroundLayer.vue'
 
 const appMode = ref<'landing' | 'ide' | 'inspiration'>('landing')
 const detachPanel = ref<'ai' | 'outline' | null>(null)
@@ -34,7 +34,7 @@ function enterIDE() {
     v-else-if="appMode === 'landing'"
     @enter-ide="enterIDE"
   />
-  <IdeWorkspace
+  <IdeShell
     v-else
     :detach-panel="detachPanel"
   />

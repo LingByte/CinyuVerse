@@ -7,9 +7,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@douyinfe/semi-foundation/upload/*": ["node_modules/@douyinfe/semi-foundation/lib/es/upload/*"],
-      "@douyinfe/semi-foundation/slider/*": ["node_modules/@douyinfe/semi-foundation/lib/es/slider/*"],
-      "@douyinfe/semi-foundation/utils/*": ["node_modules/@douyinfe/semi-foundation/lib/es/utils/*"]
+      "@/core/*": ["src/core/*"],
+      "@/features/*": ["src/features/*"]
     },
 
     /* Linting */
@@ -19,5 +18,5 @@
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "src/**/*.d.ts", "electron/types.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "src/**/*.d.ts"]
 }

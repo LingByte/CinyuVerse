@@ -1,225 +1,213 @@
 # CinyuVerse
 
-本地优先的 AI 小说创作 IDE（Electron 桌面应用）。不依赖 Go 后端，所有文件读写通过 Electron IPC 直接操作本地磁盘。
+本地优先的 AI 小说创作 IDE。桌面端使用 **Tauri + Rust** 访问本地文件系统；前端为 **Vue 3**，不依赖 Go 或 Electron 后端。
 
 ## 技术栈
 
 | 层级 | 技术 |
 |------|------|
-| 桌面壳 | Electron 41 + contextBridge IPC |
+| 桌面壳 | Tauri 1.x + Rust |
 | 前端 | Vue 3 + TypeScript + Pinia |
 | 编辑器 | CodeMirror 6（Markdown / 纯文本） |
 | 样式 | Tailwind CSS v4 + 自定义 CSS 变量主题 |
-| 构建 | Vite 8 + vue-tsc + electron-builder |
+| 构建 | Vite 8 + vue-tsc + Cargo |
 
 ## 项目结构
 
 ```
 CinyuVerse/
-├── PROJECT.md          # 本文档
+├── Cargo.toml              # Rust workspace
+├── Cargo.lock
+├── package.json            # Tauri CLI（根目录 npm run dev:tauri）
+├── PROJECT.md              # 本文档
+├── ARCHITECTURE.md         # 架构说明
 ├── LICENSE
-└── web/
-    ├── electron/       # 主进程：IPC、文件系统、窗口管理
-    │   ├── main.ts
-    │   ├── preload.ts
-    │   ├── fsTree.ts   # 目录树构建与文件类型判断
-    │   ├── build.ts    # 编译脚本
-    │   ├── watch.ts    # 开发热编译
-    │   └── run.ts      # 启动 Electron（处理 ELECTRON_RUN_AS_NODE）
+├── src-tauri/              # Rust 后端
+│   ├── src/
+│   │   ├── main.rs         # Tauri 命令注册、AI、Git、终端等
+│   │   ├── cinyuverse_fs.rs # 文件系统 cv_* 命令
+│   │   ├── ai.rs           # LLM 流式对话
+│   │   └── ...
+│   └── tauri.conf.json
+└── web/                    # Vue 前端
     ├── src/
-    │   ├── pages/      # Landing、IdeWorkspace、InspirationPage
-    │   ├── components/ide/  # IDE 面板与预览器
-    │   ├── composables/     # useWorkspace、useLocalChat
-    │   ├── stores/          # 主题、写作统计、LLM 配置等
-    │   └── utils/           # 文件类型、导出、localStorage 数据
+    │   ├── pages/          # Landing、IdeShell、InspirationPage
+    │   ├── components/     # UI（按域划分）
+    │   │   ├── layouts/    # ActivityBar、MenuBar、StatusBar
+    │   │   ├── explorer/   # ExplorerTree
+    │   │   ├── editor/     # EditorWorkspace、EditorPanel
+    │   │   ├── viewers/    # 多格式预览
+    │   │   ├── ai/         # AiChatPanel
+    │   │   ├── writing/    # MetaPanel、OutlinePanel
+    │   │   └── theme/      # ThemeSettings
+    │   ├── features/       # 业务逻辑（stores、composables）
+    │   ├── services/       # desktopApi（Tauri invoke 门面）
+    │   └── core/           # 类型、存储键、平台工具
     └── package.json
 ```
 
+详细架构见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
+
+## 环境要求
+
+| 工具 | 版本 |
+|------|------|
+| Node.js | ≥ 20 |
+| npm | 随 Node 安装 |
+| Rust | 1.70+（[rustup](https://rustup.rs/)） |
+| Windows | WebView2 运行时（Win10/11 通常已内置） |
+
 ## 快速开始
 
-### 环境要求
-
-- Node.js ≥ 20（推荐 24+）
-- npm
-
-### 安装依赖
+### 1. 安装依赖
 
 ```bash
+# 根目录：Tauri CLI
+cd CinyuVerse
+npm install
+
+# 前端
 cd web
 npm install
 ```
 
-### 开发模式（Electron 桌面）
+### 2. 开发模式（推荐）
+
+在**仓库根目录**运行：
 
 ```bash
-cd web
-npm run dev:electron
+npm run dev:tauri
 ```
 
-启动后：
-- Vite 开发服务器：`http://127.0.0.1:9090`
-- Electron 窗口自动打开，并附带 DevTools
+会自动启动 Vite（`:9090`）并打开 Tauri 桌面窗口。
 
-### 仅 Web 预览（无文件系统能力）
+### 3. 仅 Web 预览
+
+无本地文件系统能力，适合看 UI：
 
 ```bash
 cd web
 npm run dev
 ```
 
-浏览器模式下打开文件夹/文件会提示「仅桌面端支持」。
+浏览器中打开文件夹会提示「仅桌面端可用」。
 
-### 类型检查
+### 4. 类型检查
 
 ```bash
 cd web
 npm run typecheck
 ```
 
-### 打包发布
+### 5. 打包发布
 
 ```bash
-cd web
-npm run dist
+# 根目录
+npm run build:tauri
 ```
 
-产物输出到 `web/release/`（Windows NSIS / macOS DMG / Linux AppImage）。
+产物位于 `src-tauri/target/release/`（或 bundle 子目录）。
 
 ## 架构概览
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Renderer (Vue 3)                                       │
-│  IdeWorkspace → useWorkspace → window.electronAPI       │
-│  EditorPanel  → fileTypes.detectFileType → 预览器分发    │
+│  Renderer (Vue 3) — IdeShell / EditorWorkspace          │
+│  useWorkspace → services/desktopApi                     │
 └──────────────────────────┬──────────────────────────────┘
-                           │ IPC (invoke/handle)
-┌──────────────────────────▼──────────────────────────────┐
-│  Main Process (Electron)                                │
-│  fsTree.buildDirTree / readFile / writeFile / dialog    │
+                           │ Tauri invoke
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│  Rust 后端 (src-tauri/)                                 │
+│  cv_* 文件 · AI 对话 · Git · 终端 · 扩展 · 搜索         │
 └──────────────────────────┬──────────────────────────────┘
-                           │ node:fs
-┌──────────────────────────▼──────────────────────────────┐
-│  用户本地磁盘（任意文件夹）                               │
-└─────────────────────────────────────────────────────────┘
+                           ▼
+                    用户本地磁盘
 ```
 
-### 数据持久化
+## Rust 文件系统命令
+
+前端通过 `desktopApi` 调用以下 Tauri 命令：
+
+| 命令 | 说明 |
+|------|------|
+| `open_folder_dialog` | 选择文件夹 |
+| `open_file_dialog` | 选择文件 |
+| `cv_list_dir_tree` | 递归目录树 |
+| `cv_read_file` | 读取文件（utf8 / base64） |
+| `cv_write_file` | 写入文本文件 |
+| `cv_create_file` / `cv_create_dir` | 新建文件/目录 |
+| `cv_delete_path` | 删除文件或空目录 |
+| `cv_dirname` | 取父目录 |
+| `cv_scan_folder` | 扫描 `.md` / `.txt`（导出/字数） |
+
+AI 相关：`ai_chat_stream` 等，见 `src-tauri/src/ai.rs`。
+
+## 数据持久化
 
 | 数据 | 存储位置 |
 |------|----------|
 | 章节/文件内容 | 用户选择的本地文件夹 |
 | 角色卡、词条、大纲、聊天记录 | `localStorage`（按 workspace id 隔离） |
-| 灵感草稿（Electron） | `{userData}/inspiration/{wsId}.json` |
+| 灵感草稿 | `localStorage`（`cinyuverse-inspiration-{wsId}`） |
 | 主题、写作统计、LLM 配置 | `localStorage` |
-| 上次打开的文件夹/文件 | `localStorage`（`cinyuverse:lastFolder` 等） |
-
-## Electron IPC 接口
-
-| 通道 | 说明 |
-|------|------|
-| `dialog:openFile` | 打开文件对话框，返回内容（utf8/base64） |
-| `dialog:saveFile` | 保存文件对话框 |
-| `dialog:openFolder` | 选择文件夹 |
-| `fs:listDirTree` | 递归构建可浏览文件树 |
-| `fs:readFile` | 读取单个文件 |
-| `fs:writeFile` | 写入可编辑文本文件 |
-| `fs:createFile` / `fs:createDir` | 新建文件/文件夹 |
-| `fs:deletePath` | 删除文件或空目录 |
-| `fs:scanFolder` | 扫描 `.md`/`.txt`（用于导出字数统计） |
-| `window:*` | 最小化、最大化、关闭 |
-| `window:openInspiration` | 打开灵感草稿子窗口 |
-| `window:openDetached` | 拆出 AI / 大纲独立窗口 |
-| `inspiration:list` / `inspiration:add` | 灵感草稿 CRUD |
-
-Preload 通过 `contextBridge` 暴露为 `window.electronAPI`。
-
-## 文件预览
-
-`EditorPanel` 根据扩展名自动选择渲染方式：
-
-| 类型 | 扩展名示例 | 组件 |
-|------|-----------|------|
-| 文本（可编辑） | `.md` `.txt` `.json` `.js` `.py` `.csv` 等 | CodeMirror 6 |
-| 图片 | `.png` `.jpg` `.gif` `.webp` `.svg` | ImageViewer |
-| PDF | `.pdf` | PdfViewer |
-| 表格 | `.xlsx` `.xls` | SpreadsheetViewer（CSV/TSV 在编辑器中以文本打开） |
-| 其他二进制 | — | BinaryPlaceholder |
+| 上次打开的文件夹/文件 | `localStorage` |
 
 ## IDE 布局
 
-三栏可调整宽度：
+- **左栏**：资源管理器 / 设定 / 大纲（ActivityBar 切换）
+- **中栏**：EditorWorkspace 多标签 + 多格式预览
+- **右栏**：AI 对话（可拆分为独立 Tauri 子窗口）
+- **顶栏**：MenuBar · **底栏**：StatusBar
 
-- **左栏**：目录（LocalFileTree）/ 设定（MetaPanel）/ 大纲（OutlinePanel）
-- **中栏**：编辑器或多格式预览
-- **右栏**：AI 对话面板
+## ActivityBar 面板
 
-另有 MenuBar、StatusBar、主题设置、写作看板、灵感草稿独立窗口。
+| ID | 功能 |
+|----|------|
+| `explorer` | 目录树 |
+| `search` | 工作区全文搜索（ripgrep） |
+| `git` | 源代码管理 |
+| `extensions` | Open VSX 扩展市场 |
+| `meta` | 角色/词条设定 |
+| `outline` | 大纲 |
+
+底部面板：问题 / 输出 / 终端（`Ctrl+\``）
 
 ## 已实现功能
 
-### 文件与 workspace
+- 打开本地文件夹 / 单文件
+- VS Code 风格文件树（新建、删除、右键）
+- 多格式预览（文本、图片、PDF 等）
+- 自动保存、会话恢复
+- 角色/词条、大纲、写作看板
+- 多套主题与编辑器配色
+- 灵感草稿箱（Tauri 子窗口 + localStorage）
+- TXT / MD 导出
 
-- [x] 打开本地文件夹 / 单文件
-- [x] VS Code 风格文件树（折叠、新建、删除、右键菜单）
-- [x] 多格式文件预览（文本、图片、PDF、表格占位）
-- [x] 文本文件编辑与自动保存（30 秒间隔）
-- [x] 上次会话恢复（文件夹 + 文件）
-- [x] 系统文件关联打开（`.md` `.txt` 等）
-- [x] 导出 TXT / MD（合并 workspace 内章节）
+## 已知限制
 
-### 小说创作辅助
-
-- [x] 角色卡 / 词条管理（MetaPanel，localStorage）
-- [x] 大纲树 + 时间线（OutlinePanel，localStorage）
-- [x] 大纲跳转章节
-- [x] 写作数据看板（字数统计、目标进度）
-- [x] 打字机专注模式
-- [x] 灵感草稿箱（Electron 子窗口）
-
-### 界面与主题
-
-- [x] 多套预设主题 + 自定义 accent
-- [x] 编辑器配色方案（ICLS / IDEA JSON 导入导出）
-- [x] 主题插件包（`.jar` / `.zip`）
-- [x] 背景图 / 玻璃面板
-- [x] 面板布局重置、字体缩放
-
-### 窗口
-
-- [x] 自定义 MenuBar（隐藏系统菜单）
-- [x] 窗口最小化 / 最大化 / 关闭
-- [x] AI / 大纲面板拆出为独立窗口
-
-## 尚未实现 / 已知限制
-
-- [ ] **AI 对话与创作**：UI 完整，但未接入 Ollama / OpenAI 等 LLM 直连
-- [ ] **EPUB / DOCX / 平台导出**：菜单存在，功能待前端实现
-- [ ] **`.xlsx` 预览**：分类为 spreadsheet 但内容为 base64，表格预览实际不可用
-- [ ] **项目元数据落盘**：角色、大纲、聊天等仍在 localStorage，未写入项目文件夹
-- [ ] **文件监听**：外部修改文件不会自动刷新树
-- [ ] **Web 模式**：仅 Landing 可浏览，IDE 文件操作需 Electron
+- Web 模式无文件系统
+- AI 对话已接入 Rust 后端；需在 `.env` 配置 API Key（参考 `src-tauri/.env.example`）
+- EPUB / DOCX 导出待实现
+- 项目元数据尚未落盘到项目文件夹
 
 ## 快捷键（部分）
 
 | 快捷键 | 功能 |
 |--------|------|
-| `Ctrl+S` | 保存当前文件 |
+| `Ctrl+S` | 保存 |
 | `Ctrl+B` | 切换侧边栏 |
 | `Ctrl+J` | 切换 AI 面板 |
 | `Ctrl+,` | 外观与主题 |
 | `Ctrl+Shift+I` | 灵感草稿箱 |
 | `Esc` | 退出专注模式 |
 
-（macOS 下 Ctrl 对应 Cmd，见 `utils/platform.ts`）
+（macOS 下 Ctrl 对应 Cmd）
 
-## 开发说明
+## 关于 CinyuVerse1
 
-- Electron 主进程编译为 **CommonJS**（`electron/tsconfig.json`）
-- Preload 单独编译并重命名为 `preload.cjs`
-- 开发时 `watch.ts` 监听 `electron/` 变更并自动重编译
-- 类型定义单一来源：`electron/types.ts`，渲染进程通过 `src/types/electron.ts` 重导出
+`CinyuVerse1` 已合并进本仓库并**从磁盘删除**。若 Cursor 工作区仍显示该文件夹，请在 IDE 中 **Remove Folder from Workspace** 移除无效引用。
 
 ## 版本
 
-当前版本：**0.1.0**（本地优先 Electron 重构版）
+当前版本：**0.1.0**（Tauri + Rust 本地优先版）

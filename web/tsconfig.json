@@ -8,7 +8,6 @@
   "files": [],
   "references": [
     { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.node.json" },
-    { "path": "./electron/tsconfig.json" }
+    { "path": "./tsconfig.node.json" }
   ]
 }

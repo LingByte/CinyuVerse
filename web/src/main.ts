@@ -1,10 +1,10 @@
-import { createApp } from 'vue'
+﻿import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import '@/style/global.css'
 import '@/assets/themes.css'
 import App from '@/App.vue'
-import { useThemeStore } from '@/stores/themeStore'
-import { useEditorSchemeStore } from '@/stores/editorSchemeStore'
+import { useThemeStore } from '@/features/theme/stores/themeStore'
+import { useEditorSchemeStore } from '@/features/editor/stores/editorSchemeStore'
 
 const app = createApp(App)
 const pinia = createPinia()
