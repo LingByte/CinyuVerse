@@ -6,6 +6,7 @@ import DropdownMenu from '@/components/ui/DropdownMenu.vue'
 import DropdownMenuItem from '@/components/ui/DropdownMenuItem.vue'
 import DropdownMenuSeparator from '@/components/ui/DropdownMenuSeparator.vue'
 import Button from '@/components/ui/Button.vue'
+import { cn } from '@/lib/utils'
 import { useThemeStore } from '@/features/theme/stores/themeStore'
 
 const emit = defineEmits<{
@@ -15,6 +16,10 @@ const emit = defineEmits<{
 const theme = useThemeStore()
 const { lightPresets, darkPresets, customThemes, activeThemeValue, activeThemeLabel } = storeToRefs(theme)
 const open = ref(false)
+
+function itemClass(active: boolean) {
+  return active ? 'text-[var(--accent)]' : undefined
+}
 </script>
 
 <template>
@@ -24,8 +29,10 @@ const open = ref(false)
         <Button
           variant="ghost"
           size="sm"
-          class="!max-w-[180px] h-6 px-2 text-[11px] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
-          :class="{ 'text-[var(--accent)]': open }"
+          :class="cn(
+            '!max-w-[180px] h-6 px-2 text-[11px] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]',
+            open && 'text-[var(--accent)]',
+          )"
           as="div"
         >
           <span class="flex min-w-0 items-center gap-1.5">
@@ -38,7 +45,7 @@ const open = ref(false)
       <DropdownMenuItem
         v-for="p in lightPresets"
         :key="p.id"
-        :class="{ 'text-[var(--accent)]': activeThemeValue === p.id }"
+        :class="itemClass(activeThemeValue === p.id)"
         @click="theme.selectTheme(p.id)"
       >
         {{ p.name }}
@@ -49,7 +56,7 @@ const open = ref(false)
       <DropdownMenuItem
         v-for="p in darkPresets"
         :key="p.id"
-        :class="{ 'text-[var(--accent)]': activeThemeValue === p.id }"
+        :class="itemClass(activeThemeValue === p.id)"
         @click="theme.selectTheme(p.id)"
       >
         {{ p.name }}
@@ -60,7 +67,7 @@ const open = ref(false)
         <DropdownMenuItem
           v-for="c in customThemes"
           :key="c.id"
-          :class="{ 'text-[var(--accent)]': activeThemeValue === `custom:${c.id}` }"
+          :class="itemClass(activeThemeValue === `custom:${c.id}`)"
           @click="theme.selectTheme(`custom:${c.id}`)"
         >
           {{ c.name }}

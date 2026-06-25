@@ -6,7 +6,7 @@ import {
 
 defineOptions({ inheritAttrs: false })
 
-defineProps<{
+const props = defineProps<{
   class?: string
   inset?: boolean
 }>()

@@ -2,20 +2,21 @@
 import { cn } from '@/lib/utils'
 import { Loader2 } from 'lucide-vue-next'
 
-defineProps<{
+const props = withDefaults(defineProps<{
   class?: string
   size?: 'sm' | 'default' | 'lg'
-}>()
+}>(), {
+  size: 'default',
+})
 </script>
 
 <template>
   <Loader2
     :class="cn(
       'animate-spin text-muted-foreground',
-      size === 'sm' && 'h-4 w-4',
-      size === 'default' && 'h-6 w-6',
-      size === 'lg' && 'h-8 w-8',
-      !size && 'h-6 w-6',
+      props.size === 'sm' && 'h-4 w-4',
+      props.size === 'default' && 'h-6 w-6',
+      props.size === 'lg' && 'h-8 w-8',
       props.class,
     )"
   />
