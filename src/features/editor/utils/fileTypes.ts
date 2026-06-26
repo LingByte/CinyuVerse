@@ -45,11 +45,23 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
   ico: 'image/x-icon',
 }
 
+import { isStoryChapterPath } from '@/core/types/story'
+
 export function getExt(filePath: string): string {
+  if (isStoryChapterPath(filePath)) return 'md'
   return (filePath.split('.').pop() || '').toLowerCase()
 }
 
 export function detectFileType(filePath: string): FileTypeInfo {
+  if (isStoryChapterPath(filePath)) {
+    return {
+      category: 'text',
+      extension: 'md',
+      mimeType: 'text/markdown',
+      editable: true,
+    }
+  }
+
   const ext = getExt(filePath)
 
   if (IMAGE_EXTS.has(ext)) {

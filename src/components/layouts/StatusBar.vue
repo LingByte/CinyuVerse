@@ -6,6 +6,7 @@ defineProps<{
   chapterCount: number
   volumeCount: number
   connected: boolean
+  backendConnected?: boolean
   streaming: boolean
   saveStatus: string
 }>()
@@ -21,6 +22,10 @@ const emit = defineEmits<{
     <div class="status-left">
       <span class="status-item">
         <span class="status-dot" :class="{ connected }"/>{{ connected ? '已打开' : '未打开' }}
+      </span>
+      <span class="status-item" title="Go Story 后端">
+        <span class="status-dot backend" :class="{ connected: backendConnected }"/>
+        API {{ backendConnected ? '在线' : '离线' }}
       </span>
       <span v-if="streaming" class="status-item streaming"><span class="spinner-sm"/>AI 生成中…</span>
       <button class="status-item status-clickable" @click="emit('openDashboard')">{{ wordCount.toLocaleString() }} 字</button>
@@ -68,6 +73,12 @@ const emit = defineEmits<{
 }
 .status-dot.connected {
   background: var(--success);
+}
+.status-dot.backend:not(.connected) {
+  background: var(--text-muted);
+}
+.status-dot.backend.connected {
+  background: var(--accent);
 }
 
 .spinner-sm {

@@ -11,3 +11,4 @@ export {
 } from './http'
 
 export { cn } from '@/lib/utils'
+export { renderMarkdown } from './markdown'

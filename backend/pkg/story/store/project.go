@@ -233,6 +233,9 @@ func (s *ProjectStore) LoadChapterIndex(bookID string) ([]models.ChapterMeta, er
 	var index []models.ChapterMeta
 	err := s.ReadJSON(bookID, fileIndex, &index)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return []models.ChapterMeta{}, nil
+		}
 		return nil, err
 	}
 	return index, nil

@@ -1,6 +1,7 @@
 <script lang="ts">
 export type EditorWorkspaceHandle = {
   openFile: (path: string) => Promise<void>
+  openContent: (path: string, title: string, content: string, onSave?: (content: string) => Promise<void>) => void
   closeActive: () => void
   saveActive: () => Promise<void>
 }
@@ -18,6 +19,7 @@ import type { FileViewerTabModel } from '@/components/viewers/types'
 type TabState = FileViewerTabModel & {
   savedValue: string
   isDirty: boolean
+  onSave?: (content: string) => Promise<void>
 }
 
 const emit = defineEmits<{
@@ -62,26 +64,45 @@ async function openFile(path: string) {
   setStatus('加载中...')
   try {
     const { content, encoding } = await readFile(path)
-    const viewerId = viewerIdFromPath(path)
-    const readOnly = !detectFileType(path).editable
-    const tab: TabState = {
-      id: path,
-      path,
-      title: getFileName(path),
-      viewerId,
-      readOnly,
-      value: content,
-      savedValue: content,
-      encoding,
-      isDirty: false,
-    }
-    tabs.value = [...tabs.value, tab]
-    activeId.value = tab.id
+    openContent(path, getFileName(path), content)
+    const tab = tabs.value.find((t) => t.path === path)
+    if (tab) tab.encoding = encoding
     setStatus('就绪')
   } catch (err: unknown) {
     setStatus(err instanceof Error ? err.message : '打开失败')
     throw err
   }
+}
+
+function openContent(
+  path: string,
+  title: string,
+  content: string,
+  onSave?: (content: string) => Promise<void>,
+) {
+  const existing = tabs.value.find((t) => t.path === path)
+  if (existing) {
+    activeId.value = existing.id
+    return
+  }
+
+  const viewerId = viewerIdFromPath(path)
+  const readOnly = onSave ? false : !detectFileType(path).editable
+  const tab: TabState = {
+    id: path,
+    path,
+    title,
+    viewerId,
+    readOnly,
+    value: content,
+    savedValue: content,
+    encoding: 'utf8',
+    isDirty: false,
+    onSave,
+  }
+  tabs.value = [...tabs.value, tab]
+  activeId.value = tab.id
+  setStatus('就绪')
 }
 
 function closeTab(id: string) {
@@ -109,7 +130,11 @@ async function saveActive() {
   if (!tab || tab.readOnly || !tab.isDirty) return
   setStatus('保存中...')
   try {
-    await writeFile(tab.path, tab.value)
+    if (tab.onSave) {
+      await tab.onSave(tab.value)
+    } else {
+      await writeFile(tab.path, tab.value)
+    }
     tabs.value = tabs.value.map((t) =>
       t.id === tab.id ? { ...t, savedValue: t.value, isDirty: false } : t,
     )
@@ -122,6 +147,7 @@ async function saveActive() {
 
 defineExpose<EditorWorkspaceHandle>({
   openFile,
+  openContent,
   closeActive,
   saveActive,
 })

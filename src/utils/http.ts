@@ -17,11 +17,16 @@ export interface HttpError extends Error {
 }
 
 const DEFAULT_TIMEOUT = 30_000
+export const LONG_TIMEOUT = 300_000
 
-function createHttpClient(baseURL?: string): AxiosInstance {
+export interface HttpClientOptions {
+  timeout?: number
+}
+
+function createHttpClient(baseURL?: string, options?: HttpClientOptions): AxiosInstance {
   const instance = axios.create({
     baseURL: baseURL ?? import.meta.env.VITE_API_BASE_URL ?? '',
-    timeout: DEFAULT_TIMEOUT,
+    timeout: options?.timeout ?? DEFAULT_TIMEOUT,
     headers: {
       'Content-Type': 'application/json',
     },
@@ -35,8 +40,9 @@ function createHttpClient(baseURL?: string): AxiosInstance {
   instance.interceptors.response.use(
     (response: AxiosResponse) => response,
     (error) => {
+      const data = error.response?.data as { message?: string; error?: string } | undefined
       const httpError: HttpError = new Error(
-        error.response?.data?.message ?? error.message ?? '请求失败',
+        data?.error ?? data?.message ?? error.message ?? '请求失败',
       )
       httpError.status = error.response?.status
       httpError.data = error.response?.data
@@ -49,8 +55,8 @@ function createHttpClient(baseURL?: string): AxiosInstance {
 
 export const http = createHttpClient()
 
-export function createApiClient(baseURL: string) {
-  return createHttpClient(baseURL)
+export function createApiClient(baseURL: string, options?: HttpClientOptions) {
+  return createHttpClient(baseURL, options)
 }
 
 export async function get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {

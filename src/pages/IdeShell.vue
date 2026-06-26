@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
-import { Files, BookOpen, List, Search } from 'lucide-vue-next'
+import { Files, BookOpen, List, Search, Server } from 'lucide-vue-next'
 import MenuBar from '@/components/layouts/MenuBar.vue'
 import StatusBar from '@/components/layouts/StatusBar.vue'
 import ActivityBar from '@/components/layouts/ActivityBar.vue'
@@ -21,11 +21,14 @@ import { defaultRenderers } from '@/components/viewers/defaultRenderers'
 import { useWorkspace } from '@/features/workspace/composables/useWorkspace'
 import { useThemeStore } from '@/features/theme/stores/themeStore'
 import { useWritingStatsStore } from '@/features/writing/stores/writingStatsStore'
+import { useStoryStore } from '@/features/story/stores/storyStore'
 import type { WordStats } from '@/core/types/workspace'
 import type { ActivityBarItem } from '@/types/activity-bar'
 import { computeWordStats } from '@/features/writing/utils/wordStats'
 import { buildWorkspaceExport, downloadText } from '@/features/workspace/utils/localExport'
 import BackgroundLayer from '@/components/theme/BackgroundLayer.vue'
+import StoryBookPanel from '@/components/story/StoryBookPanel.vue'
+import { storyChapterPath } from '@/core/types/story'
 import { isModKey } from '@/core/platform'
 import { desktopApi } from '@/services/desktopApi'
 import { isDesktop } from '@/services/runtime'
@@ -43,9 +46,6 @@ const workspaceRef = ref<EditorWorkspaceHandle | null>(null)
 const activePanelId = ref('explorer')
 const aiPanelOpen = ref(false)
 const saveStatus = ref('就绪')
-const aiError = ref('')
-const aiStreaming = ref(false)
-const aiStreamText = ref('')
 const menuError = ref('')
 const menuLoading = ref(false)
 const showPreferences = ref(false)
@@ -65,6 +65,7 @@ const rootPath = computed(() => localRootPath.value ?? '')
 
 const themeStore = useThemeStore()
 const writingStats = useWritingStatsStore()
+const storyStore = useStoryStore()
 
 const totalWordCount = computed(() => {
   if (!currentWorkspace.value) return 0
@@ -83,6 +84,7 @@ const totalVolumes = computed(() => currentWorkspace.value?.volumes.length ?? 0)
 
 const activityItems: ActivityBarItem[] = [
   { id: 'explorer', label: '目录', icon: Files },
+  { id: 'story', label: '后端', icon: Server },
   { id: 'search', label: '搜索', icon: Search },
   { id: 'meta', label: '设定', icon: BookOpen },
   { id: 'outline', label: '大纲', icon: List },
@@ -91,17 +93,6 @@ const activityItems: ActivityBarItem[] = [
 function toggleAiPanel() {
   aiPanelOpen.value = !aiPanelOpen.value
 }
-
-const workspaceMeta = computed(() => {
-  const ws = currentWorkspace.value
-  if (!ws) return null
-  return {
-    world_view: ws.world_view,
-    character: ws.character,
-    outline: ws.outline,
-    style: ws.style,
-  }
-})
 
 const currentFilePath = computed(() => workspace.currentFilePath.value)
 
@@ -215,62 +206,26 @@ function onSearchOpenMatch(path: string, _line: number, _column: number) {
   void openFile(path)
 }
 
-type GenerateOpts = {
-  type: 'chat' | 'create' | 'new_chapter'
-  mode: string
-  instruction: string
-  temperature: number
-  maxTokens: number
-  model: string
-  history: { role: 'user' | 'assistant'; content: string }[]
+async function onOpenStoryChapter(
+  path: string,
+  title: string,
+  content: string,
+  bookId: string,
+  chapterNum: number,
+) {
+  workspaceRef.value?.openContent(path, title, content, async (newContent) => {
+    await storyStore.saveChapter(bookId, chapterNum, title, newContent)
+  })
+  currentChId.value = path
 }
 
-async function onAiGenerate(opts: GenerateOpts) {
-  if (!isDesktop()) {
-    aiError.value = '创作模式需桌面端运行'
-    return
-  }
-  aiError.value = ''
-  aiStreaming.value = true
-  aiStreamText.value = ''
-  try {
-    const config = await desktopApi.aiGetConfig()
-    if (!config) {
-      aiError.value = 'AI 未配置：请在项目根目录 .env 设置 API Key'
-      return
-    }
-    const systemParts: string[] = []
-    const meta = workspaceMeta.value
-    if (meta?.world_view?.trim()) systemParts.push('【世界观】\n' + meta.world_view.trim())
-    if (meta?.character?.trim()) systemParts.push('【人物设定】\n' + meta.character.trim())
-    if (meta?.outline?.trim()) systemParts.push('【大纲】\n' + meta.outline.trim())
-    if (meta?.style?.trim()) systemParts.push('【文风】\n' + meta.style.trim())
-
-    const messages: { role: string; content: string }[] = []
-    if (systemParts.length) {
-      messages.push({ role: 'system', content: systemParts.join('\n\n') })
-    }
-    messages.push(...opts.history)
-    messages.push({ role: 'user', content: opts.instruction })
-
-    await desktopApi.aiChatStream(
-      {
-        model: opts.model || config.model,
-        messages,
-        temperature: opts.temperature,
-        maxTokens: opts.maxTokens,
-      },
-      (chunk) => { aiStreamText.value += chunk },
-    )
-  } catch (e: unknown) {
-    aiError.value = e instanceof Error ? e.message : 'AI 生成失败'
-  } finally {
-    aiStreaming.value = false
-  }
+function onChapterWritten(bookId: string, chapterNum: number, title: string, content: string) {
+  const path = storyChapterPath(bookId, chapterNum)
+  void onOpenStoryChapter(path, title, content, bookId, chapterNum)
 }
 
-function onAiStop() {
-  aiStreaming.value = false
+function onInsertToEditor(_text: string) {
+  saveStatus.value = '请在编辑器中粘贴智能体返回的内容'
 }
 
 function openDashboard() {
@@ -336,6 +291,7 @@ watch(workspaceRef, async (ws) => {
 onMounted(async () => {
   document.addEventListener('keydown', onGlobalKeydown)
   themeStore.applyTheme()
+  void storyStore.init()
   if (isDesktop()) {
     await restoreLastSession()
     desktopApi.onOpenFile(async (filePath: string) => {
@@ -361,19 +317,9 @@ onUnmounted(() => {
     <div class="ide-content" :class="{ 'detach-mode': !!props.detachPanel }">
     <div v-if="props.detachPanel === 'ai'" class="detach-full">
       <AiChatPanel
-        :connected="!!currentWorkspace"
-        :streaming="aiStreaming"
-        :stream-text="aiStreamText"
-        :log-messages="[]"
-        :tool-calls="[]"
-        :error="aiError"
-        :chapter-id="currentChId"
-        :workspace-id="currentWorkspace?.id"
-        :workspace-name="currentWorkspace?.book_name"
-        :workspace-meta="workspaceMeta"
-        @generate="onAiGenerate"
-        @stop="onAiStop"
-        @insert="() => {}"
+        :current-chapter-path="currentChId"
+        @insert="onInsertToEditor"
+        @chapter-written="onChapterWritten"
       />
     </div>
     <div v-else-if="props.detachPanel === 'outline'" class="detach-full">
@@ -435,6 +381,9 @@ onUnmounted(() => {
             :root-path="rootPath"
             :on-open-match="onSearchOpenMatch"
           />
+          <PanelShell v-show="activePanelId === 'story'" title="后端书籍" subtitle="Go Story API">
+            <StoryBookPanel @open-chapter="onOpenStoryChapter" />
+          </PanelShell>
           <PanelShell v-show="activePanelId === 'meta'" title="设定" subtitle="角色与词条">
             <MetaPanel :workspace-id="currentWorkspace?.id ?? null" />
           </PanelShell>
@@ -473,19 +422,9 @@ onUnmounted(() => {
             </div>
             <AiAssistantDrawer :open="aiPanelOpen" @close="aiPanelOpen = false">
               <AiChatPanel
-                :connected="!!currentWorkspace"
-                :streaming="aiStreaming"
-                :stream-text="aiStreamText"
-                :log-messages="[]"
-                :tool-calls="[]"
-                :error="aiError"
-                :chapter-id="currentChId"
-                :workspace-id="currentWorkspace?.id"
-                :workspace-name="currentWorkspace?.book_name"
-                :workspace-meta="workspaceMeta"
-                @generate="onAiGenerate"
-                @stop="onAiStop"
-                @insert="() => {}"
+                :current-chapter-path="currentChId"
+                @insert="onInsertToEditor"
+                @chapter-written="onChapterWritten"
               />
             </AiAssistantDrawer>
           </div>
@@ -498,7 +437,8 @@ onUnmounted(() => {
         :chapter-count="totalChapters"
         :volume-count="totalVolumes"
         :connected="!!currentWorkspace"
-        :streaming="aiStreaming"
+        :backend-connected="storyStore.connected"
+        :streaming="storyStore.busy"
         @open-dashboard="openDashboard"
         @toggle-terminal="toggleBottomPanel('terminal')"
       />

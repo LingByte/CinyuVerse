@@ -1,1217 +1,582 @@
 ﻿<script setup lang="ts">
-import { ref, computed, watch, nextTick, toRef, onMounted } from 'vue'
-import ThemeSettings from '@/components/theme/ThemeSettings.vue'
-import { useLocalChat } from '@/features/chat/composables/useLocalChat'
-import { useLlmStore, type LlmModelEntry } from '@/features/chat/stores/llmStore'
-import { usePromptStore } from '@/features/chat/stores/promptStore'
-import { detectMacPlatform, isModKey, modEnterLabel } from '@/core/platform'
+import { ref, computed, watch, nextTick } from 'vue'
+import { useStoryAgent, type PipelineAction } from '@/features/story/composables/useStoryAgent'
+import { useStoryStore } from '@/features/story/stores/storyStore'
+import { parseStoryChapterPath } from '@/core/types/story'
 import {
-  X,
-  Plus,
-  History,
-  MoreVertical,
-  Columns2,
-  Sun,
-  Settings,
-  Trash2,
-  MessageCircle,
-  PenLine,
-  CheckCircle2,
-  AlertCircle,
+  Bot,
+  BookOpen,
+  Wifi,
+  WifiOff,
   Loader2,
-  ChevronDown,
-  Square,
   ArrowUp,
+  PenLine,
+  ListChecks,
+  FileEdit,
+  ShieldCheck,
+  Sparkles,
+  RefreshCw,
+  ChevronDown,
 } from 'lucide-vue-next'
-
-const showThemeModal = ref(false)
-const sendShortcutLabel = ref(modEnterLabel())
+import { isModKey, modEnterLabel } from '@/core/platform'
+import MarkdownContent from '@/components/ai/MarkdownContent.vue'
 
 const props = defineProps<{
-  connected: boolean
-  streaming: boolean
-  streamText: string
-  logMessages: string[]
-  toolCalls: { name: string; status: string; time: number }[]
-  error: string
-  chapterId: string
-  workspaceId?: string | null
-  workspaceName?: string
-  workspaceMeta?: {
-    world_view?: string
-    character?: string
-    outline?: string
-    style?: string
-  } | null
+  currentChapterPath?: string | null
 }>()
 
 const emit = defineEmits<{
-  generate: [opts: {
-    type: 'chat' | 'create' | 'new_chapter'
-    mode: string
-    instruction: string
-    temperature: number
-    maxTokens: number
-    model: string
-    history: { role: 'user' | 'assistant'; content: string }[]
-  }]
-  stop: []
   insert: [text: string]
-  clearHistory: []
+  chapterWritten: [bookId: string, chapterNum: number, title: string, content: string]
 }>()
 
-// ── State ──────────────────────────────────────────────────
+const currentChapterNum = computed(() => {
+  if (!props.currentChapterPath) return null
+  const parsed = parseStoryChapterPath(props.currentChapterPath)
+  return parsed?.chapterNum ?? null
+})
+
+const storyStore = useStoryStore()
+const agent = useStoryAgent(currentChapterNum)
+
+const books = computed(() => storyStore.books ?? [])
+
 const instruction = ref('')
-const mode = ref('chapter')
-const temperature = ref(0.55)
-const maxTokens = ref(4096)
+const guidance = ref('')
+const error = ref('')
+const panelMode = ref<'agent' | 'pipeline'>('agent')
+const showBookMenu = ref(false)
 const chatEndRef = ref<HTMLDivElement>()
-const textareaRef = ref<HTMLTextAreaElement>()
-const showSettings = ref(false)
-const showModelMenu = ref(false)
-const showContextMenu = ref(false)
-const showMoreMenu = ref(false)
+const sendShortcutLabel = ref(modEnterLabel())
 
-const agentMode = ref<'chat' | 'create'>('chat')
-const lastCreateUserMsg = ref('')
-
-const llmStore = useLlmStore()
-const promptStore = usePromptStore()
-
-const chatSession = useLocalChat(
-  toRef(props, 'workspaceId'),
-  computed(() => props.workspaceName ?? '工作区'),
-)
-
-const contextSizes = [
-  { value: -1, label: '∞', desc: '无限制' },
-  { value: 2048, label: '2K' },
-  { value: 4096, label: '4K' },
-  { value: 8192, label: '8K' },
-  { value: 16384, label: '16K' },
-  { value: 32768, label: '32K' },
-]
-const selectedContext = ref(contextSizes[0])
-
-const models = computed(() => llmStore.models)
-const selectedModel = ref<LlmModelEntry>(llmStore.models[0] ?? {
-  id: 'qwen-plus',
-  name: '通义 Plus',
-  provider: 'qwen',
-  group: 'create',
-})
-
-const promptOptions = computed(() => promptStore.allPrompts)
-const selectedPromptId = ref('')
-const showPromptMenu = ref(false)
-
-watch(() => props.workspaceId, (id) => {
-  if (!id) return
-  const active = promptStore.getActivePrompt(id)
-  selectedPromptId.value = active?.id ?? promptOptions.value[0]?.id ?? ''
-}, { immediate: true })
-
-function buildGlobalMemoryPrompt(): string {
-  const parts: string[] = []
-  const meta = props.workspaceMeta
-  if (meta?.world_view?.trim()) parts.push('【世界观】\n' + meta.world_view.trim())
-  if (meta?.character?.trim()) parts.push('【人物设定】\n' + meta.character.trim())
-  if (meta?.outline?.trim()) parts.push('【大纲】\n' + meta.outline.trim())
-  if (meta?.style?.trim()) parts.push('【文风】\n' + meta.style.trim())
-  const prompt = promptOptions.value.find((p) => p.id === selectedPromptId.value)
-  if (prompt?.content) parts.push('【文风模板】\n' + prompt.content)
-  return parts.join('\n\n')
-}
-
-const modes = [
-  { value: 'chapter', label: '续写' },
-  { value: 'plot_branch', label: '剧情推演' },
-  { value: 'conflict', label: '冲突' },
-  { value: 'foreshadow', label: '伏笔' },
-  { value: 'dialogue_opt', label: '对话' },
-  { value: 'chapter_summary', label: '摘要' },
-  { value: 'duplicate_check', label: '查重' },
-  { value: 'select', label: '改写选中' },
-  { value: 'rewrite', label: '改写' },
-  { value: 'expand', label: '扩写' },
-  { value: 'condense', label: '缩写' },
-  { value: 'polish', label: '润色' },
+const pipelineActions: { id: PipelineAction; label: string; icon: typeof PenLine; desc: string; needsChapter?: boolean }[] = [
+  { id: 'write-next', label: '写下一章', icon: PenLine, desc: '完整流水线：规划→写作→审核→修订' },
+  { id: 'plan', label: '规划章节', icon: ListChecks, desc: '生成本章意图与备忘录' },
+  { id: 'draft', label: '起草', icon: FileEdit, desc: '仅生成正文，不跑审核' },
+  { id: 'audit', label: '审核', icon: ShieldCheck, desc: '33+ 维度质量审核', needsChapter: true },
+  { id: 'revise', label: '修订', icon: RefreshCw, desc: '根据审核结果自动修订', needsChapter: true },
+  { id: 'polish', label: '润色', icon: Sparkles, desc: '轻量语言润色', needsChapter: true },
 ]
 
-const showWelcome = computed(() =>
-  chatSession.messages.value.length === 0
-  && !props.streamText
-  && !props.streaming
-  && !chatSession.sending.value
-  && props.logMessages.length === 0
-  && props.toolCalls.length === 0
+const visibleMessages = computed(() =>
+  agent.messages.value.filter((m) => m.role === 'user' || m.role === 'assistant'),
 )
 
-const modeStatusText = computed(() => {
-  const modeLabel = agentMode.value === 'chat' ? '对话模式・不读取文件' : '创作模式・自主创作'
-  return `${modeLabel} | 记忆：${chatSession.messages.value.length} 条`
+const canSend = computed(
+  () =>
+    storyStore.connected
+    && storyStore.currentBookId
+    && instruction.value.trim()
+    && !storyStore.busy,
+)
+
+const statusText = computed(() => {
+  if (!storyStore.connected) return '后端离线'
+  if (!storyStore.currentBookId) return '请选择书籍'
+  const book = storyStore.currentBook?.title ?? storyStore.currentBookId
+  const ch = storyStore.chapters.length
+  return `${book} · ${ch} 章`
 })
 
-const displayError = computed(() => props.error || chatSession.error.value)
-const showHistoryMenu = ref(false)
-
-const canInsert = computed(() => !!props.streamText.trim() && !props.streaming)
-
-// ── Methods ────────────────────────────────────────────────
-async function handleGenerate() {
-  if (props.streaming || chatSession.sending.value) return
-  if (!instruction.value.trim()) return
-
-  const userMsg = instruction.value.trim()
+async function handleSend() {
+  if (!canSend.value) return
+  const text = instruction.value.trim()
   instruction.value = ''
-  autoResizeTextarea()
-
-  if (agentMode.value === 'chat') {
-    try {
-      await chatSession.sendChatMessage(
-        userMsg,
-        selectedModel.value.id,
-        temperature.value,
-        maxTokens.value,
-        buildGlobalMemoryPrompt(),
-      )
-      scrollToBottom()
-    } catch {
-      // error in chatSession.error
-    }
-    return
+  error.value = ''
+  try {
+    await agent.sendInstruction(text)
+    scrollToBottom()
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : '发送失败'
   }
-
-  lastCreateUserMsg.value = userMsg
-  emit('generate', {
-    type: agentMode.value,
-    mode: mode.value,
-    instruction: userMsg,
-    temperature: temperature.value,
-    maxTokens: maxTokens.value,
-    model: selectedModel.value.id,
-    history: chatSession.messages.value
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-  })
 }
 
-function onInstructionKeydown(e: KeyboardEvent) {
+async function runAction(action: PipelineAction) {
+  if (!storyStore.connected || !storyStore.currentBookId || storyStore.busy) return
+  error.value = ''
+  try {
+    const out = await agent.runPipeline(action, guidance.value.trim())
+    if (action === 'write-next' && storyStore.currentBookId) {
+      await storyStore.fetchChapters(storyStore.currentBookId)
+      const last = storyStore.chapters[storyStore.chapters.length - 1]
+      if (last) {
+        const detail = await storyStore.loadChapter(storyStore.currentBookId, last.number)
+        emit('chapterWritten', storyStore.currentBookId, last.number, detail.meta.title, detail.content)
+      }
+    }
+    if (typeof out === 'string') {
+      agent.lastResult.value = out
+    } else if (out && typeof out === 'object') {
+      agent.lastResult.value = JSON.stringify(out, null, 2)
+    }
+    scrollToBottom()
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : '操作失败'
+  }
+}
+
+function useQuickPrompt(text: string) {
+  instruction.value = text
+}
+
+function onKeydown(e: KeyboardEvent) {
   if (isModKey(e) && e.key === 'Enter') {
     e.preventDefault()
-    handleGenerate()
+    void handleSend()
   }
-}
-
-onMounted(async () => {
-  sendShortcutLabel.value = modEnterLabel(await detectMacPlatform())
-})
-
-watch(() => props.streaming, (streaming, wasStreaming) => {
-  if (wasStreaming && !streaming && props.streamText && agentMode.value === 'create') {
-    chatSession.appendConversationPair(lastCreateUserMsg.value, props.streamText)
-  }
-})
-
-function switchMode(m: 'chat' | 'create') {
-  agentMode.value = m
-}
-
-function clearHistory() {
-  chatSession.clearCurrentSession()
-  emit('clearHistory')
-}
-
-async function openHistoryMenu() {
-  showMoreMenu.value = false
-  showHistoryMenu.value = !showHistoryMenu.value
-  if (showHistoryMenu.value) {
-    await chatSession.fetchSessionList()
-  }
-}
-
-async function pickHistorySession(id: number) {
-  await chatSession.switchSession(id)
-  showHistoryMenu.value = false
-  scrollToBottom()
-}
-
-async function onNewChat() {
-  await chatSession.createNewSession()
-  showHistoryMenu.value = false
-  scrollToBottom()
-}
-
-function quickContinue() {
-  if (props.streaming) return
-
-  const instructionText = '请读取项目大纲和最新章节，自动判断是否需要新建章节或新卷，然后续写完整下一章。一次性写完，自主保存到文件。'
-
-  lastCreateUserMsg.value = instructionText
-  emit('generate', {
-    type: 'create',
-    mode: 'chapter',
-    instruction: instructionText,
-    temperature: temperature.value,
-    maxTokens: maxTokens.value,
-    model: selectedModel.value.id,
-    history: chatSession.messages.value
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-  })
-
-  instruction.value = ''
-}
-
-function handleInsert() {
-  if (!props.streamText.trim()) return
-  emit('insert', props.streamText)
 }
 
 function scrollToBottom() {
-  nextTick(() => {
-    chatEndRef.value?.scrollIntoView({ behavior: 'smooth' })
-  })
+  nextTick(() => chatEndRef.value?.scrollIntoView({ behavior: 'smooth' }))
 }
 
-function selectModel(m: LlmModelEntry) {
-  selectedModel.value = m
-  showModelMenu.value = false
-}
-
-function selectPrompt(id: string) {
-  selectedPromptId.value = id
-  if (props.workspaceId) promptStore.setActivePrompt(props.workspaceId, id)
-  showPromptMenu.value = false
-}
-
-function selectContext(c: typeof contextSizes[number]) {
-  selectedContext.value = c
-  showContextMenu.value = false
-}
-
-function toggleMoreMenu() {
-  showMoreMenu.value = !showMoreMenu.value
-  showSettings.value = false
-  showModelMenu.value = false
-  showContextMenu.value = false
-}
-
-function openThemeSettings() {
-  showMoreMenu.value = false
-  showThemeModal.value = true
-}
-
-function closeDropdowns() {
-  showModelMenu.value = false
-  showContextMenu.value = false
-  showMoreMenu.value = false
-  showHistoryMenu.value = false
-}
-
-function autoResizeTextarea() {
-  const el = textareaRef.value
-  if (!el) return
-  el.style.height = 'auto'
-  el.style.height = `${Math.min(el.scrollHeight, 120)}px`
-}
-
-watch(() => props.streamText, scrollToBottom)
-watch(() => props.logMessages.length, scrollToBottom)
+watch(() => agent.messages.value.length, scrollToBottom)
+watch(() => agent.eventLogs.value.length, scrollToBottom)
 </script>
 
 <template>
-  <div class="chat-panel-wrap" @click="closeDropdowns">
-
-    <!-- 1. Tab Header -->
-    <div class="chat-tab-header">
-      <div class="tab-item active">
-        <span class="tab-label">{{ chatSession.sessionTitle.value || '新对话' }}</span>
-        <button class="tab-close" title="关闭标签" @click="onNewChat"><X :size="14" /></button>
+  <div class="agent-panel" @click="showBookMenu = false">
+    <!-- Header -->
+    <div class="agent-header">
+      <div class="header-left">
+        <Bot :size="16" class="header-icon" />
+        <span class="header-title">故事智能体</span>
+        <span class="conn-badge" :class="{ ok: storyStore.connected }">
+          <Wifi v-if="storyStore.connected" :size="11" />
+          <WifiOff v-else :size="11" />
+        </span>
       </div>
-      <div class="tab-actions">
-        <button class="tab-icon-btn" title="新建对话" @click="onNewChat">
-          <Plus :size="18" :stroke-width="1.75" />
+      <div class="book-select-wrap" @click.stop>
+        <button class="book-select" :disabled="!storyStore.connected" @click="showBookMenu = !showBookMenu">
+          <BookOpen :size="12" />
+          <span class="book-label">{{ statusText }}</span>
+          <ChevronDown :size="10" />
         </button>
-        <button class="tab-icon-btn" title="历史记录" @click.stop="openHistoryMenu">
-          <History :size="18" :stroke-width="1.75" />
-        </button>
-        <button class="tab-icon-btn" title="更多" @click.stop="toggleMoreMenu">
-          <MoreVertical :size="18" :stroke-width="1.75" />
-        </button>
-        <button class="tab-icon-btn" title="分屏">
-          <Columns2 :size="18" :stroke-width="1.75" />
-        </button>
-      </div>
-    </div>
-
-    <div v-if="showHistoryMenu" class="header-more-menu history-menu" @click.stop>
-      <div v-if="chatSession.sessions.value.length === 0" class="history-empty">暂无历史会话</div>
-      <button
-        v-for="s in chatSession.sessions.value"
-        :key="s.id"
-        class="more-menu-item"
-        :class="{ active: chatSession.sessionId.value === s.id }"
-        @click="pickHistorySession(s.id)"
-      >
-        <span class="history-item-title">{{ s.title || '未命名对话' }}</span>
-        <span class="history-item-time">{{ new Date(s.updatedAt).toLocaleDateString() }}</span>
-      </button>
-    </div>
-
-    <div v-if="showMoreMenu" class="header-more-menu" @click.stop>
-      <button class="more-menu-item" @click="openThemeSettings">
-        <Sun :size="14" :stroke-width="1.75" />
-        主题设置
-      </button>
-      <button class="more-menu-item" @click="showSettings = true; showMoreMenu = false">
-        <Settings :size="14" :stroke-width="1.75" />
-        AI 设置
-      </button>
-      <button class="more-menu-item" @click="clearHistory(); showMoreMenu = false">
-        <Trash2 :size="14" :stroke-width="1.75" />
-        清空对话记录
-      </button>
-    </div>
-
-    <!-- 2. Mode Switch Bar -->
-    <div class="mode-switch-bar">
-      <div class="mode-switch-tabs">
-        <button
-          class="mode-tab"
-          :class="{ active: agentMode === 'chat' }"
-          @click="switchMode('chat')"
-        >
-          <MessageCircle class="mode-icon" :size="13" :fill="agentMode === 'chat' ? 'currentColor' : 'none'" :stroke-width="1.5" />
-          <span>对话</span>
-        </button>
-        <button
-          class="mode-tab"
-          :class="{ active: agentMode === 'create' }"
-          @click="switchMode('create')"
-        >
-          <PenLine class="mode-icon" :size="13" :fill="agentMode === 'create' ? 'currentColor' : 'none'" :stroke-width="1.5" />
-          <span>创作</span>
-        </button>
-      </div>
-      <span class="mode-status-text">{{ modeStatusText }}</span>
-      <button
-        v-if="agentMode === 'create' && !streaming"
-        class="quick-continue-btn"
-        @click="quickContinue"
-        title="AI 自动读取大纲并续写下一章"
-      >续写下一章</button>
-    </div>
-
-    <!-- 3. Message Area -->
-    <div class="chat-message-scroll">
-      <div v-if="chatSession.loading.value" class="log-msg">正在加载对话历史…</div>
-
-      <!-- Welcome bubble -->
-      <div v-if="showWelcome" class="message-bubble welcome-bubble">
-        <div class="bubble-mode-tag">
-          {{ agentMode === 'chat' ? '对话模式' : '创作模式' }} ({{ selectedModel.id }})
-        </div>
-        <h3 class="welcome-title">欢迎来到 CinyuVerse 小说创作空间</h3>
-        <p class="welcome-intro">我是你的 AI 创作助手，可以陪你讨论剧情、打磨设定、续写章节。</p>
-        <ul class="welcome-list">
-          <li>聊聊某个角色的动机和性格</li>
-          <li>讨论大纲或下一章该怎么写</li>
-          <li>整理世界观、人设等创作资料</li>
-        </ul>
-        <p class="welcome-feature">我可以帮你梳理人设、世界观，并在创作模式下自主读取项目文件续写正文。</p>
-        <div class="welcome-tip-card">
-          切换到「创作」模式后，AI 会读取当前工作区文件进行写作。
-        </div>
-      </div>
-
-      <div
-        v-for="msg in chatSession.messages.value"
-        :key="msg.id"
-        class="message-bubble"
-        :class="msg.role === 'user' ? 'user-bubble' : 'ai-bubble'"
-      >
-        <div class="bubble-mode-tag">{{ msg.role === 'user' ? '你' : 'AI 回复' }}</div>
-        <div class="stream-content">{{ msg.content }}</div>
-      </div>
-
-      <div v-if="toolCalls.length > 0" class="tool-progress-bar">
-        <div
-          v-for="(tc, i) in toolCalls"
-          :key="'tool-' + i"
-          class="tool-step"
-          :class="tc.status"
-        >
-          <span class="tool-icon">
-            <CheckCircle2 v-if="tc.status === 'done'" :size="12" />
-            <AlertCircle v-else-if="tc.status === 'error'" :size="12" />
-            <Loader2 v-else :size="12" class="tool-spinner" />
-          </span>
-          <span class="tool-name">{{ tc.name }}</span>
-        </div>
-      </div>
-
-      <div
-        v-for="(msg, i) in logMessages"
-        :key="'log-' + i"
-        class="log-msg"
-      >{{ msg }}</div>
-
-      <div v-if="agentMode === 'create'" class="mode-bar-inline">
-        <button
-          v-for="m in modes"
-          :key="m.value"
-          class="mode-chip"
-          :class="{ active: mode === m.value }"
-          @click="mode = m.value"
-        >{{ m.label }}</button>
-      </div>
-
-      <div v-if="streamText" class="message-bubble ai-bubble streaming-bubble">
-        <div class="bubble-mode-tag">AI 回复</div>
-        <div class="stream-content">{{ streamText }}</div>
-      </div>
-
-      <div v-if="chatSession.sending.value" class="log-msg">AI 正在思考…</div>
-
-      <div v-if="displayError" class="error-msg">{{ displayError }}</div>
-
-      <div ref="chatEndRef"></div>
-    </div>
-
-    <!-- 4. Input Footer（Cursor 风格） -->
-    <div class="chat-input-footer">
-      <div class="cursor-input-box" :class="{ focused: instruction.length > 0 }">
-        <div v-if="showSettings" class="settings-row">
-          <label>温度：{{ temperature }}</label>
-          <input v-model.number="temperature" type="range" min="0" max="2" step="0.1" />
-          <label>最大生成长度：{{ maxTokens }}</label>
-          <input v-model.number="maxTokens" type="range" min="512" max="16384" step="512" />
-        </div>
-
-        <textarea
-          v-model="instruction"
-          class="chat-textarea"
-          :placeholder="agentMode === 'chat' ? '输入问题，讨论剧情…' : '描述创作要求，AI 自动读文件写正文…'"
-          rows="1"
-          @keydown="onInstructionKeydown"
-          @input="autoResizeTextarea"
-          ref="textareaRef"
-        ></textarea>
-
-        <div class="input-toolbar">
-          <div class="toolbar-left dropdown-wrap" @click.stop>
-            <button
-              class="toolbar-pill"
-              title="上下文窗口"
-              @click="showContextMenu = !showContextMenu; showModelMenu = false"
-            >{{ selectedContext.label }}</button>
-            <button
-              class="toolbar-pill model-pill"
-              @click="showModelMenu = !showModelMenu; showContextMenu = false; showPromptMenu = false"
-            >
-              <span class="model-name">{{ selectedModel.name }}</span>
-              <ChevronDown :size="10" :stroke-width="2" />
-            </button>
-            <button
-              class="toolbar-pill"
-              title="文风 Prompt 模板"
-              @click="showPromptMenu = !showPromptMenu; showModelMenu = false; showContextMenu = false"
-            >Prompt</button>
-            <div v-if="showContextMenu" class="dropdown-menu">
-              <button
-                v-for="c in contextSizes"
-                :key="c.value"
-                class="dropdown-item"
-                :class="{ active: selectedContext.value === c.value }"
-                @click="selectContext(c)"
-              >
-                <span class="item-label">{{ c.label }}</span>
-                <span v-if="c.desc" class="item-desc">{{ c.desc }}</span>
-              </button>
-            </div>
-            <div v-if="showModelMenu" class="dropdown-menu">
-              <button
-                v-for="m in models"
-                :key="m.id"
-                class="dropdown-item"
-                :class="{ active: selectedModel.id === m.id }"
-                @click="selectModel(m)"
-              >{{ m.name }}</button>
-            </div>
-            <div v-if="showPromptMenu" class="dropdown-menu prompt-menu">
-              <button
-                v-for="p in promptOptions"
-                :key="p.id"
-                class="dropdown-item"
-                :class="{ active: selectedPromptId === p.id }"
-                @click="selectPrompt(p.id)"
-              >
-                <span class="item-label">{{ p.name }}</span>
-                <span class="item-desc">{{ p.category }}</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="toolbar-spacer"></div>
-
+        <div v-if="showBookMenu && books.length > 0" class="book-menu">
           <button
-            v-if="canInsert"
-            class="toolbar-pill insert-pill"
-            @click="handleInsert"
-          >插入正文</button>
-
-          <button
-            v-if="streaming"
-            class="cursor-send-btn stop"
-            @click="$emit('stop')"
-            title="停止生成"
+            v-for="b in books"
+            :key="b.id"
+            class="book-option"
+            :class="{ active: b.id === storyStore.currentBookId }"
+            @click="storyStore.selectBook(b.id); showBookMenu = false"
           >
-            <Square :size="12" fill="currentColor" :stroke-width="0" />
-          </button>
-          <button
-            v-else
-            class="cursor-send-btn"
-            :class="{ active: instruction.trim() && !chatSession.sending.value }"
-            :disabled="!instruction.trim() || chatSession.sending.value"
-            @click="handleGenerate"
-            :title="`发送 (${sendShortcutLabel})`"
-          >
-            <ArrowUp :size="14" :stroke-width="2.5" />
+            {{ b.title }}
+            <span class="book-option-meta">{{ b.genre }}</span>
           </button>
         </div>
       </div>
     </div>
 
-    <ThemeSettings :visible="showThemeModal" @close="showThemeModal = false" />
+    <!-- Mode tabs -->
+    <div class="mode-tabs">
+      <button :class="{ active: panelMode === 'agent' }" @click="panelMode = 'agent'">
+        <Bot :size="12" /> 智能对话
+      </button>
+      <button :class="{ active: panelMode === 'pipeline' }" @click="panelMode = 'pipeline'">
+        <PenLine :size="12" /> 写作流水线
+      </button>
+    </div>
+
+    <!-- Offline hint -->
+    <div v-if="!storyStore.connected" class="offline-banner">
+      <p>后端未连接（{{ storyStore.baseUrl }}）</p>
+      <p class="sub">启动：<code>cd backend && go run ./cmd/server</code></p>
+      <button class="retry-btn" @click="storyStore.ping()">重试</button>
+    </div>
+
+    <div v-else-if="!storyStore.currentBookId" class="offline-banner">
+      <p>请先在左侧「后端」面板创建或选择书籍</p>
+    </div>
+
+    <!-- Messages / logs -->
+    <div class="message-area">
+      <div v-if="agent.loadingSession.value" class="hint">加载对话历史…</div>
+
+      <div v-if="visibleMessages.length === 0 && !storyStore.busy" class="welcome">
+        <h3>CinyuVerse 故事智能体</h3>
+        <p v-if="panelMode === 'agent'">
+          通过自然语言驱动写作工具：规划章节、续写、审核、读取设定文件等。
+          模型由后端 <code>STORY_LLM_MODEL</code> 配置。
+        </p>
+        <p v-else>直接调用写作流水线 API，适合明确的单步操作。</p>
+        <div v-if="panelMode === 'agent'" class="quick-prompts">
+          <button
+            v-for="q in agent.quickPrompts"
+            :key="q.label"
+            class="quick-btn"
+            @click="useQuickPrompt(q.text)"
+          >{{ q.label }}</button>
+        </div>
+      </div>
+
+      <div
+        v-for="(msg, i) in visibleMessages"
+        :key="i"
+        class="bubble"
+        :class="msg.role === 'user' ? 'user' : 'assistant'"
+      >
+        <div class="bubble-role">{{ msg.role === 'user' ? '你' : '智能体' }}</div>
+        <MarkdownContent
+          v-if="msg.role === 'assistant'"
+          class="bubble-content"
+          :content="msg.content"
+        />
+        <div v-else class="bubble-content user-text">{{ msg.content }}</div>
+      </div>
+
+      <!-- Pipeline event log -->
+      <div v-for="(ev, i) in agent.eventLogs.value" :key="'ev-' + i" class="event-line">
+        <span class="ev-type">{{ ev.type }}</span>
+        <span v-if="ev.agent" class="ev-agent">{{ ev.agent }}</span>
+        <span class="ev-msg">{{ ev.message }}</span>
+      </div>
+
+      <div v-if="storyStore.busy" class="busy-line">
+        <Loader2 :size="14" class="spin" />
+        {{ storyStore.agentRunning ? '智能体思考中（可能调用多个工具）…' : '流水线执行中…' }}
+      </div>
+
+      <div v-if="error || storyStore.lastError" class="error-line">{{ error || storyStore.lastError }}</div>
+      <div ref="chatEndRef" />
+    </div>
+
+    <!-- Pipeline mode toolbar -->
+    <div v-if="panelMode === 'pipeline' && storyStore.connected && storyStore.currentBookId" class="pipeline-bar">
+      <input v-model="guidance" class="guidance-input" placeholder="写作指导（可选）" />
+      <div class="pipeline-actions">
+        <button
+          v-for="act in pipelineActions"
+          :key="act.id"
+          class="pipeline-btn"
+          :title="act.desc"
+          :disabled="storyStore.busy || (act.needsChapter && !agent.latestChapterNum.value)"
+          @click="runAction(act.id)"
+        >
+          <component :is="act.icon" :size="12" />
+          {{ act.label }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Agent input -->
+    <div v-if="panelMode === 'agent'" class="input-area">
+      <textarea
+        v-model="instruction"
+        class="input-textarea"
+        rows="2"
+        :placeholder="storyStore.currentBookId ? '输入指令，如：帮我规划下一章、检查人设一致性…' : '请先选择书籍'"
+        :disabled="!storyStore.connected || !storyStore.currentBookId || storyStore.busy"
+        @keydown="onKeydown"
+      />
+      <div class="input-footer">
+        <span class="hint-text">{{ sendShortcutLabel }} 发送 · 工具：写章/规划/审核/读设定</span>
+        <div class="input-actions">
+          <button
+            v-if="agent.lastResult.value"
+            class="insert-btn"
+            @click="emit('insert', agent.lastResult.value)"
+          >插入编辑器</button>
+          <button class="send-btn" :disabled="!canSend" :title="sendShortcutLabel" @click="handleSend">
+            <Loader2 v-if="storyStore.busy" :size="14" class="spin" />
+            <ArrowUp v-else :size="14" />
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
-/* ── Chat panel：全部跟随全局主题变量 ── */
-.chat-panel-wrap {
+.agent-panel {
   display: flex;
   flex-direction: column;
   height: 100%;
   background: var(--bg-secondary);
-  position: relative;
-  color: var(--chat-text-primary);
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
-/* ── 1. Tab Header ── */
-.chat-tab-header {
+.agent-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 10px;
-  background: var(--bg-primary);
-  flex-shrink: 0;
-  min-height: 32px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border);
+  gap: 8px;
+  flex-shrink: 0;
 }
 
-.tab-item {
-  display: inline-flex;
+.header-left {
+  display: flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  background: var(--chat-card-bg);
+  min-width: 0;
 }
 
-.tab-item:not(.active) .tab-label {
-  opacity: 0.55;
-}
+.header-icon { color: var(--accent); flex-shrink: 0; }
+.header-title { font-weight: 600; color: var(--text-main); font-size: 13px; }
 
-.tab-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--chat-text-primary);
-}
-
-.tab-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border: none;
-  background: transparent;
-  color: var(--chat-text-secondary);
-  cursor: pointer;
-  border-radius: 4px;
-  font-size: 13px;
-  line-height: 1;
-  padding: 0;
-  transition: color var(--chat-transition), background var(--chat-transition);
-}
-.tab-close:hover {
-  background: color-mix(in srgb, var(--danger) 18%, transparent);
+.conn-badge {
+  display: inline-flex;
   color: var(--danger);
 }
+.conn-badge.ok { color: var(--success); }
 
-.tab-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
+.book-select-wrap { position: relative; flex-shrink: 0; }
 
-.tab-icon-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: transparent;
-  color: var(--chat-text-secondary);
-  cursor: pointer;
-  border-radius: 50%;
-  padding: 0;
-  transition: background var(--chat-transition), color var(--chat-transition), transform 0.15s ease;
-}
-.tab-icon-btn:hover {
-  background: var(--chat-hover-bg);
-  color: var(--chat-text-primary);
-}
-.tab-icon-btn:active {
-  transform: scale(0.92);
-}
-
-.header-more-menu {
-  position: absolute;
-  top: 34px;
-  right: 8px;
-  z-index: 300;
-  background: var(--chat-card-bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  padding: 4px;
-  min-width: 150px;
-}
-
-.more-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 10px;
-  border: none;
-  background: transparent;
-  color: var(--chat-text-secondary);
-  font-size: 12px;
-  cursor: pointer;
-  border-radius: 6px;
-  text-align: left;
-  transition: background var(--chat-transition), color var(--chat-transition);
-}
-.more-menu-item:hover {
-  background: var(--chat-hover-bg);
-  color: var(--chat-text-primary);
-}
-
-/* ── 2. Mode Switch Bar（紧凑分段控件） ── */
-.mode-switch-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 10px;
-  flex-shrink: 0;
-  min-width: 0;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
-}
-
-.mode-switch-tabs {
+.book-select {
   display: inline-flex;
   align-items: center;
-  flex-shrink: 0;
-  height: 26px;
-  padding: 2px;
-  border-radius: 6px;
-  background: var(--bg-hover);
-  border: 1px solid var(--border);
-  gap: 1px;
-}
-
-.mode-tab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   gap: 4px;
-  height: 22px;
-  padding: 0 8px;
-  border: none;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background: transparent;
-  color: var(--chat-text-secondary);
-  font-size: 11px;
-  font-weight: 500;
+  background: var(--bg-input);
+  color: var(--text-sub);
   cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
+  font-size: 11px;
+  max-width: 160px;
 }
-
-.mode-tab span {
-  white-space: nowrap;
-  line-height: 1;
-}
-
-.mode-tab .mode-icon {
-  flex-shrink: 0;
-  opacity: 0.75;
-}
-
-.mode-tab.active {
-  background: var(--chat-card-bg);
-  color: var(--chat-text-primary);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
-}
-
-.mode-tab.active .mode-icon {
-  opacity: 1;
-}
-
-.mode-status-text {
-  flex: 1;
-  min-width: 0;
-  font-size: 10px;
-  color: var(--text-muted);
-  white-space: nowrap;
+.book-label {
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.quick-continue-btn {
-  flex-shrink: 0;
-  height: 26px;
-  padding: 0 8px;
-  border: 1px solid color-mix(in srgb, var(--chat-mode-create) 40%, transparent);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--chat-mode-create);
-  font-size: 10px;
-  font-weight: 500;
-  cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s;
-}
-.quick-continue-btn:hover {
-  background: var(--accent-light);
 }
 
-/* ── 3. Message Area ── */
-.chat-message-scroll {
+.book-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 180px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 20;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.book-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+.book-option:hover { background: var(--bg-hover); }
+.book-option.active { background: color-mix(in oklab, var(--accent) 10%, transparent); }
+.book-option-meta { font-size: 10px; color: var(--text-muted); }
+
+.mode-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.mode-tabs button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 7px;
+  border: none;
+  background: transparent;
+  color: var(--text-sub);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+}
+.mode-tabs button.active {
+  color: var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.offline-banner {
+  padding: 12px;
+  margin: 8px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  text-align: center;
+  color: var(--text-sub);
+}
+.offline-banner .sub { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+.offline-banner code { font-size: 10px; background: var(--bg-input); padding: 1px 4px; border-radius: 3px; }
+.retry-btn {
+  margin-top: 8px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.message-area {
   flex: 1;
   overflow-y: auto;
-  padding: 18px 16px;
+  padding: 10px;
   min-height: 0;
 }
 
-.message-bubble {
-  background: var(--chat-bubble-fill);
-  border-radius: 10px;
-  padding: 20px;
-  margin-bottom: 16px;
-}
-
-.bubble-mode-tag {
-  font-size: 12px;
-  color: var(--chat-text-hint);
-  margin-bottom: 12px;
-}
-
-.welcome-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--chat-text-primary);
-  margin: 0 0 12px;
-  line-height: 1.5;
-}
-
-.welcome-intro {
-  font-size: 13px;
-  color: var(--chat-text-secondary);
-  margin: 0 0 12px;
-  line-height: 1.7;
-}
-
-.welcome-list {
-  margin: 0 0 12px;
-  padding-left: 1.2em;
-  color: var(--chat-text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.welcome-list li {
-  margin-bottom: 6px;
-}
-
-.welcome-list li:last-child {
-  margin-bottom: 0;
-}
-
-.welcome-feature {
-  font-size: 13px;
-  color: var(--chat-text-secondary);
-  margin: 0 0 12px;
-  line-height: 1.7;
-}
-
-.welcome-tip-card {
-  font-size: 12px;
-  color: var(--chat-text-secondary);
-  line-height: 1.6;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 8%, var(--chat-bubble-fill));
-  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
-}
-
-.user-bubble {
-  background: color-mix(in srgb, var(--accent) 12%, var(--chat-bubble-fill));
-  margin-left: 12px;
-}
-
-.history-menu {
-  top: 34px;
-  right: 48px;
-  max-height: 280px;
-  overflow-y: auto;
-}
-
-.history-empty {
-  padding: 10px 12px;
-  font-size: 11px;
-  color: var(--chat-text-hint);
-}
-
-.more-menu-item.active {
-  background: var(--accent-light);
-}
-
-.history-item-title {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.history-item-time {
-  font-size: 10px;
-  color: var(--chat-text-hint);
-  margin-left: 8px;
-  flex-shrink: 0;
-}
-
-.streaming-bubble {
-  border: 1px dashed var(--border);
-}
-
-.stream-content {
-  color: var(--chat-text-primary);
-  font-size: 13px;
-  line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
-}
-
-.log-msg {
-  color: var(--chat-text-hint);
-  font-size: 12px;
-  padding: 4px 0;
-  margin-bottom: 8px;
-}
-
-.tool-progress-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 16px;
-  padding: 10px 12px;
-  background: var(--bg-card);
-  border-radius: 8px;
+.welcome {
+  padding: 12px;
   border: 1px solid var(--border);
-}
-
-.tool-step {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  background: var(--bg-hover);
-  color: var(--chat-text-secondary);
-  transition: all var(--chat-transition);
-}
-
-.tool-step.done {
-  background: var(--accent-light);
-  color: var(--success);
-}
-
-.tool-step.error {
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-  color: var(--danger);
-}
-
-.tool-icon {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.tool-spinner {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.tool-name {
-  font-weight: 500;
-  font-size: 11px;
-}
-
-.mode-bar-inline {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 16px;
-}
-
-.mode-chip {
-  padding: 5px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
+  border-radius: 8px;
   background: var(--bg-card);
-  color: var(--chat-text-secondary);
-  font-size: 11px;
-  cursor: pointer;
-  transition: all var(--chat-transition);
+  margin-bottom: 10px;
 }
-.mode-chip:hover {
-  color: var(--chat-text-primary);
-  background: var(--chat-hover-bg);
-}
-.mode-chip.active {
-  background: var(--accent-light);
-  border-color: var(--accent);
-  color: var(--chat-text-primary);
-}
+.welcome h3 { margin: 0 0 8px; font-size: 14px; color: var(--text-main); }
+.welcome p { margin: 0 0 8px; line-height: 1.5; color: var(--text-sub); font-size: 11px; }
+.welcome code { font-size: 10px; background: var(--bg-input); padding: 1px 4px; border-radius: 3px; }
 
-.error-msg {
-  color: var(--danger);
-  padding: 10px 12px;
-  background: color-mix(in srgb, var(--danger) 10%, transparent);
-  border-radius: 6px;
-  margin-bottom: 16px;
-  font-size: 12px;
-}
-
-/* ── 4. Input Footer（Cursor 风格） ── */
-.chat-input-footer {
-  flex-shrink: 0;
-  padding: 12px 14px 14px;
-  background: var(--bg-secondary);
-  border-top: 1px solid var(--border);
-}
-
-.cursor-input-box {
-  background: var(--bg-input);
+.quick-prompts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.quick-btn {
+  padding: 4px 8px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 10px 12px 8px;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.cursor-input-box:focus-within,
-.cursor-input-box.focused {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
-}
-
-.settings-row {
-  padding-bottom: 8px;
-  margin-bottom: 8px;
-  border-bottom: 1px solid var(--border);
-}
-
-.settings-row label {
-  display: block;
-  font-size: 11px;
-  color: var(--chat-text-hint);
-  margin-bottom: 2px;
-}
-
-.settings-row input[type="range"] {
-  width: 100%;
-  margin-bottom: 8px;
-  accent-color: var(--accent);
-}
-
-.chat-textarea {
-  width: 100%;
   background: transparent;
-  border: none;
-  color: var(--chat-text-primary);
-  padding: 0;
-  font-size: 13px;
-  resize: none;
-  outline: none;
-  font-family: inherit;
-  line-height: 1.5;
-  min-height: 22px;
-  max-height: 120px;
-  overflow-y: auto;
+  color: var(--text-sub);
+  cursor: pointer;
+  font-size: 10px;
 }
+.quick-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-.chat-textarea::placeholder {
+.bubble {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  max-width: 95%;
+}
+.bubble.user {
+  margin-left: auto;
+  background: color-mix(in oklab, var(--accent) 15%, var(--bg-card));
+  border: 1px solid color-mix(in oklab, var(--accent) 25%, transparent);
+}
+.bubble.assistant {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+.bubble-role { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
+.bubble-content.user-text { white-space: pre-wrap; line-height: 1.55; color: var(--text-main); font-size: 12px; }
+.bubble-content :deep(.md-content) { font-size: 12px; }
+
+.event-line {
+  font-size: 10px;
   color: var(--text-muted);
-  opacity: 1;
-  font-size: 13px;
+  padding: 2px 0;
+  font-family: ui-monospace, monospace;
 }
+.ev-type { color: var(--accent); margin-right: 4px; }
+.ev-agent { color: var(--warning); margin-right: 4px; }
 
-.input-toolbar {
+.busy-line, .error-line, .hint {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-top: 8px;
-  min-width: 0;
+  padding: 6px 0;
+  font-size: 11px;
 }
+.busy-line { color: var(--warning); }
+.error-line { color: var(--danger); }
+.hint { color: var(--text-muted); }
 
-.toolbar-left {
+.pipeline-bar {
+  padding: 8px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.guidance-input {
+  width: 100%;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-main);
+  font-size: 11px;
+  box-sizing: border-box;
+}
+.pipeline-actions {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
-  flex-shrink: 1;
-  min-width: 0;
 }
-
-.toolbar-spacer {
-  flex: 1;
-  min-width: 4px;
-}
-
-.toolbar-pill {
+.pipeline-btn {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  height: 22px;
-  padding: 0 7px;
-  border: none;
+  gap: 4px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
   border-radius: 4px;
   background: transparent;
-  color: var(--text-muted);
-  font-size: 11px;
+  color: var(--text-sub);
   cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.12s, color 0.12s;
+  font-size: 10px;
 }
+.pipeline-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.pipeline-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-.toolbar-pill:hover {
-  background: var(--bg-hover);
-  color: var(--text-secondary);
-}
-
-.model-pill .model-name {
-  max-width: 88px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.insert-pill {
-  color: var(--accent);
-  font-weight: 500;
-}
-
-.cursor-send-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: none;
-  border-radius: 50%;
-  background: var(--bg-hover);
-  color: var(--text-muted);
-  cursor: default;
+.input-area {
+  padding: 8px;
+  border-top: 1px solid var(--border);
   flex-shrink: 0;
-  transition: background 0.15s, color 0.15s, transform 0.12s;
 }
-
-.cursor-send-btn.active {
-  background: var(--text-main);
-  color: var(--bg-primary);
-  cursor: pointer;
-}
-
-.cursor-send-btn.active:hover {
-  opacity: 0.88;
-}
-
-.cursor-send-btn.active:active {
-  transform: scale(0.92);
-}
-
-.cursor-send-btn.stop {
-  background: var(--danger);
-  color: #fff;
-  cursor: pointer;
-  border-radius: 6px;
-}
-
-.dropdown-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.dropdown-menu {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 0;
-  min-width: 160px;
-  background: var(--chat-card-bg);
+.input-textarea {
+  width: 100%;
+  padding: 8px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  padding: 4px;
-  z-index: 200;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-main);
+  font-size: 12px;
+  font-family: inherit;
+  resize: none;
+  box-sizing: border-box;
+  min-height: 52px;
 }
-
-.dropdown-item {
+.input-textarea:focus { outline: none; border-color: var(--accent); }
+.input-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 100%;
-  padding: 6px 10px;
-  border: none;
-  background: transparent;
-  color: var(--chat-text-primary);
-  font-size: 12px;
-  cursor: pointer;
+  margin-top: 6px;
+  gap: 8px;
+}
+.hint-text { font-size: 10px; color: var(--text-muted); flex: 1; }
+.input-actions { display: flex; gap: 6px; align-items: center; }
+.insert-btn {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
   border-radius: 4px;
-  text-align: left;
-  transition: background 0.12s;
-}
-.dropdown-item:hover {
-  background: var(--chat-hover-bg);
-}
-.dropdown-item.active {
-  background: var(--accent-light);
-  color: var(--accent);
-}
-
-.item-desc {
+  background: transparent;
+  color: var(--text-sub);
+  cursor: pointer;
   font-size: 10px;
-  color: var(--chat-text-hint);
 }
+.insert-btn:hover { border-color: var(--accent); color: var(--accent); }
+.send-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.spin { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
