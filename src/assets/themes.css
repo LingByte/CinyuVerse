@@ -115,104 +115,172 @@
   background: var(--scrollbar-thumb-hover);
 }
 
-html:not([data-has-bg-image]),
-html:not([data-has-bg-image]) body,
-html:not([data-has-bg-image]) #app {
+html:not([data-has-bg-image]):not([data-ide-mode]):not([data-landing-mode]),
+html:not([data-has-bg-image]):not([data-ide-mode]):not([data-landing-mode]) body,
+html:not([data-has-bg-image]):not([data-ide-mode]):not([data-landing-mode]) #app {
   background: var(--bg-primary);
   color: var(--text-main);
 }
 
 /* 覆盖 global.css 的渐变背景，确保主题切换全局生效 */
-html[data-preset]:not([data-has-bg-image]) body,
-html[data-mode]:not([data-has-bg-image]) body {
+html[data-preset]:not([data-has-bg-image]):not([data-landing-mode]):not([data-ide-mode]) body,
+html[data-mode]:not([data-has-bg-image]):not([data-landing-mode]):not([data-ide-mode]) body {
   background: var(--bg-primary) !important;
   color: var(--text-main) !important;
 }
 
-/* ── 背景图模式：三栏统一半透明遮罩（无 blur，--wp-panel-alpha 由 themeStore 注入） ── */
-html[data-has-bg-image] {
+html[data-landing-mode],
+html[data-landing-mode] body,
+html[data-landing-mode] #app {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* ── 编辑页：半透明面板（与首页背景互不影响） ── */
+html[data-ide-mode] {
   --wp-panel-surface: color-mix(in srgb, var(--bg-primary) calc(var(--wp-panel-alpha, 0.72) * 100%), transparent);
   --wp-panel-chrome: color-mix(in srgb, var(--bg-secondary) calc(var(--wp-panel-alpha, 0.72) * 100%), transparent);
 }
 
-html[data-has-bg-image] body {
+html[data-ide-mode][data-has-bg-image] {
+  --wp-panel-surface: color-mix(in srgb, var(--bg-primary) calc(var(--wp-panel-alpha, 0.72) * 100%), transparent);
+  --wp-panel-chrome: color-mix(in srgb, var(--bg-secondary) calc(var(--wp-panel-alpha, 0.72) * 100%), transparent);
+}
+
+html[data-ide-mode] body,
+html[data-ide-mode][data-has-bg-image] body {
   background: transparent !important;
 }
 
-html[data-has-bg-image] #app {
+html[data-ide-mode] #app,
+html[data-ide-mode][data-has-bg-image] #app {
   background: transparent !important;
   position: relative;
   z-index: 1;
 }
 
-html[data-has-bg-image] .ide-shell,
-html[data-has-bg-image] .ide-main,
-html[data-has-bg-image] .editor-workspace,
-html[data-has-bg-image] .center-column,
-html[data-has-bg-image] .activity-bar,
-html[data-has-bg-image] .panel-shell,
-html[data-has-bg-image] .ai-drawer {
-  background: transparent !important;
-}
-
-html[data-has-bg-image] .left-panel,
-html[data-has-bg-image] .center-panel,
-html[data-has-bg-image] .right-panel,
-html[data-has-bg-image] .resize-handle {
+/* 外层栏位：统一半透明遮罩（与三栏透明度一致） */
+html[data-ide-mode] .left-panel,
+html[data-ide-mode] .center-panel,
+html[data-ide-mode] .right-panel,
+html[data-ide-mode] .bottom-panel,
+html[data-ide-mode] .activity-bar,
+html[data-ide-mode] .ai-drawer-inner,
+html[data-ide-mode] .resize-handle,
+html[data-ide-mode][data-has-bg-image] .left-panel,
+html[data-ide-mode][data-has-bg-image] .center-panel,
+html[data-ide-mode][data-has-bg-image] .right-panel,
+html[data-ide-mode][data-has-bg-image] .bottom-panel,
+html[data-ide-mode][data-has-bg-image] .activity-bar,
+html[data-ide-mode][data-has-bg-image] .ai-drawer-inner,
+html[data-ide-mode][data-has-bg-image] .resize-handle {
   background: var(--wp-panel-surface) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
 
-html[data-has-bg-image] .menu-bar,
-html[data-has-bg-image] .menu-bar-top,
-html[data-has-bg-image] .status-bar {
+html[data-ide-mode] .menu-bar,
+html[data-ide-mode] .menu-bar-top,
+html[data-ide-mode] .status-bar,
+html[data-ide-mode][data-has-bg-image] .menu-bar,
+html[data-ide-mode][data-has-bg-image] .menu-bar-top,
+html[data-ide-mode][data-has-bg-image] .status-bar {
   background: var(--wp-panel-chrome) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
 
-/* 栏内子区域透明，由外层 column 统一承担遮罩色 */
-html[data-has-bg-image] .left-sidebar,
-html[data-has-bg-image] .sidebar-tabs,
-html[data-has-bg-image] .sidebar-body,
-html[data-has-bg-image] .file-tree,
-html[data-has-bg-image] .meta-panel,
-html[data-has-bg-image] .outline-panel,
-html[data-has-bg-image] .editor-panel,
-html[data-has-bg-image] .tab-bar,
-html[data-has-bg-image] .editor-area,
-html[data-has-bg-image] .cm-editor,
-html[data-has-bg-image] .cm-scroller,
-html[data-has-bg-image] .chat-panel-wrap,
-html[data-has-bg-image] .chat-tab-header,
-html[data-has-bg-image] .mode-switch-bar,
-html[data-has-bg-image] .chat-message-scroll,
-html[data-has-bg-image] .chat-input-footer {
+/* 布局容器与栏内子区域透明，由外层 column 统一承担遮罩色 */
+html[data-ide-mode] .ide-shell,
+html[data-ide-mode] .ide-content,
+html[data-ide-mode] .ide-main,
+html[data-ide-mode] .center-column,
+html[data-ide-mode] .center-workbench,
+html[data-ide-mode] .center-main,
+html[data-ide-mode] .editor-workspace,
+html[data-ide-mode] .editor-body,
+html[data-ide-mode] .panel-shell,
+html[data-ide-mode] .tabs-bar,
+html[data-ide-mode] .ai-drawer-header,
+html[data-ide-mode] .ai-drawer-body,
+html[data-ide-mode] .left-sidebar,
+html[data-ide-mode] .sidebar-tabs,
+html[data-ide-mode] .sidebar-body,
+html[data-ide-mode] .file-tree,
+html[data-ide-mode] .file-tree-header,
+html[data-ide-mode] .meta-panel,
+html[data-ide-mode] .outline-panel,
+html[data-ide-mode] .editor-panel,
+html[data-ide-mode] .tab-bar,
+html[data-ide-mode] .editor-area,
+html[data-ide-mode] .cm-editor,
+html[data-ide-mode] .cm-scroller,
+html[data-ide-mode] .chat-panel-wrap,
+html[data-ide-mode] .chat-tab-header,
+html[data-ide-mode] .mode-switch-bar,
+html[data-ide-mode] .chat-message-scroll,
+html[data-ide-mode] .chat-input-footer,
+html[data-ide-mode][data-has-bg-image] .ide-shell,
+html[data-ide-mode][data-has-bg-image] .ide-content,
+html[data-ide-mode][data-has-bg-image] .ide-main,
+html[data-ide-mode][data-has-bg-image] .center-column,
+html[data-ide-mode][data-has-bg-image] .center-workbench,
+html[data-ide-mode][data-has-bg-image] .center-main,
+html[data-ide-mode][data-has-bg-image] .editor-workspace,
+html[data-ide-mode][data-has-bg-image] .editor-body,
+html[data-ide-mode][data-has-bg-image] .panel-shell,
+html[data-ide-mode][data-has-bg-image] .tabs-bar,
+html[data-ide-mode][data-has-bg-image] .ai-drawer-header,
+html[data-ide-mode][data-has-bg-image] .ai-drawer-body,
+html[data-ide-mode][data-has-bg-image] .left-sidebar,
+html[data-ide-mode][data-has-bg-image] .sidebar-tabs,
+html[data-ide-mode][data-has-bg-image] .sidebar-body,
+html[data-ide-mode][data-has-bg-image] .file-tree,
+html[data-ide-mode][data-has-bg-image] .file-tree-header,
+html[data-ide-mode][data-has-bg-image] .meta-panel,
+html[data-ide-mode][data-has-bg-image] .outline-panel,
+html[data-ide-mode][data-has-bg-image] .editor-panel,
+html[data-ide-mode][data-has-bg-image] .tab-bar,
+html[data-ide-mode][data-has-bg-image] .editor-area,
+html[data-ide-mode][data-has-bg-image] .cm-editor,
+html[data-ide-mode][data-has-bg-image] .cm-scroller,
+html[data-ide-mode][data-has-bg-image] .chat-panel-wrap,
+html[data-ide-mode][data-has-bg-image] .chat-tab-header,
+html[data-ide-mode][data-has-bg-image] .mode-switch-bar,
+html[data-ide-mode][data-has-bg-image] .chat-message-scroll,
+html[data-ide-mode][data-has-bg-image] .chat-input-footer {
   background: transparent !important;
 }
 
-html[data-has-bg-image] .cm-content,
-html[data-has-bg-image] .cm-line {
+html[data-ide-mode] .cm-content,
+html[data-ide-mode] .cm-line,
+html[data-ide-mode][data-has-bg-image] .cm-content,
+html[data-ide-mode][data-has-bg-image] .cm-line {
   color: var(--text-main) !important;
 }
 
-html[data-has-bg-image] .cm-placeholder {
+html[data-ide-mode] .cm-placeholder,
+html[data-ide-mode][data-has-bg-image] .cm-placeholder {
   color: var(--text-muted) !important;
 }
 
-html[data-has-bg-image] .cm-activeLine {
+html[data-ide-mode] .cm-activeLine,
+html[data-ide-mode][data-has-bg-image] .cm-activeLine {
   background: color-mix(in srgb, var(--bg-hover) 80%, transparent) !important;
 }
 
-html[data-has-bg-image] .landing-page,
-html[data-has-bg-image] main.relative {
-  background: transparent !important;
+html[data-landing-mode] .landing-page {
+  background: #ffffff !important;
 }
-html[data-has-bg-image] .welcome-bubble,
-html[data-has-bg-image] .message-bubble,
-html[data-has-bg-image] .mode-switch-tabs,
-html[data-has-bg-image] .cursor-input-box {
+
+html[data-ide-mode] .welcome-bubble,
+html[data-ide-mode] .message-bubble,
+html[data-ide-mode] .mode-switch-tabs,
+html[data-ide-mode] .cursor-input-box,
+html[data-ide-mode][data-has-bg-image] .welcome-bubble,
+html[data-ide-mode][data-has-bg-image] .message-bubble,
+html[data-ide-mode][data-has-bg-image] .mode-switch-tabs,
+html[data-ide-mode][data-has-bg-image] .cursor-input-box {
   background: color-mix(in srgb, var(--bg-card) calc(min(var(--wp-panel-alpha, 0.72) + 0.12, 0.95) * 100%), transparent) !important;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 55%, transparent);
 }

@@ -197,7 +197,8 @@ export const useThemeStore = defineStore('theme', () => {
   function applyWallpaperPanelVars() {
     if (typeof document === 'undefined') return
     const root = document.documentElement
-    if (!backgroundImage.value) {
+    const ideMode = root.hasAttribute('data-ide-mode')
+    if (!ideMode && !backgroundImage.value) {
       root.style.removeProperty('--wp-panel-alpha')
       root.style.removeProperty('--wp-panel-blur')
       return
@@ -208,8 +209,6 @@ export const useThemeStore = defineStore('theme', () => {
 
   function applyBackgroundToDOM() {
     if (typeof document === 'undefined') return
-    const root = document.documentElement
-    root.toggleAttribute('data-has-bg-image', !!backgroundImage.value)
     applyWallpaperPanelVars()
   }
 

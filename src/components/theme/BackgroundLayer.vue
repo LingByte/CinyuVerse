@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useThemeStore } from '@/features/theme/stores/themeStore'
 
@@ -21,33 +21,22 @@ const layerStyle = computed(() => {
     backgroundAttachment: 'fixed',
   } as Record<string, string>
 })
-
-watch(
-  backgroundImage,
-  (img) => {
-    document.documentElement.toggleAttribute('data-has-bg-image', !!img)
-  },
-  { immediate: true },
-)
 </script>
 
 <template>
-  <Teleport to="body">
-    <div
-      v-show="visible"
-      id="cinyuverse-bg-layer"
-      class="cinyuverse-bg-layer"
-      :style="layerStyle"
-      aria-hidden="true"
-    />
-  </Teleport>
+  <div
+    v-show="visible"
+    class="cinyuverse-bg-layer"
+    :style="layerStyle"
+    aria-hidden="true"
+  />
 </template>
 
-<style>
+<style scoped>
 .cinyuverse-bg-layer {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: 0;
   pointer-events: none;
 }
 </style>

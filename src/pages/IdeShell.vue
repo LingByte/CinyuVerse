@@ -25,6 +25,7 @@ import type { WordStats } from '@/core/types/workspace'
 import type { ActivityBarItem } from '@/types/activity-bar'
 import { computeWordStats } from '@/features/writing/utils/wordStats'
 import { buildWorkspaceExport, downloadText } from '@/features/workspace/utils/localExport'
+import BackgroundLayer from '@/components/theme/BackgroundLayer.vue'
 import { isModKey } from '@/core/platform'
 import { desktopApi } from '@/services/desktopApi'
 import { isDesktop } from '@/services/runtime'
@@ -354,6 +355,10 @@ onUnmounted(() => {
 
 <template>
   <div class="ide-shell" :class="{ 'detach-mode': !!props.detachPanel }">
+    <div v-if="!props.detachPanel" class="ide-bg" aria-hidden="true">
+      <BackgroundLayer />
+    </div>
+    <div class="ide-content" :class="{ 'detach-mode': !!props.detachPanel }">
     <div v-if="props.detachPanel === 'ai'" class="detach-full">
       <AiChatPanel
         :connected="!!currentWorkspace"
@@ -412,24 +417,19 @@ onUnmounted(() => {
             v-if="isLeftDragging"
             class="resize-overlay"
           />
-          <PanelShell
+          <ExplorerTree
             v-show="activePanelId === 'explorer'"
-            :title="folderName || '工作区'"
-            subtitle="目录"
-          >
-            <ExplorerTree
-              :tree="tree"
-              :folder-name="folderName"
-              :current-file-path="currentFilePath"
-              @select-file="openFile"
-              @create-file="onCreateFile"
-              @create-dir="onCreateDir"
-              @delete-path="onDeletePath"
-              @close-folder="workspace.closeCurrent()"
-              @open-folder="onMenuOpenFolder"
-              @refresh-tree="refreshTree()"
-            />
-          </PanelShell>
+            :tree="tree"
+            :folder-name="folderName"
+            :current-file-path="currentFilePath"
+            @select-file="openFile"
+            @create-file="onCreateFile"
+            @create-dir="onCreateDir"
+            @delete-path="onDeletePath"
+            @close-folder="workspace.closeCurrent()"
+            @open-folder="onMenuOpenFolder"
+            @refresh-tree="refreshTree()"
+          />
           <SearchPanel
             v-show="activePanelId === 'search'"
             :root-path="rootPath"
@@ -450,41 +450,45 @@ onUnmounted(() => {
           />
         </div>
 
-        <div class="center-column" :class="{ 'ai-open': aiPanelOpen }">
-          <div class="center-panel">
-            <EditorWorkspace
-              ref="workspaceRef"
-              @save-status="saveStatus = $event"
-            />
+        <div class="center-column">
+          <div class="center-workbench">
+            <div class="center-main">
+              <div class="center-panel">
+                <EditorWorkspace
+                  ref="workspaceRef"
+                  @save-status="saveStatus = $event"
+                />
+              </div>
+              <BottomPanel
+                :open="bottomPanelOpen"
+                :active-tab="bottomPanelTab"
+                :height="bottomPanelHeight"
+                :root-path="rootPath"
+                :output-text="outputText"
+                @open-change="bottomPanelOpen = $event"
+                @active-tab-change="bottomPanelTab = $event"
+                @height-change="bottomPanelHeight = $event"
+                @clear-output="outputText = ''"
+              />
+            </div>
+            <AiAssistantDrawer :open="aiPanelOpen" @close="aiPanelOpen = false">
+              <AiChatPanel
+                :connected="!!currentWorkspace"
+                :streaming="aiStreaming"
+                :stream-text="aiStreamText"
+                :log-messages="[]"
+                :tool-calls="[]"
+                :error="aiError"
+                :chapter-id="currentChId"
+                :workspace-id="currentWorkspace?.id"
+                :workspace-name="currentWorkspace?.book_name"
+                :workspace-meta="workspaceMeta"
+                @generate="onAiGenerate"
+                @stop="onAiStop"
+                @insert="() => {}"
+              />
+            </AiAssistantDrawer>
           </div>
-          <BottomPanel
-            :open="bottomPanelOpen"
-            :active-tab="bottomPanelTab"
-            :height="bottomPanelHeight"
-            :root-path="rootPath"
-            :output-text="outputText"
-            @open-change="bottomPanelOpen = $event"
-            @active-tab-change="bottomPanelTab = $event"
-            @height-change="bottomPanelHeight = $event"
-            @clear-output="outputText = ''"
-          />
-          <AiAssistantDrawer :open="aiPanelOpen" @close="aiPanelOpen = false">
-            <AiChatPanel
-              :connected="!!currentWorkspace"
-              :streaming="aiStreaming"
-              :stream-text="aiStreamText"
-              :log-messages="[]"
-              :tool-calls="[]"
-              :error="aiError"
-              :chapter-id="currentChId"
-              :workspace-id="currentWorkspace?.id"
-              :workspace-name="currentWorkspace?.book_name"
-              :workspace-meta="workspaceMeta"
-              @generate="onAiGenerate"
-              @stop="onAiStop"
-              @insert="() => {}"
-            />
-          </AiAssistantDrawer>
         </div>
       </div>
 
@@ -507,19 +511,36 @@ onUnmounted(() => {
       :stats="wordStats"
       @close="showDashboard = false"
     />
+    </div>
   </div>
 </template>
 
 <style scoped>
 .ide-shell {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+.ide-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--bg-primary);
+}
+
+.ide-content {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  background: var(--bg-primary);
 }
 
-.ide-shell.detach-mode {
+.ide-content.detach-mode {
   height: 100%;
 }
 
@@ -544,8 +565,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   min-width: 180px;
   max-width: 400px;
-  border-right: 1px solid var(--border);
-  background: var(--bg-secondary);
+  background: transparent;
   display: flex;
   flex-direction: column;
 }
@@ -556,7 +576,6 @@ onUnmounted(() => {
 }
 
 .center-column {
-  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -564,8 +583,20 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-.center-column.ai-open .center-panel {
-  padding-right: 0;
+.center-workbench {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+.center-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .center-panel {
@@ -584,11 +615,12 @@ onUnmounted(() => {
   width: 4px;
   cursor: ew-resize;
   z-index: 2;
+  background: transparent;
 }
 
 .resize-handle-right:hover {
   background: var(--accent);
-  opacity: 0.4;
+  opacity: 0.35;
 }
 
 .resize-overlay {

@@ -137,7 +137,7 @@ function onKeydown(e: KeyboardEvent) {
 <template>
   <div class="file-tree" @click="dismissMenu" @keydown="onKeydown">
     <div class="file-tree-header">
-      <span class="header-title">资源管理器</span>
+      <span class="header-title">{{ folderName || '工作区' }}</span>
       <div class="header-actions" v-if="tree">
         <button
           class="action-btn"
@@ -265,7 +265,7 @@ function onKeydown(e: KeyboardEvent) {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bg-primary);
+  background: transparent;
   color: var(--text-secondary);
   font-size: 13px;
   user-select: none;

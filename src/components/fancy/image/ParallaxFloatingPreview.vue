@@ -12,10 +12,13 @@ withDefaults(
   defineProps<{
     asBackground?: boolean
     showOverlay?: boolean
+    /** 首页与编辑页使用独立背景样式 */
+    surface?: 'landing' | 'ide'
   }>(),
   {
     asBackground: false,
     showOverlay: true,
+    surface: 'landing',
   },
 )
 
@@ -89,7 +92,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section ref="containerRef" class="pf" :class="{ 'pf--bg': asBackground }">
+  <section
+    ref="containerRef"
+    class="pf"
+    :class="{
+      'pf--bg': asBackground,
+      'pf--surface-landing': asBackground && surface === 'landing',
+      'pf--surface-ide': asBackground && surface === 'ide',
+    }"
+  >
     <div v-if="showOverlay" class="pf__overlay">
       <p class="pf__brand">fancy.</p>
       <button type="button" class="pf__btn">Download</button>
@@ -125,6 +136,51 @@ onBeforeUnmount(() => {
   min-height: 0;
   border-radius: 0;
   background: transparent;
+}
+
+.pf--surface-landing {
+  background: transparent;
+}
+
+.pf--surface-ide {
+  background: transparent;
+}
+
+.pf--surface-landing .pf__item img {
+  filter: saturate(1.15) contrast(1.05) brightness(1.02);
+  box-shadow:
+    0 18px 40px -28px rgba(15, 23, 42, 0.22),
+    0 6px 16px -8px rgba(15, 23, 42, 0.12);
+  border: 1px solid rgba(226, 232, 240, 0.75);
+}
+
+.pf--surface-ide .pf__item img {
+  filter: saturate(1.08) contrast(1.04) brightness(0.96);
+  opacity: 0.92;
+  box-shadow:
+    0 22px 48px -32px rgba(0, 0, 0, 0.45),
+    0 8px 20px -10px rgba(0, 0, 0, 0.28);
+  border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+}
+
+.pf--bg .pf__item::before,
+.pf--bg .pf__item::after {
+  display: none;
+}
+
+.pf--bg .pf__item:hover::before {
+  opacity: 0;
+}
+
+.pf--surface-landing .pf__item:hover img {
+  transform: scale(1.02);
+  filter: saturate(1.12) contrast(1.04) brightness(1);
+}
+
+.pf--surface-ide .pf__item:hover img {
+  transform: scale(1.02);
+  filter: saturate(1.1) contrast(1.04) brightness(0.98);
+  opacity: 0.96;
 }
 .pf__overlay {
   position: absolute;

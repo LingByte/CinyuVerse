@@ -11,8 +11,14 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <Transition name="ai-drawer">
-    <aside v-if="open" class="ai-drawer" role="complementary" aria-label="AI 助手">
+  <aside
+    class="ai-drawer"
+    :class="{ 'ai-drawer--open': open }"
+    role="complementary"
+    aria-label="AI 助手"
+    :aria-hidden="!open"
+  >
+    <div class="ai-drawer-inner">
       <div class="ai-drawer-header">
         <span class="ai-drawer-title">AI 助手</span>
         <button type="button" class="ai-drawer-close" title="关闭 (⌘L / Ctrl+L)" @click="emit('close')">
@@ -22,23 +28,33 @@ const emit = defineEmits<{
       <div class="ai-drawer-body">
         <slot />
       </div>
-    </aside>
-  </Transition>
+    </div>
+  </aside>
 </template>
 
 <style scoped>
 .ai-drawer {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 30;
+  flex-shrink: 0;
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  border-left: 1px solid transparent;
+  transition:
+    width 0.28s cubic-bezier(0.32, 0.72, 0, 1),
+    border-color 0.2s ease;
+}
+
+.ai-drawer--open {
+  width: min(420px, 40vw);
+  border-left-color: var(--border);
+}
+
+.ai-drawer-inner {
   display: flex;
   flex-direction: column;
-  width: min(420px, 92vw);
-  background: var(--bg-secondary);
-  border-left: 1px solid var(--border);
-  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.22);
+  width: min(420px, 40vw);
+  height: 100%;
+  background: transparent;
 }
 
 .ai-drawer-header {
@@ -80,18 +96,5 @@ const emit = defineEmits<{
   flex: 1;
   min-height: 0;
   overflow: hidden;
-}
-
-.ai-drawer-enter-active,
-.ai-drawer-leave-active {
-  transition:
-    transform 0.28s cubic-bezier(0.32, 0.72, 0, 1),
-    opacity 0.22s ease;
-}
-
-.ai-drawer-enter-from,
-.ai-drawer-leave-to {
-  transform: translateX(100%);
-  opacity: 0.85;
 }
 </style>

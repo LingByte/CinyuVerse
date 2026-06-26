@@ -49,7 +49,7 @@ const emit = defineEmits<{
   flex-shrink: 0;
   overflow-x: auto;
   border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
+  background: transparent;
 }
 
 .tab-item {

@@ -342,8 +342,8 @@ function saveCustomScheme() {
             </div>
 
             <div class="theme-section">
-              <label class="theme-section-label">页面背景图</label>
-              <p class="section-desc">导入图片作为全局背景（可配合遮罩保证文字可读）</p>
+              <label class="theme-section-label">编辑页背景图</label>
+              <p class="section-desc">导入图片作为编辑页背景（不影响首页）；可配合遮罩保证文字可读</p>
               <div class="file-actions">
                 <button type="button" class="action-btn" @click="openBgImagePicker">选择图片</button>
                 <button v-if="theme.backgroundImage" type="button" class="action-btn" @click="theme.clearBackgroundImage(); importInfo = '已清除背景图'">清除背景</button>

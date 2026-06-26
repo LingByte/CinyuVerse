@@ -160,7 +160,7 @@ watch(activeTab, (tab) => {
   flex-direction: column;
   height: 100%;
   min-width: 0;
-  background: var(--bg-primary);
+  background: transparent;
 }
 
 .editor-body {

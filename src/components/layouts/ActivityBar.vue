@@ -43,8 +43,7 @@ function handleClick(item: ActivityBarItem) {
   flex-direction: column;
   width: 48px;
   flex-shrink: 0;
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border);
+  background: transparent;
 }
 
 .activity-btn {
