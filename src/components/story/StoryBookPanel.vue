@@ -3,10 +3,16 @@ import { ref, computed, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useStoryStore } from '@/features/story/stores/storyStore'
 import { storyChapterPath, storyChapterFileDir } from '@/core/types/story'
-import { RefreshCw, Plus, PenLine, Loader2, Wifi, WifiOff } from 'lucide-vue-next'
+import { RefreshCw, Plus, PenLine, Loader2, Wifi, WifiOff, Layers } from 'lucide-vue-next'
+
+const props = defineProps<{
+  workspaceRoot?: string | null
+  activeStoryChapter?: { bookId: string; chapterNum: number } | null
+}>()
 
 const emit = defineEmits<{
   openChapter: [path: string, title: string, content: string, bookId: string, chapterNum: number]
+  runLocalPipeline: [payload: { bookId: string; chapterNum: number; title: string }]
 }>()
 
 const storyStore = useStoryStore()
@@ -114,6 +120,23 @@ const storageHint = computed(() => {
   if (!currentBookId.value) return ''
   return storyChapterFileDir(currentBookId.value)
 })
+
+const canRunLocalPipeline = computed(
+  () =>
+    !!props.workspaceRoot
+    && !!props.activeStoryChapter
+    && props.activeStoryChapter.bookId === currentBookId.value,
+)
+
+function onRunLocalPipeline() {
+  if (!props.activeStoryChapter || !currentBookId.value) return
+  const ch = chapters.value.find((c) => c.number === props.activeStoryChapter!.chapterNum)
+  emit('runLocalPipeline', {
+    bookId: props.activeStoryChapter.bookId,
+    chapterNum: props.activeStoryChapter.chapterNum,
+    title: ch?.title ?? `第${props.activeStoryChapter.chapterNum}章`,
+  })
+}
 </script>
 
 <template>
@@ -192,6 +215,25 @@ const storageHint = computed(() => {
           <span class="ch-meta">{{ ch.wordCount }}字 · {{ ch.status }}</span>
         </button>
         <p v-if="!loadingChapters && chapters.length === 0" class="hint">暂无章节</p>
+      </div>
+
+      <div v-if="workspaceRoot" class="local-bridge">
+        <div class="section-title">本地 Rust 三层流水线</div>
+        <p class="bridge-hint">
+          与 Go 后端独立，使用本地工作区 API 配置执行大纲→正文→校对。
+        </p>
+        <button
+          type="button"
+          class="action-btn primary"
+          :disabled="!canRunLocalPipeline"
+          @click="onRunLocalPipeline"
+        >
+          <Layers :size="14" />
+          三层流水线处理当前章
+        </button>
+        <p v-if="!canRunLocalPipeline" class="hint">
+          请先在编辑器打开本书某一章
+        </p>
       </div>
 
       <p v-if="displayError" class="err">{{ displayError }}</p>
@@ -291,6 +333,19 @@ const storageHint = computed(() => {
 .chapter-section {
   flex: 1;
   border-top: 1px solid var(--border);
+}
+
+.local-bridge {
+  padding: 8px 10px 12px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in oklab, var(--accent) 6%, transparent);
+}
+
+.bridge-hint {
+  margin: 0 0 8px;
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 .section-title {

@@ -24,6 +24,20 @@ mod config;
 mod task_decomposition;
 mod conversation;
 mod cinyuverse_fs;
+mod project_meta;
+mod prompt_builder;
+mod content_checker;
+mod version_snapshot;
+mod export_format;
+mod file_watch;
+mod chapter_storage;
+mod ai_pipeline;
+mod style_analyzer;
+mod stats_audit;
+mod llm_adapter;
+mod prompt_template;
+mod plugin_system;
+mod llm_runtime;
 
 use extension_host::{ExtensionHostState, start_extension_host, stop_extension_host, activate_extension, deactivate_extension, extension_host_execute_command};
 use ai::{
@@ -960,13 +974,10 @@ async fn kill_command(
     Ok(())
 }
 
-// AI 配置状态
-static AI_CONFIG: TokioMutex<Option<AiConfig>> = TokioMutex::const_new(None);
-
 /// 设置 AI 配置
 #[tauri::command]
 async fn ai_set_config(config: AiConfig) -> Result<(), String> {
-    let mut global_config = AI_CONFIG.lock().await;
+    let mut global_config = llm_runtime::AI_CONFIG.lock().await;
     *global_config = Some(config);
     Ok(())
 }
@@ -974,7 +985,7 @@ async fn ai_set_config(config: AiConfig) -> Result<(), String> {
 /// 获取 AI 配置
 #[tauri::command]
 async fn ai_get_config() -> Result<Option<AiConfig>, String> {
-    let config = AI_CONFIG.lock().await;
+    let config = llm_runtime::AI_CONFIG.lock().await;
     Ok(config.clone())
 }
 
@@ -1011,7 +1022,7 @@ async fn ai_test_connection(config: AiConfig) -> Result<String, String> {
 async fn ai_chat(request: ChatRequest) -> Result<ChatResponse, String> {
     println!("🔍 AI 聊天请求: {:?}", request);
     
-    let config = AI_CONFIG.lock().await;
+    let config = llm_runtime::AI_CONFIG.lock().await;
     println!("🔍 当前 AI 配置: {:?}", config);
     
     if let Some(config) = config.as_ref() {
@@ -1044,7 +1055,7 @@ async fn ai_chat_stream(
     request: ChatRequest,
     window: tauri::Window,
 ) -> Result<(), String> {
-    let config = AI_CONFIG.lock().await;
+    let config = llm_runtime::AI_CONFIG.lock().await;
     
     if let Some(config) = config.as_ref() {
         let client = create_ai_client(config.clone());
@@ -1157,7 +1168,7 @@ async fn conversation_create(title: String) -> Result<String, String> {
     
     // 获取当前 AI 配置
     let ai_config = {
-        let config = AI_CONFIG.lock().await;
+        let config = llm_runtime::AI_CONFIG.lock().await;
         config.as_ref().cloned()
     };
 
@@ -1168,7 +1179,7 @@ async fn conversation_create(title: String) -> Result<String, String> {
             let app_config = config::ConfigLoader::load_from_env()
                 .map_err(|e| format!("AI 配置未设置，且重新加载失败: {}", e))?;
 
-            let mut global_config = AI_CONFIG.lock().await;
+            let mut global_config = llm_runtime::AI_CONFIG.lock().await;
             *global_config = Some(app_config.ai.clone());
             println!("✅ AI 配置已从环境变量重新加载并写入全局变量");
             app_config.ai
@@ -1369,6 +1380,55 @@ fn main() {
             cinyuverse_fs::cv_delete_path,
             cinyuverse_fs::cv_dirname,
             cinyuverse_fs::cv_scan_folder,
+            project_meta::cv_ensure_project_meta,
+            project_meta::cv_load_project_meta,
+            project_meta::cv_save_project_meta,
+            project_meta::cv_move_outline_file,
+            project_meta::cv_rename_outline_file,
+            project_meta::cv_generate_summary_md,
+            project_meta::cv_backup_workspace,
+            project_meta::cv_backup_workspace_incremental,
+            project_meta::cv_list_backups,
+            project_meta::cv_get_character_by_name,
+            project_meta::cv_get_glossary_item,
+            prompt_builder::cv_build_writing_prompt,
+            content_checker::cv_check_content,
+            version_snapshot::cv_snapshot_version,
+            version_snapshot::cv_list_versions,
+            version_snapshot::cv_restore_version,
+            version_snapshot::cv_write_file_with_snapshot,
+            export_format::cv_export_book,
+            export_format::cv_export_platform,
+            export_format::cv_export_volume_bundle,
+            file_watch::cv_watch_workspace,
+            file_watch::cv_unwatch_workspace,
+            chapter_storage::cv_relocate_chapter,
+            chapter_storage::cv_batch_move_files,
+            chapter_storage::cv_batch_rename_files,
+            ai_pipeline::cv_truncate_context,
+            ai_pipeline::cv_run_pipeline_stage,
+            ai_pipeline::cv_enqueue_ai_task,
+            ai_pipeline::cv_get_ai_task,
+            ai_pipeline::cv_list_ai_tasks,
+            ai_pipeline::cv_update_ai_task,
+            ai_pipeline::cv_save_stream_checkpoint,
+            ai_pipeline::cv_resume_stream,
+            ai_pipeline::cv_clear_stream_checkpoint,
+            ai_pipeline::cv_process_ai_task,
+            ai_pipeline::cv_get_batch_queue,
+            stats_audit::cv_run_plot_audit,
+            stats_audit::cv_run_plot_audit_rules,
+            stats_audit::cv_get_writing_stats,
+            style_analyzer::cv_extract_style_sample,
+            style_analyzer::cv_get_style_sample,
+            llm_adapter::cv_list_llm_providers,
+            llm_adapter::cv_save_llm_profiles,
+            llm_adapter::cv_set_active_llm_provider,
+            prompt_template::cv_list_prompt_templates,
+            prompt_template::cv_save_prompt_template,
+            prompt_template::cv_delete_prompt_template,
+            plugin_system::cv_list_plugins,
+            plugin_system::cv_set_plugin_enabled,
         ])
         .setup(move |app| {
             // 自动设置 AI 配置
@@ -1376,7 +1436,7 @@ fn main() {
                 tauri::async_runtime::spawn({
                     let config = config.clone();
                     async move {
-                        let mut global_config = AI_CONFIG.lock().await;
+                        let mut global_config = llm_runtime::AI_CONFIG.lock().await;
                         *global_config = Some(config);
                         println!("✅ AI 配置已自动设置到全局变量");
                     }

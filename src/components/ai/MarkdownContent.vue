@@ -15,9 +15,9 @@ const html = computed(() => renderMarkdown(props.content))
 
 <style scoped>
 .md-content {
-  line-height: 1.55;
+  line-height: 1.6;
   color: var(--text-main);
-  font-size: 12px;
+  font-size: 13px;
   word-break: break-word;
 }
 
@@ -70,11 +70,11 @@ const html = computed(() => renderMarkdown(props.content))
 }
 
 .md-content :deep(pre) {
-  margin: 0.5em 0;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
+  margin: 0.65em 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-input) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   overflow-x: auto;
 }
 .md-content :deep(pre code) {

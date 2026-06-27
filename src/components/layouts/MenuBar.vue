@@ -18,6 +18,10 @@ const emit = defineEmits<{
   exportFanqie: []
   exportQidian: []
   exportJinjiang: []
+  backupWorkspace: []
+  writingStats: []
+  plotAudit: []
+  openExtensionHub: []
   closeWorkspace: []
   newWorkspace: []
   newVolume: []
@@ -76,8 +80,17 @@ const fileMenuItems = computed<MenuItem[]>(() => {
     { separator: true },
     { label: '导出为 TXT', action: () => emit('exportTxt') },
     { label: '导出为 Markdown', action: () => emit('exportMd') },
-    { label: '导出 EPUB', disabled: true, action: () => emit('exportEpub') },
-    { label: '导出 Word (.docx)', disabled: true, action: () => emit('exportDocx') },
+    { label: '导出 EPUB', action: () => emit('exportEpub') },
+    { label: '导出 Word (.docx)', action: () => emit('exportDocx') },
+    { separator: true },
+    { label: '导出番茄小说格式', action: () => emit('exportFanqie') },
+    { label: '导出起点中文网格式', action: () => emit('exportQidian') },
+    { label: '导出晋江文学城格式', action: () => emit('exportJinjiang') },
+    { separator: true },
+    { label: '写作统计…', action: () => emit('writingStats') },
+    { label: '剧情审校报告…', action: () => emit('plotAudit') },
+    { label: '增量备份工作区', action: () => emit('backupWorkspace') },
+    { label: '扩展与模型…', action: () => emit('openExtensionHub') },
     { separator: true },
     { label: '关闭工作区', action: () => emit('closeWorkspace') },
   ]
@@ -130,6 +143,7 @@ const menus = computed<MenuDef[]>(() => [
       { label: '写作数据看板', action: () => emit('openDashboard') },
       { separator: true },
       { label: '灵感草稿箱', shortcut: 'Ctrl+Shift+I', action: () => emit('openInspiration') },
+      { label: '拆出 AI 面板', action: () => emit('detachPanel', 'ai') },
       { label: '拆出大纲面板', action: () => emit('detachPanel', 'outline') },
       { separator: true },
       { label: '放大字体', shortcut: 'Ctrl+=', action: () => emit('zoomIn') },

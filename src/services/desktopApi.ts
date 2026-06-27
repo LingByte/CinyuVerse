@@ -269,6 +269,286 @@ export const desktopApi = {
     requireTauri()
     return tauriInvoke('ai_get_config')
   },
+
+  async ensureProjectMeta(workspaceRoot: string): Promise<void> {
+    requireTauri()
+    await tauriInvoke('cv_ensure_project_meta', { workspaceRoot })
+  },
+
+  async loadProjectMeta(workspaceRoot: string): Promise<unknown> {
+    requireTauri()
+    return tauriInvoke('cv_load_project_meta', { workspaceRoot })
+  },
+
+  async saveProjectMeta(workspaceRoot: string, fileKey: string, jsonContent: string): Promise<void> {
+    requireTauri()
+    await tauriInvoke('cv_save_project_meta', { workspaceRoot, fileKey, jsonContent })
+  },
+
+  async buildWritingPrompt(request: Record<string, unknown>): Promise<{
+    system_prompt: string
+    user_prompt: string
+    context_summary: string
+  }> {
+    requireTauri()
+    return tauriInvoke('cv_build_writing_prompt', { request })
+  },
+
+  async checkContent(request: Record<string, unknown>): Promise<unknown> {
+    requireTauri()
+    return tauriInvoke('cv_check_content', { request })
+  },
+
+  async snapshotVersion(
+    workspaceRoot: string,
+    filePath: string,
+    content: string,
+    label?: string,
+  ): Promise<unknown> {
+    requireTauri()
+    return tauriInvoke('cv_snapshot_version', {
+      workspaceRoot,
+      filePath,
+      content,
+      label,
+    })
+  },
+
+  async listVersions(workspaceRoot: string, filePath: string): Promise<unknown[]> {
+    requireTauri()
+    return tauriInvoke('cv_list_versions', { workspaceRoot, filePath })
+  },
+
+  async restoreVersion(workspaceRoot: string, filePath: string, versionId: string): Promise<string> {
+    requireTauri()
+    return tauriInvoke('cv_restore_version', { workspaceRoot, filePath, versionId })
+  },
+
+  async writeFileWithSnapshot(workspaceRoot: string, filePath: string, content: string): Promise<void> {
+    requireTauri()
+    await tauriInvoke('cv_write_file_with_snapshot', { workspaceRoot, filePath, content })
+  },
+
+  async exportBook(request: Record<string, unknown>): Promise<string> {
+    requireTauri()
+    return tauriInvoke('cv_export_book', { request })
+  },
+
+  async moveOutlineFile(fromPath: string, toPath: string): Promise<string> {
+    requireTauri()
+    return tauriInvoke('cv_move_outline_file', { fromPath, toPath })
+  },
+
+  async renameOutlineFile(filePath: string, newName: string): Promise<string> {
+    requireTauri()
+    return tauriInvoke('cv_rename_outline_file', { filePath, newName })
+  },
+
+  async generateSummaryMd(workspaceRoot: string): Promise<string> {
+    requireTauri()
+    return tauriInvoke('cv_generate_summary_md', { workspaceRoot })
+  },
+
+  async backupWorkspace(workspaceRoot: string, destZip: string): Promise<string> {
+    requireTauri()
+    return tauriInvoke('cv_backup_workspace', { workspaceRoot, destZip })
+  },
+
+  async watchWorkspace(workspaceRoot: string): Promise<void> {
+    requireTauri()
+    await tauriInvoke('cv_watch_workspace', { workspaceRoot })
+  },
+
+  async unwatchWorkspace(): Promise<void> {
+    requireTauri()
+    await tauriInvoke('cv_unwatch_workspace')
+  },
+
+  async relocateChapter(
+    workspaceRoot: string,
+    filePath: string,
+    storage: 'draft' | 'final' | 'workspace',
+  ): Promise<{ oldPath: string; newPath: string; storage: string }> {
+    requireTauri()
+    return tauriInvoke('cv_relocate_chapter', { workspaceRoot, filePath, storage })
+  },
+
+  async batchMoveFiles(
+    filePaths: string[],
+    destDir: string,
+  ): Promise<{ path: string; ok: boolean; error?: string }[]> {
+    requireTauri()
+    return tauriInvoke('cv_batch_move_files', { filePaths, destDir })
+  },
+
+  async batchRenameFiles(
+    renames: { from: string; to: string }[],
+  ): Promise<{ path: string; ok: boolean; error?: string }[]> {
+    requireTauri()
+    return tauriInvoke('cv_batch_rename_files', { renames })
+  },
+
+  async getCharacterByName(workspaceRoot: string, name: string) {
+    requireTauri()
+    return tauriInvoke<{ id: string; name: string } | null>('cv_get_character_by_name', {
+      workspaceRoot,
+      name,
+    })
+  },
+
+  async getGlossaryItem(workspaceRoot: string, term: string) {
+    requireTauri()
+    return tauriInvoke<{ id: string; term: string } | null>('cv_get_glossary_item', {
+      workspaceRoot,
+      term,
+    })
+  },
+
+  async truncateContext(request: Record<string, unknown>) {
+    requireTauri()
+    return tauriInvoke('cv_truncate_context', { req: request })
+  },
+
+  async runPipelineStage(request: Record<string, unknown>) {
+    requireTauri()
+    return tauriInvoke('cv_run_pipeline_stage', { req: request })
+  },
+
+  async enqueueAiTask(workspaceRoot: string, kind: string) {
+    requireTauri()
+    return tauriInvoke('cv_enqueue_ai_task', { workspaceRoot, kind })
+  },
+
+  async getAiTask(workspaceRoot: string, taskId: string) {
+    requireTauri()
+    return tauriInvoke('cv_get_ai_task', { workspaceRoot, taskId })
+  },
+
+  async listAiTasks(workspaceRoot: string) {
+    requireTauri()
+    return tauriInvoke('cv_list_ai_tasks', { workspaceRoot })
+  },
+
+  async processAiTask(workspaceRoot: string, taskId: string) {
+    requireTauri()
+    return tauriInvoke('cv_process_ai_task', { workspaceRoot, taskId })
+  },
+
+  async getBatchQueue(workspaceRoot: string, taskId: string) {
+    requireTauri()
+    return tauriInvoke('cv_get_batch_queue', { workspaceRoot, taskId })
+  },
+
+  async updateAiTask(
+    workspaceRoot: string,
+    taskId: string,
+    status: string,
+    progress: number,
+    total: number,
+    message: string,
+  ) {
+    requireTauri()
+    return tauriInvoke('cv_update_ai_task', { workspaceRoot, taskId, status, progress, total, message })
+  },
+
+  async clearStreamCheckpoint(workspaceRoot: string, taskId: string) {
+    requireTauri()
+    return tauriInvoke('cv_clear_stream_checkpoint', { workspaceRoot, taskId })
+  },
+
+  async setActiveLlmProvider(workspaceRoot: string, providerId: string) {
+    requireTauri()
+    return tauriInvoke('cv_set_active_llm_provider', { workspaceRoot, providerId })
+  },
+
+  async savePromptTemplate(workspaceRoot: string, template: Record<string, unknown>) {
+    requireTauri()
+    return tauriInvoke('cv_save_prompt_template', { workspaceRoot, template })
+  },
+
+  async deletePromptTemplate(workspaceRoot: string, templateId: string) {
+    requireTauri()
+    return tauriInvoke('cv_delete_prompt_template', { workspaceRoot, templateId })
+  },
+
+  async setPluginEnabled(workspaceRoot: string, pluginId: string, enabled: boolean) {
+    requireTauri()
+    return tauriInvoke('cv_set_plugin_enabled', { workspaceRoot, pluginId, enabled })
+  },
+
+  async resumeStream(workspaceRoot: string, taskId: string) {
+    requireTauri()
+    return tauriInvoke('cv_resume_stream', { workspaceRoot, taskId })
+  },
+
+  async saveStreamCheckpoint(workspaceRoot: string, taskId: string, partialText: string) {
+    requireTauri()
+    return tauriInvoke('cv_save_stream_checkpoint', { workspaceRoot, taskId, partialText })
+  },
+
+  async runPlotAudit(workspaceRoot: string, deep = false) {
+    requireTauri()
+    return tauriInvoke('cv_run_plot_audit', { workspaceRoot, deep })
+  },
+
+  async getWritingStats(workspaceRoot: string) {
+    requireTauri()
+    return tauriInvoke('cv_get_writing_stats', { workspaceRoot })
+  },
+
+  async exportPlatform(
+    workspaceRoot: string,
+    platform: string,
+    destPath: string,
+    chapters: { title: string; content: string }[],
+  ) {
+    requireTauri()
+    return tauriInvoke('cv_export_platform', { workspaceRoot, platform, destPath, chapters })
+  },
+
+  async exportVolumeBundle(workspaceRoot: string, volumeId: string, destZip: string) {
+    requireTauri()
+    return tauriInvoke('cv_export_volume_bundle', { workspaceRoot, volumeId, destZip })
+  },
+
+  async listBackups(workspaceRoot: string) {
+    requireTauri()
+    return tauriInvoke('cv_list_backups', { workspaceRoot })
+  },
+
+  async backupWorkspaceIncremental(workspaceRoot: string, destZip?: string) {
+    requireTauri()
+    return tauriInvoke<{
+      path: string
+      changed_files?: number
+      changedFiles?: number
+      total_tracked?: number
+      totalTracked?: number
+      skipped: boolean
+    }>('cv_backup_workspace_incremental', { workspaceRoot, destZip })
+  },
+
+  async listLlmProviders(workspaceRoot: string) {
+    requireTauri()
+    return tauriInvoke('cv_list_llm_providers', { workspaceRoot })
+  },
+
+  async listPromptTemplates(workspaceRoot: string) {
+    requireTauri()
+    return tauriInvoke('cv_list_prompt_templates', { workspaceRoot })
+  },
+
+  async listPlugins(workspaceRoot: string) {
+    requireTauri()
+    return tauriInvoke('cv_list_plugins', { workspaceRoot })
+  },
+
+  async extractStyleSample(workspaceRoot: string, maxSamples = 5, maxChars = 2000) {
+    requireTauri()
+    return tauriInvoke('cv_extract_style_sample', {
+      req: { workspaceRoot, maxSamples, maxChars },
+    })
+  },
 }
 
 export function requireDesktop() {

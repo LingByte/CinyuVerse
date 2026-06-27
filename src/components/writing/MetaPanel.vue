@@ -1,28 +1,42 @@
-﻿<script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+<script setup lang="ts">
+import { ref, watch, onMounted, nextTick } from 'vue'
 import type { CharacterCard, GlossaryEntry } from '@/core/types/workspace'
-import { loadWorkspaceJson, saveWorkspaceJson } from '@/features/workspace/utils/localDataStore'
+import { loadWorkspaceData, saveWorkspaceData } from '@/features/workspace/utils/localDataStore'
+import { useShellSyncStore } from '@/features/shell/stores/shellSyncStore'
+import { useProjectMetaStore } from '@/features/workspace/stores/projectMetaStore'
 import { Trash2, Plus } from 'lucide-vue-next'
 
-const props = defineProps<{ workspaceId: string | null }>()
+const props = defineProps<{ workspaceId: string | null; workspaceRoot?: string | null }>()
 
+const shellSync = useShellSyncStore()
+const metaStore = useProjectMetaStore()
 const subTab = ref<'characters' | 'glossary'>('characters')
 const characters = ref<CharacterCard[]>([])
 const glossary = ref<GlossaryEntry[]>([])
 const saving = ref(false)
 const search = ref('')
+const highlightId = ref<string | null>(null)
 
 async function load() {
   if (!props.workspaceId) return
-  characters.value = loadWorkspaceJson(props.workspaceId, 'characters', [])
-  glossary.value = loadWorkspaceJson(props.workspaceId, 'glossary', [])
+  characters.value = await loadWorkspaceData(props.workspaceId, props.workspaceRoot ?? null, 'characters', [])
+  glossary.value = await loadWorkspaceData(props.workspaceId, props.workspaceRoot ?? null, 'glossary', [])
+  for (const c of characters.value) {
+    if (!c.id) c.id = `c_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  }
+  for (const g of glossary.value) {
+    if (!g.id) g.id = `g_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  }
+  metaStore.characters = [...characters.value]
+  metaStore.glossary = [...glossary.value]
 }
 
 async function persistCharacters() {
   if (!props.workspaceId) return
   saving.value = true
   try {
-    saveWorkspaceJson(props.workspaceId, 'characters', characters.value)
+    await saveWorkspaceData(props.workspaceId, props.workspaceRoot ?? null, 'characters', characters.value)
+    metaStore.characters = [...characters.value]
   } finally {
     saving.value = false
   }
@@ -32,7 +46,8 @@ async function persistGlossary() {
   if (!props.workspaceId) return
   saving.value = true
   try {
-    saveWorkspaceJson(props.workspaceId, 'glossary', glossary.value)
+    await saveWorkspaceData(props.workspaceId, props.workspaceRoot ?? null, 'glossary', glossary.value)
+    metaStore.glossary = [...glossary.value]
   } finally {
     saving.value = false
   }
@@ -40,7 +55,7 @@ async function persistGlossary() {
 
 function addCharacter() {
   characters.value.push({
-    id: '',
+    id: `c_${Date.now()}`,
     name: '新人物',
     age: '',
     identity: '',
@@ -52,7 +67,12 @@ function addCharacter() {
 }
 
 function addGlossary() {
-  glossary.value.push({ id: '', term: '新词条', category: '世界观', definition: '' })
+  glossary.value.push({
+    id: `g_${Date.now()}`,
+    term: '新词条',
+    category: '世界观',
+    definition: '',
+  })
 }
 
 function removeCharacter(i: number) {
@@ -73,6 +93,43 @@ const filteredGlossary = () => {
   )
 }
 
+function scrollToCard(id: string) {
+  nextTick(() => {
+    const el = document.getElementById(`meta-card-${id}`)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    highlightId.value = id
+    window.setTimeout(() => {
+      if (highlightId.value === id) highlightId.value = null
+    }, 2400)
+  })
+}
+
+function focusCharacter(id: string) {
+  subTab.value = 'characters'
+  scrollToCard(id)
+}
+
+function focusGlossary(id: string) {
+  subTab.value = 'glossary'
+  scrollToCard(id)
+}
+
+function applyFocus(focus: { tab: 'characters' | 'glossary'; id: string }) {
+  if (focus.tab === 'characters') focusCharacter(focus.id)
+  else focusGlossary(focus.id)
+}
+
+defineExpose({ focusCharacter, focusGlossary, applyFocus })
+
+watch(
+  () => shellSync.metaFocus,
+  (focus) => {
+    if (!focus) return
+    applyFocus(focus)
+    shellSync.clearMetaFocus()
+  },
+)
+
 watch(() => props.workspaceId, load, { immediate: true })
 onMounted(load)
 </script>
@@ -87,7 +144,13 @@ onMounted(load)
       </div>
 
       <div v-if="subTab === 'characters'" class="panel-scroll">
-        <div v-for="(c, i) in characters" :key="c.id || i" class="card">
+        <div
+          v-for="(c, i) in characters"
+          :id="`meta-card-${c.id || i}`"
+          :key="c.id || i"
+          class="card"
+          :class="{ highlighted: highlightId === (c.id || String(i)) }"
+        >
           <div class="card-head">
             <input v-model="c.name" class="field title-field" placeholder="姓名" @blur="persistCharacters" />
             <button class="icon-btn danger" title="删除" @click="removeCharacter(i)"><Trash2 :size="14" /></button>
@@ -104,7 +167,13 @@ onMounted(load)
 
       <div v-else class="panel-scroll">
         <input v-model="search" class="search" placeholder="搜索词条..." />
-        <div v-for="(g, i) in filteredGlossary()" :key="g.id || i" class="card">
+        <div
+          v-for="(g, i) in filteredGlossary()"
+          :id="`meta-card-${g.id || i}`"
+          :key="g.id || i"
+          class="card"
+          :class="{ highlighted: highlightId === (g.id || String(i)) }"
+        >
           <div class="card-head">
             <input v-model="g.term" class="field title-field" placeholder="词条名" @blur="persistGlossary" />
             <button class="icon-btn danger" @click="removeGlossaryEntry(g)"><Trash2 :size="14" /></button>
@@ -162,77 +231,98 @@ onMounted(load)
   padding: 8px;
 }
 
-.search {
-  width: 100%;
-  margin-bottom: 8px;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg-input);
-  color: var(--text-main);
-  font-size: 12px;
-}
-
 .card {
-  background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 8px;
   margin-bottom: 8px;
+  background: var(--bg-card);
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.card.highlighted {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .card-head {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   align-items: center;
+  margin-bottom: 6px;
 }
 
 .field {
   width: 100%;
-  margin-top: 6px;
+  box-sizing: border-box;
   padding: 5px 8px;
+  margin-bottom: 4px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg-input);
   color: var(--text-main);
   font-size: 12px;
-  box-sizing: border-box;
+  font-family: inherit;
 }
-.title-field { font-weight: 600; margin-top: 0; }
-.area { min-height: 48px; resize: vertical; font-family: inherit; }
+
+.title-field {
+  font-weight: 600;
+  flex: 1;
+}
+
+.area {
+  min-height: 48px;
+  resize: vertical;
+}
 
 .icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   border: none;
-  background: none;
+  background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 0 4px;
+  padding: 4px;
+  border-radius: 4px;
 }
-.icon-btn.danger:hover { color: var(--danger); }
+.icon-btn.danger:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
 
 .add-btn {
-  width: 100%;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  width: 100%;
   padding: 8px;
   border: 1px dashed var(--border);
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text-sub);
   cursor: pointer;
   font-size: 12px;
 }
-.add-btn:hover { border-color: var(--accent); color: var(--accent); }
+.add-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-main);
+  font-size: 12px;
+}
 
 .save-hint {
   padding: 4px 8px;
   font-size: 10px;
   color: var(--text-muted);
-  text-align: center;
+  border-top: 1px solid var(--border);
 }
 </style>

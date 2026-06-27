@@ -70,6 +70,10 @@ export interface OutlineNode {
   content: string
   chapter_id?: string
   vol_id?: string
+  /** 绑定的本地章节 md 绝对路径 */
+  file_path?: string
+  /** draft | published | revision */
+  status?: 'draft' | 'published' | 'revision'
   children?: OutlineNode[]
 }
 
@@ -102,4 +106,83 @@ export interface ChatSessionItem {
   workspaceId?: string
   createdAt: string
   updatedAt: string
+}
+
+/** `.cinyuverse/project.json` */
+export interface ProjectInfo {
+  bookName: string
+  genre: string
+  tags: string[]
+  author: string
+  status: 'draft' | 'serializing' | 'completed' | string
+  worldView: string
+  style: string
+  styleSample: string
+  targetWords: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface WritingRules {
+  rules: string[]
+  tone: string
+  pov: string
+}
+
+export interface ProjectMetaBundle {
+  project: ProjectInfo
+  characters: CharacterCard[]
+  glossary: GlossaryEntry[]
+  outline: ProjectOutline
+  bannedWords: string[]
+  writingRules: WritingRules
+}
+
+export interface VersionEntry {
+  id: string
+  filePath: string
+  createdAt: string
+  label: string
+  size: number
+}
+
+export interface BannedWordHit {
+  word: string
+  index: number
+  line: number
+}
+
+export interface OocWarning {
+  character: string
+  message: string
+  snippet: string
+}
+
+export interface ContentCheckResult {
+  bannedHits: BannedWordHit[]
+  oocWarnings: OocWarning[]
+  wordCount: number
+}
+
+export interface PromptBuildRequest {
+  workspaceRoot: string
+  userInstruction: string
+  selection?: string
+  contextBefore?: string
+  contextAfter?: string
+  outlineSnippet?: string
+  characterNames?: string[]
+  chapterPath?: string
+  action?: string
+}
+
+export interface PromptBuildResult {
+  systemPrompt: string
+  userPrompt: string
+  contextSummary: string
+}
+
+export interface ExportChapter {
+  title: string
+  content: string
 }

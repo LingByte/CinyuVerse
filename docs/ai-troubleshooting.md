@@ -1,206 +1,109 @@
-# AI 故障排除指南
+# AI 故障排除
 
-## ❌ 常见问题
+## 启动时未加载配置
 
-### 问题 1：AI 显示"未配置"状态
+**现象：** 终端显示「未找到 .env 文件」或 AI 请求始终失败。
 
-**症状**：AI 面板标题栏显示橙色警告图标和"未配置"文字
+**处理：**
 
-**原因**：AI 服务尚未配置或配置文件不存在
-
-**解决方案**：
 ```bash
-# 方法 1：使用配置助手（推荐）
-npm run setup-ai
-
-# 方法 2：手动创建配置文件
 cp src-tauri/.env.example src-tauri/.env
-# 编辑 src-tauri/.env 文件，填入 AI 配置
+# 编辑并填入 AI_PROVIDER / AI_BASE_URL / AI_API_KEY / AI_MODEL
+npm run dev:tauri   # 必须重启
 ```
 
-### 问题 2：聊天时显示"连接失败"
+确认终端出现：
 
-**症状**：发送消息后返回连接错误提示
+```
+✅ 成功加载 AI 配置
+✅ AI 配置已自动设置到全局变量
+```
 
-**可能原因及解决方案**：
+## 发送消息后无响应或报错
 
-#### 2.1 API 密钥问题
-- **检查**：API 密钥是否正确复制
-- **解决**：重新获取 API 密钥并更新配置
+### 1. Ollama 未运行
 
-#### 2.2 网络连接问题
-- **检查**：网络是否正常，能否访问 AI 服务
-- **解决**：检查防火墙设置，尝试切换网络
+**现象：** 连接 `localhost:11434` 失败。
 
-#### 2.3 AI 服务不可用
-- **检查**：AI 服务提供商是否正常运行
-- **解决**：等待服务恢复或更换提供商
-
-#### 2.4 配置格式错误
-- **检查**：`.env` 文件格式是否正确
-- **解决**：使用配置助手重新生成配置
-
-### 问题 3：Ollama 连接失败
-
-**症状**：使用 Ollama 时无法连接
-
-**解决方案**：
 ```bash
-# 1. 确保 Ollama 已安装
-ollama --version
+# 确认服务可达
+curl http://localhost:11434/api/tags
 
-# 2. 启动 Ollama 服务
-ollama serve
-
-# 3. 下载模型
-ollama pull llama2
-
-# 4. 测试连接
-curl http://localhost:11434/api/generate -d '{
-  "model": "llama2",
-  "prompt": "Hello"
-}'
+# 拉取配置中指定的模型
+ollama pull qwen2.5
 ```
 
-### 问题 4：任务拆解功能异常
+### 2. 模型名称错误
 
-**症状**：任务拆解返回错误或无响应
+**现象：** 404 或 model not found。
 
-**解决方案**：
-1. 检查 AI 配置是否正确
-2. 确保网络连接正常
-3. 尝试简化需求描述
-4. 检查后端日志是否有错误
+检查 `.env` 中 `AI_MODEL` 与 `ollama list` 中的名称一致。
 
-## 🔧 诊断步骤
+### 3. API Key 无效（云端 API）
 
-### 步骤 1：检查配置文件
+**现象：** 401 / 403。
+
+- 重新复制 API Key，避免多余空格
+- 确认 `AI_BASE_URL` 与服务商文档一致
+- 检查账户余额与配额
+
+### 4. 网络 / 防火墙
+
+**现象：** 超时、连接被拒绝。
+
+- 检查代理与防火墙
+- 国内访问 OpenAI 官方 API 可能需要代理
+- 可改用国内 OpenAI 兼容接口或本地 Ollama
+
+### 5. .env 格式错误
+
+- 每行 `KEY=VALUE`，不要加引号除非值中含空格
+- 修改后必须重启 `npm run dev:tauri`
+- 不要用 UTF-8 BOM 保存（Windows 记事本偶发问题）
+
+## 流式输出中断
+
+**现象：** 只显示部分内容后停止。
+
+1. 查看 Tauri 终端 Rust 侧错误日志
+2. 检查模型上下文长度是否超限
+3. 尝试缩短输入或换更小模型
+
+## Web 模式下 AI 不可用
+
+**说明：** `desktopApi.aiChatStream` 在 Web 预览模式会抛出「仅桌面端可用」。请使用 `npm run dev:tauri`。
+
+## 调试步骤清单
+
+1. [ ] `.env` 存在且四项 AI 变量已填
+2. [ ] 重启 `npm run dev:tauri`
+3. [ ] 终端有「成功加载 AI 配置」
+4. [ ] Ollama / 云端 API 可独立访问
+5. [ ] 模型名正确
+6. [ ] 在 IDE 中已打开工作区文件夹
+7. [ ] 查看 Rust 终端完整错误栈
+
+## 测试连接
+
+在 `src-tauri/` 目录（若脚本存在）：
+
 ```bash
-# 检查配置文件是否存在
-ls -la src-tauri/.env
-
-# 查看配置内容
-cat src-tauri/.env
+node test-ai-connection.cjs
+node debug-ai-chat.cjs
 ```
 
-### 步骤 2：测试 AI 连接
-在 AI 面板中发送简单的测试消息：
-```
-输入：你好
-预期：AI 回复问候语
-```
+## 仍无法解决？
 
-### 步骤 3：检查应用日志
-1. 打开开发者工具（F12）
-2. 查看 Console 标签页
-3. 寻找相关错误信息
+1. 记录 Tauri 终端完整错误信息
+2. 记录 `.env` 中 `AI_PROVIDER`、`AI_BASE_URL`、`AI_MODEL`（**不要**泄露 Key）
+3. 对照 [ai-configuration-guide.md](./ai-configuration-guide.md) 逐项核对
 
-### 步骤 4：验证 API 密钥
-```bash
-# 测试 OpenAI API
-curl -H "Authorization: Bearer YOUR_API_KEY" \
-     https://api.openai.com/v1/models
+## 相关代码位置
 
-# 测试阿里云 API
-curl -H "Authorization: Bearer YOUR_API_KEY" \
-     https://dashscope.aliyuncs.com/compatible-mode/v1/models
-```
-
-## 🛠️ 配置验证
-
-### 验证脚本
-创建一个简单的测试脚本来验证配置：
-
-```javascript
-// test-ai-config.js
-const { invoke } = require('@tauri-apps/api/tauri');
-
-async function testAIConfig() {
-  try {
-    const config = await invoke('ai_get_config');
-    console.log('✅ AI 配置已加载:', config);
-    
-    const testResponse = await invoke('ai_chat', {
-      request: {
-        model: 'gpt-3.5-turbo',
-        messages: [{ role: 'user', content: '你好' }],
-        temperature: 0.1,
-        max_tokens: 10,
-        stream: false
-      }
-    });
-    
-    console.log('✅ AI 连接测试成功:', testResponse);
-  } catch (error) {
-    console.error('❌ 测试失败:', error);
-  }
-}
-
-testAIConfig();
-```
-
-## 📋 配置检查清单
-
-在寻求帮助前，请确认以下项目：
-
-### 基础配置
-- [ ] `.env` 文件存在于 `src-tauri/` 目录
-- [ ] 配置文件格式正确（无多余空格或特殊字符）
-- [ ] API 密钥已正确填入
-- [ ] 应用已重启
-
-### 网络环境
-- [ ] 网络连接正常
-- [ ] 防火墙未阻止应用
-- [ ] 代理设置正确（如需要）
-
-### 服务状态
-- [ ] AI 服务提供商正常运行
-- [ ] API 密钥有效且未过期
-- [ ] 账户余额充足（付费服务）
-
-### 应用状态
-- [ ] 应用版本最新
-- [ ] 无其他错误提示
-- [ ] 开发者工具中无相关错误
-
-## 🆘 获取帮助
-
-如果以上步骤都无法解决问题：
-
-### 1. 收集信息
-- 操作系统和版本
-- GoPilot 版本
-- 使用的 AI 服务提供商
-- 完整的错误信息
-- 配置文件内容（隐去 API 密钥）
-
-### 2. 查看日志
-```bash
-# 查看应用日志
-tail -f ~/.gopilot/logs/app.log
-
-# 查看 Tauri 日志
-npm run tauri:dev -- --log-level debug
-```
-
-### 3. 社区支持
-- GitHub Issues: 报告 bug 和功能请求
-- 文档: 查看最新配置指南
-- 示例配置: 参考其他用户的配置
-
-## 🎯 预防措施
-
-### 定期维护
-- 定期检查 API 密钥有效期
-- 监控 API 使用量和费用
-- 备份重要配置文件
-
-### 最佳实践
-- 使用环境变量管理敏感信息
-- 定期更新应用版本
-- 关注 AI 服务提供商的变更通知
-
----
-
-**记住**：大多数 AI 连接问题都是配置不当导致的。仔细检查配置文件通常能解决 90% 的问题！ 🚀
+| 层级 | 文件 |
+|------|------|
+| 前端调用 | `src/services/desktopApi.ts` → `aiChatStream` |
+| 前端逻辑 | `src/features/chat/composables/useLocalChat.ts` |
+| Rust AI | `src-tauri/src/ai.rs` |
+| 配置加载 | `src-tauri/src/config.rs` |
+| 命令注册 | `src-tauri/src/main.rs` → `ai_chat_stream` |
