@@ -23,7 +23,12 @@ import (
 	"github.com/LingByte/CinyuVerse/pkg/story/models"
 	"github.com/LingByte/CinyuVerse/pkg/story/pipeline"
 	"github.com/LingByte/CinyuVerse/pkg/story/references"
+	"github.com/LingByte/CinyuVerse/pkg/utils"
 )
+
+func init() {
+	_ = utils.LoadEnv("")
+}
 
 func main() {
 	if len(os.Args) < 2 {

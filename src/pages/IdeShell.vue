@@ -11,6 +11,7 @@ import OutlinePanel from '@/components/writing/OutlinePanel.vue'
 import EditorWorkspace from '@/components/editor/EditorWorkspace.vue'
 import type { EditorWorkspaceHandle } from '@/components/editor/EditorWorkspace.vue'
 import AiChatPanel from '@/components/ai/AiChatPanel.vue'
+import UnifiedAiPanel from '@/components/ai/UnifiedAiPanel.vue'
 import AiAssistantDrawer from '@/components/ai/AiAssistantDrawer.vue'
 import SearchPanel from '@/components/search/SearchPanel.vue'
 import BottomPanel, { type PanelTab } from '@/components/terminal/BottomPanel.vue'
@@ -30,8 +31,18 @@ import { buildWorkspaceExport, downloadText } from '@/features/workspace/utils/l
 import BackgroundLayer from '@/components/theme/BackgroundLayer.vue'
 import { chapterFilePath } from '@/features/workspace/utils/bookProjectPaths'
 import { isModKey } from '@/core/platform'
-import { desktopApi } from '@/services/desktopApi'
+import ProjectSettings from '@/components/writing/ProjectSettings.vue'
+import ExportDialog from '@/components/writing/ExportDialog.vue'
+import VersionPanel from '@/components/writing/VersionPanel.vue'
+import AiTaskPanel from '@/components/writing/AiTaskPanel.vue'
+import BackupPanel from '@/components/writing/BackupPanel.vue'
+import PlotAuditDialog from '@/components/writing/PlotAuditDialog.vue'
+import ExtensionHub from '@/components/writing/ExtensionHub.vue'
+import { useEditorAi, type EditorAiAction } from '@/features/workspace/composables/useEditorAi'
+import type { OutlineNode } from '@/core/types/workspace'
+import { desktopApi, getFileName } from '@/services/desktopApi'
 import { isDesktop } from '@/services/runtime'
+import { useShellSyncStore } from '@/features/shell/stores/shellSyncStore'
 
 const props = defineProps<{
   detachPanel?: 'ai' | 'outline' | null
@@ -58,8 +69,10 @@ const {
 const isLibrary = computed(() => !!libraryRootPath.value)
 
 const workspaceRef = ref<EditorWorkspaceHandle | null>(null)
+const shellSync = useShellSyncStore()
 const activePanelId = ref('explorer')
 const aiPanelOpen = ref(false)
+const aiPipelineTrigger = ref<PipelineTrigger | null>(null)
 const saveStatus = ref('就绪')
 const menuError = ref('')
 const menuLoading = ref(false)
@@ -67,7 +80,11 @@ const showCreateBookDialog = ref(false)
 const createBookError = ref('')
 const createBookStage = ref<'idle' | 'pick-folder' | 'creating' | 'generating'>('idle')
 const showPreferences = ref(false)
+const editorAi = useEditorAi()
 const showDashboard = ref(false)
+const showExtensionHub = ref(false)
+const showPlotAudit = ref(false)
+const plotAuditData = ref({ summary: '', markdown: '', issues: [] as { severity: string; category: string; message: string }[] })
 const wordStats = ref<WordStats | null>(null)
 const currentChId = ref('')
 const leftPanelWidth = ref(280)
@@ -115,6 +132,9 @@ const activityItems: ActivityBarItem[] = [
   { id: 'search', label: '搜索', icon: Search },
   { id: 'meta', label: '设定', icon: BookOpen },
   { id: 'outline', label: '大纲', icon: List },
+  { id: 'versions', label: '版本', icon: History },
+  { id: 'tasks', label: '任务', icon: ListTodo },
+  { id: 'backup', label: '备份', icon: Archive },
 ]
 
 function toggleAiPanel() {
@@ -122,6 +142,12 @@ function toggleAiPanel() {
 }
 
 const currentFilePath = computed(() => workspace.currentFilePath.value)
+
+const activeStoryChapter = computed(() => {
+  const path = currentFilePath.value
+  if (!path || !isStoryChapterPath(path)) return null
+  return parseStoryChapterPath(path)
+})
 
 async function openFile(path: string) {
   currentChId.value = path
@@ -343,9 +369,228 @@ async function onExportMd() {
   downloadText(text, `${currentWorkspace.value.book_name}.md`)
 }
 
-function onExportUnavailable() {
-  saveStatus.value = 'EPUB/DOCX/平台导出需后续实现'
+async function onExportEpub() {
+  showExportDialog.value = true
 }
+
+async function onExportDocx() {
+  showExportDialog.value = true
+}
+
+async function onExportFanqie() {
+  await exportPlatform('fanqie', '番茄')
+}
+
+async function onExportQidian() {
+  await exportPlatform('qidian', '起点')
+}
+
+async function onExportJinjiang() {
+  await exportPlatform('jinjiang', '晋江')
+}
+
+async function exportPlatform(platform: string, label: string) {
+  if (!currentWorkspace.value || !localRootPath.value || !isDesktop()) return
+  saveStatus.value = `导出${label}格式…`
+  try {
+    const chapters: { title: string; content: string }[] = []
+    for (const vol of currentWorkspace.value.volumes) {
+      for (const ch of vol.chapters) {
+        const content = await workspace.loadChapterContent(vol.id, ch.id)
+        chapters.push({ title: ch.title, content })
+      }
+    }
+    const dest = `${localRootPath.value}/${currentWorkspace.value.book_name}_${platform}.txt`
+    await desktopApi.exportPlatform(localRootPath.value, platform, dest, chapters)
+    saveStatus.value = `已导出 ${label} 格式`
+  } catch (e: unknown) {
+    saveStatus.value = e instanceof Error ? e.message : '导出失败'
+  }
+}
+
+async function onBackupWorkspace() {
+  if (!localRootPath.value || !isDesktop()) return
+  saveStatus.value = '增量备份中…'
+  try {
+    const result = await desktopApi.backupWorkspaceIncremental(localRootPath.value)
+    const changed = result.changedFiles ?? result.changed_files ?? 0
+    if (result.skipped) {
+      saveStatus.value = `无变更文件（已跟踪 ${result.totalTracked ?? result.total_tracked ?? 0} 个）`
+    } else {
+      saveStatus.value = `增量备份完成：${changed} 个变更文件`
+    }
+  } catch (e: unknown) {
+    saveStatus.value = e instanceof Error ? e.message : '备份失败'
+  }
+}
+
+async function onWritingStatsMenu() {
+  openDashboard()
+}
+
+async function onPlotAudit(deep = true) {
+  if (!localRootPath.value || !isDesktop()) return
+  saveStatus.value = deep ? '生成深度审校报告…' : '生成审校报告…'
+  try {
+    const report = await desktopApi.runPlotAudit(localRootPath.value, deep) as {
+      summary: string
+      markdown: string
+      issues: { severity: string; category: string; message: string }[]
+    }
+    plotAuditData.value = {
+      summary: report.summary,
+      markdown: report.markdown,
+      issues: report.issues ?? [],
+    }
+    showPlotAudit.value = true
+    saveStatus.value = report.summary || '审校完成'
+  } catch (e: unknown) {
+    saveStatus.value = e instanceof Error ? e.message : '审校失败'
+  }
+}
+
+async function loadRustWordStats() {
+  if (!localRootPath.value || !currentWorkspace.value || !isDesktop()) {
+    return computeWordStats(currentWorkspace.value!, writingStats.targetWords)
+  }
+  try {
+    const raw = await desktopApi.getWritingStats(localRootPath.value) as {
+      total_chars: number
+      total_chapters: number
+      volumes: { volume_id: string; title: string; chars: number; chapters: { path: string; title: string; chars: number }[] }[]
+      daily: Record<string, number>
+      target_words: number
+      progress_percent: number
+    }
+    writingStats.load(currentWorkspace.value.id)
+    for (const [date, words] of Object.entries(raw.daily ?? {})) {
+      const idx = writingStats.dailyStats.findIndex((d) => d.date === date)
+      if (idx >= 0) writingStats.dailyStats[idx].words = words
+      else writingStats.dailyStats.push({ date, words })
+    }
+    if (raw.target_words) writingStats.setTarget(raw.target_words)
+    return {
+      total_words: raw.total_chars,
+      body_words: raw.total_chars,
+      volume_stats: (raw.volumes ?? []).map((v) => ({
+        volume_id: v.volume_id,
+        title: v.title,
+        total_words: v.chars,
+        chapters: v.chapters.map((c) => ({
+          chapter_id: c.path,
+          title: c.title,
+          words: c.chars,
+          body_words: c.chars,
+        })),
+      })),
+      target_words: raw.target_words || writingStats.targetWords,
+      target_progress: raw.progress_percent,
+    } satisfies WordStats
+  } catch {
+    return computeWordStats(currentWorkspace.value, writingStats.targetWords)
+  }
+}
+
+async function onEditorAiRewrite(payload: {
+  action: string
+  selection: string
+  from: number
+  to: number
+  fullText: string
+}) {
+  if (!localRootPath.value || !currentFilePath.value) return
+  saveStatus.value = 'AI 改写中…'
+  const result = await editorAi.runSelectionAction({
+    workspaceRoot: localRootPath.value,
+    chapterPath: currentFilePath.value,
+    fullText: payload.fullText,
+    selection: payload.selection,
+    selectionFrom: payload.from,
+    selectionTo: payload.to,
+    action: payload.action as EditorAiAction,
+  })
+  if (result) {
+    workspaceRef.value?.applyTextReplacement(payload.from, payload.to, result)
+    saveStatus.value = 'AI 改写完成'
+  } else {
+    saveStatus.value = editorAi.error.value || 'AI 改写失败'
+  }
+}
+
+async function onGenerateFromOutline(node: OutlineNode) {
+  if (!localRootPath.value) return
+  saveStatus.value = '基于大纲生成…'
+  try {
+    const built = await desktopApi.buildWritingPrompt({
+      workspace_root: localRootPath.value,
+      user_instruction: '根据以下章节细纲撰写完整章节正文，直接输出正文，不要解释。',
+      outline_snippet: node.content,
+      chapter_path: node.file_path ?? undefined,
+    })
+    const text = await desktopApi.aiChatStream({
+      model: 'default',
+      messages: [
+        { role: 'system', content: built.system_prompt },
+        { role: 'user', content: built.user_prompt },
+      ],
+    }, () => {})
+    if (node.file_path) {
+      await workspace.saveFileContent(node.file_path, text)
+      await openFile(node.file_path)
+    } else {
+      aiPanelOpen.value = true
+      saveStatus.value = '已生成，请绑定章节路径或从 AI 面板查看'
+    }
+    saveStatus.value = '章节生成完成'
+  } catch (e: unknown) {
+    saveStatus.value = e instanceof Error ? e.message : '生成失败'
+  }
+}
+
+async function onRewriteFromOutline(node: OutlineNode) {
+  if (!localRootPath.value || !node.file_path) {
+    saveStatus.value = '请先绑定章节文件路径'
+    return
+  }
+  const content = await workspace.loadChapterContent(node.vol_id ?? '', node.file_path)
+  saveStatus.value = '基于新大纲改写…'
+  try {
+    const built = await desktopApi.buildWritingPrompt({
+      workspace_root: localRootPath.value,
+      user_instruction: '根据更新后的大纲细纲改写本章正文，保持前后连贯。',
+      outline_snippet: node.content,
+      chapter_path: node.file_path,
+      selection: content.slice(0, 4000),
+    })
+    const text = await desktopApi.aiChatStream({
+      model: 'default',
+      messages: [
+        { role: 'system', content: built.system_prompt },
+        { role: 'user', content: built.user_prompt },
+      ],
+    }, () => {})
+    await workspace.saveFileContent(node.file_path, text)
+    await openFile(node.file_path)
+    saveStatus.value = '改写完成'
+  } catch (e: unknown) {
+    saveStatus.value = e instanceof Error ? e.message : '改写失败'
+  }
+}
+
+async function onRestoreVersion(content: string) {
+  if (!currentFilePath.value) return
+  workspaceRef.value?.openContent(currentFilePath.value, getFileName(currentFilePath.value), content)
+  saveStatus.value = '已加载历史版本（未自动保存）'
+}
+
+
+watch(
+  () => shellSync.metaFocus,
+  (focus) => {
+    if (!focus) return
+    activePanelId.value = 'meta'
+  },
+)
 
 function onOpenInspiration() {
   void desktopApi.openInspirationWindow(currentWorkspace.value?.id ?? 'default')
@@ -369,8 +614,22 @@ function onSearchOpenMatch(path: string, _line: number, _column: number) {
   void openFile(path)
 }
 
-function onChapterWritten(_bookId: string, chapterNum: number, _title: string, _content: string) {
-  void onOpenBookChapter(chapterNum)
+async function onOpenStoryChapter(
+  path: string,
+  title: string,
+  content: string,
+  bookId: string,
+  chapterNum: number,
+) {
+  workspaceRef.value?.openContent(path, title, content, async (newContent) => {
+    await storyStore.saveChapter(bookId, chapterNum, title, newContent)
+  })
+  currentChId.value = path
+}
+
+function onChapterWritten(bookId: string, chapterNum: number, title: string, content: string) {
+  const path = storyChapterPath(bookId, chapterNum)
+  void onOpenStoryChapter(path, title, content, bookId, chapterNum)
 }
 
 function onInsertToEditor(_text: string) {
@@ -379,8 +638,7 @@ function onInsertToEditor(_text: string) {
 
 function openDashboard() {
   if (!currentWorkspace.value) return
-  writingStats.load(currentWorkspace.value.id)
-  wordStats.value = computeWordStats(currentWorkspace.value, writingStats.targetWords)
+  wordStats.value = await loadRustWordStats()
   showDashboard.value = true
 }
 
@@ -417,7 +675,11 @@ function onGlobalKeydown(e: KeyboardEvent) {
   }
   if (isModKey(e) && !e.altKey && e.key === ',') {
     e.preventDefault()
-    showPreferences.value = true
+    if (e.shiftKey) {
+      showProjectSettings.value = true
+    } else {
+      showPreferences.value = true
+    }
   }
   if (isModKey(e) && e.key === '`') {
     e.preventDefault()
@@ -446,6 +708,18 @@ onMounted(async () => {
   void storyStore.init()
   if (isDesktop()) {
     await restoreLastSession()
+    const { listen } = await import('@tauri-apps/api/event')
+    listen<string>('workspace-file-changed', async (ev) => {
+      await refreshTree()
+      if (currentFilePath.value && ev.payload === currentFilePath.value) {
+        try {
+          await workspaceRef.value?.openFile(ev.payload)
+          saveStatus.value = '外部修改已同步'
+        } catch {
+          /* ignore */
+        }
+      }
+    })
     desktopApi.onOpenFile(async (filePath: string) => {
       try {
         await openFile(filePath)
@@ -482,6 +756,7 @@ onUnmounted(() => {
     <div v-else-if="props.detachPanel === 'outline'" class="detach-full">
       <OutlinePanel
         :workspace-id="currentWorkspace?.id ?? null"
+        :workspace-root="localRootPath"
         @jump-chapter="onSelectChapter"
       />
     </div>
@@ -495,13 +770,20 @@ onUnmounted(() => {
         @save="doSave"
         @export-txt="onExportTxt"
         @export-md="onExportMd"
-        @export-epub="onExportUnavailable"
-        @export-docx="onExportUnavailable"
-        @export-fanqie="onExportUnavailable"
+        @export-epub="onExportEpub"
+        @export-docx="onExportDocx"
+        @export-fanqie="onExportFanqie"
+        @export-qidian="onExportQidian"
+        @export-jinjiang="onExportJinjiang"
+        @backup-workspace="onBackupWorkspace"
+        @writing-stats="onWritingStatsMenu"
+        @plot-audit="onPlotAudit"
+        @open-extension-hub="showExtensionHub = true"
         @open-dashboard="openDashboard"
         @open-inspiration="onOpenInspiration"
         @toggle-ai-panel="toggleAiPanel"
         @detach-outline="onDetachPanel('outline')"
+        @detach-panel="onDetachPanel"
         @open-preferences="showPreferences = true"
       />
 
@@ -550,13 +832,33 @@ onUnmounted(() => {
             :on-open-match="onSearchOpenMatch"
           />
           <PanelShell v-show="activePanelId === 'meta'" title="设定" subtitle="角色与词条">
-            <MetaPanel :workspace-id="currentWorkspace?.id ?? null" />
+            <MetaPanel
+              :workspace-id="currentWorkspace?.id ?? null"
+              :workspace-root="localRootPath"
+            />
           </PanelShell>
           <PanelShell v-show="activePanelId === 'outline'" title="大纲" subtitle="章节与时间线">
             <OutlinePanel
               :workspace-id="currentWorkspace?.id ?? null"
+              :workspace-root="localRootPath"
               @jump-chapter="onSelectChapter"
+              @generate-from-outline="onGenerateFromOutline"
+              @rewrite-from-outline="onRewriteFromOutline"
+              @refresh-tree="refreshTree()"
             />
+          </PanelShell>
+          <PanelShell v-show="activePanelId === 'versions'" title="版本" subtitle="章节快照">
+            <VersionPanel
+              :workspace-root="localRootPath"
+              :file-path="currentFilePath"
+              @restore="onRestoreVersion"
+            />
+          </PanelShell>
+          <PanelShell v-show="activePanelId === 'tasks'" title="AI 任务" subtitle="异步队列与进度">
+            <AiTaskPanel :workspace-root="localRootPath" />
+          </PanelShell>
+          <PanelShell v-show="activePanelId === 'backup'" title="备份" subtitle="增量与全书打包">
+            <BackupPanel :workspace-root="localRootPath" />
           </PanelShell>
           <div
             class="resize-handle-right"
@@ -571,6 +873,7 @@ onUnmounted(() => {
                 <EditorWorkspace
                   ref="workspaceRef"
                   @save-status="saveStatus = $event"
+                  @ai-rewrite="onEditorAiRewrite"
                 />
               </div>
               <BottomPanel

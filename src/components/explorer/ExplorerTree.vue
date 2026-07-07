@@ -46,7 +46,8 @@ const emit = defineEmits<{
   refreshTree: []
 }>()
 
-const collapsedDirs = ref<Set<string>>(new Set())
+const shellSync = useShellSyncStore()
+
 const contextMenu = ref<{ x: number; y: number; node: FsNode } | null>(null)
 const creating = ref<{ parentPath: string; isDirectory: boolean } | null>(null)
 const newName = ref('')
@@ -66,31 +67,30 @@ function collectAllDirs(node: FsNode, set: Set<string>, depth: number) {
 watch(() => props.tree, (t) => {
   if (!t) {
     initialLoadDone = false
-    collapsedDirs.value = new Set()
+    shellSync.collapsedDirs = new Set()
     return
   }
   if (!initialLoadDone) {
     initialLoadDone = true
     const set = new Set<string>()
     collectAllDirs(t, set, 0)
-    collapsedDirs.value = set
+    for (const p of set) shellSync.setDirCollapsed(p, true)
   }
 }, { immediate: true })
 
 function toggleDir(path: string) {
-  if (collapsedDirs.value.has(path)) collapsedDirs.value.delete(path)
-  else collapsedDirs.value.add(path)
+  shellSync.toggleDir(path)
 }
 
 function isCollapsed(path: string) {
-  return collapsedDirs.value.has(path)
+  return shellSync.isDirCollapsed(path)
 }
 
 function collapseAll() {
   if (!props.tree) return
   const set = new Set<string>()
   collectAllDirs(props.tree, set, 0)
-  collapsedDirs.value = set
+  for (const p of set) shellSync.setDirCollapsed(p, true)
 }
 
 function onRightClick(e: MouseEvent, node: FsNode) {
@@ -332,7 +332,7 @@ function onKeydown(e: KeyboardEvent) {
           :node="child"
           :depth="1"
           :current-file-path="currentFilePath"
-          :collapsed-dirs="collapsedDirs"
+          :collapsed-dirs="shellSync.collapsedDirs"
           @select-file="(p) => emit('selectFile', p)"
           @toggle-dir="toggleDir"
           @contextmenu="onRightClick"

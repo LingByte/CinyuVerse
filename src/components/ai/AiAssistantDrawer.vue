@@ -45,14 +45,14 @@ const emit = defineEmits<{
 }
 
 .ai-drawer--open {
-  width: min(420px, 40vw);
+  width: min(440px, 42vw);
   border-left-color: var(--border);
 }
 
 .ai-drawer-inner {
   display: flex;
   flex-direction: column;
-  width: min(420px, 40vw);
+  width: min(440px, 42vw);
   height: 100%;
   background: transparent;
 }
@@ -61,17 +61,18 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 40px;
-  padding: 0 14px;
-  border-bottom: 1px solid var(--border);
+  height: 36px;
+  padding: 0 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   flex-shrink: 0;
 }
 
 .ai-drawer-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--text-main);
-  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .ai-drawer-close {

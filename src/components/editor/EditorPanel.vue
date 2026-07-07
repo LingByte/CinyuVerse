@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { Circle, Sparkles } from 'lucide-vue-next'
 import { EditorView, keymap, placeholder, drawSelection, highlightActiveLine } from '@codemirror/view'
 import { EditorState, Compartment } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
@@ -12,7 +13,13 @@ import ImageViewer from '@/components/viewers/ImageViewer.vue'
 import PdfViewer from '@/components/viewers/PdfViewer.vue'
 import SpreadsheetViewer from '@/components/viewers/SpreadsheetViewer.vue'
 import BinaryPlaceholder from '@/components/viewers/BinaryPlaceholder.vue'
-import { Circle } from 'lucide-vue-next'
+import { EDITOR_AI_ACTIONS, type EditorAiAction } from '@/features/workspace/composables/useEditorAi'
+import { entityLinkExtension, type EntityLinkSpec } from '@/features/editor/utils/entityLinkExtension'
+import { useProjectMetaStore } from '@/features/workspace/stores/projectMetaStore'
+import { useShellSyncStore } from '@/features/shell/stores/shellSyncStore'
+import { useEditorSelectionStore } from '@/features/editor/stores/editorSelectionStore'
+import { desktopApi } from '@/services/desktopApi'
+import { isDesktop } from '@/services/runtime'
 
 const props = defineProps<{
   content: string
@@ -28,6 +35,13 @@ const props = defineProps<{
 const emit = defineEmits<{
   updateContent: [content: string]
   save: []
+  aiRewrite: [payload: {
+    action: EditorAiAction
+    selection: string
+    from: number
+    to: number
+    fullText: string
+  }]
 }>()
 
 const fileType = ref<FileTypeInfo>({ category: 'text', extension: '', mimeType: 'text/plain', editable: true })
@@ -42,9 +56,66 @@ watch(
 
 const schemeStore = useEditorSchemeStore()
 const themeStore = useThemeStore()
+const metaStore = useProjectMetaStore()
+const shellSync = useShellSyncStore()
+const selectionStore = useEditorSelectionStore()
 const editorRef = ref<HTMLDivElement>()
 let view: EditorView | null = null
 const schemeCompartment = new Compartment()
+const entityCompartment = new Compartment()
+
+const isMarkdown = computed(() => {
+  const ext = fileType.value.extension
+  return ['md', 'markdown', 'mdown'].includes(ext)
+})
+
+function buildEntitySpecs(): EntityLinkSpec[] {
+  const specs: EntityLinkSpec[] = []
+  for (const c of metaStore.characters) {
+    const name = c.name?.trim()
+    if (!name) continue
+    specs.push({ text: name, kind: 'character', id: c.id || `char_${name}` })
+  }
+  for (const g of metaStore.glossary) {
+    const term = g.term?.trim()
+    if (!term) continue
+    specs.push({ text: term, kind: 'glossary', id: g.id || `term_${term}` })
+  }
+  return specs
+}
+
+async function onEntityClick(entity: EntityLinkSpec) {
+  const root = metaStore.workspaceRoot
+  if (isDesktop() && root) {
+    try {
+      if (entity.kind === 'character') {
+        const found = await desktopApi.getCharacterByName(root, entity.text)
+        if (found?.id) shellSync.focusCharacter(found.id)
+        else shellSync.focusCharacter(entity.id)
+      } else {
+        const found = await desktopApi.getGlossaryItem(root, entity.text)
+        if (found?.id) shellSync.focusGlossary(found.id)
+        else shellSync.focusGlossary(entity.id)
+      }
+      return
+    } catch {
+      /* fallback local id */
+    }
+  }
+  if (entity.kind === 'character') shellSync.focusCharacter(entity.id)
+  else shellSync.focusGlossary(entity.id)
+}
+
+const aiToolbarEnabled = computed(() => selectionStore.hasSelection)
+
+function applyEntityLinks() {
+  if (!view || !isMarkdown.value) return
+  view.dispatch({
+    effects: entityCompartment.reconfigure(
+      entityLinkExtension(buildEntitySpecs, onEntityClick),
+    ),
+  })
+}
 
 const chromeTheme = EditorView.theme({
   '&': {
@@ -80,6 +151,57 @@ const chromeTheme = EditorView.theme({
   },
 })
 
+const aiMenu = ref({ visible: false, x: 0, y: 0 })
+const selectionRange = ref({ from: 0, to: 0, text: '' })
+
+function onEditorContextMenu(e: MouseEvent) {
+  if (!view || !fileType.value.editable) return
+  const { from, to } = view.state.selection.main
+  if (from === to) return
+  const text = view.state.doc.sliceString(from, to)
+  selectionRange.value = { from, to, text }
+  aiMenu.value = { visible: true, x: e.clientX, y: e.clientY }
+  e.preventDefault()
+}
+
+function closeAiMenu() {
+  aiMenu.value.visible = false
+}
+
+function emitAiRewrite(action: EditorAiAction, from: number, to: number) {
+  if (!view) return
+  const text = view.state.doc.sliceString(from, to)
+  if (!text.trim()) return
+  emit('aiRewrite', {
+    action,
+    selection: text,
+    from,
+    to,
+    fullText: view.state.doc.toString(),
+  })
+}
+
+function triggerAiAction(action: EditorAiAction) {
+  emitAiRewrite(action, selectionRange.value.from, selectionRange.value.to)
+  closeAiMenu()
+}
+
+function triggerAiToolbar(action: EditorAiAction) {
+  if (!view || !selectionStore.hasSelection) return
+  emitAiRewrite(action, selectionStore.selectionFrom, selectionStore.selectionTo)
+}
+
+function replaceSelection(newText: string) {
+  if (!view) return
+  const { from, to } = selectionRange.value
+  view.dispatch({
+    changes: { from, to, insert: newText },
+  })
+  emit('updateContent', view.state.doc.toString())
+}
+
+defineExpose({ replaceSelection })
+
 function getPlaceholder() {
   const ext = fileType.value.extension
   if (['md', 'markdown', 'mdown'].includes(ext)) return '开始创作...'
@@ -94,6 +216,7 @@ function createEditor() {
   const extensions = [
     markdown({ base: markdownLanguage }),
     schemeCompartment.of(schemeStore.getCodeMirrorExtensions()),
+    entityCompartment.of(isMarkdown.value ? entityLinkExtension(buildEntitySpecs, onEntityClick) : []),
     chromeTheme,
     EditorView.lineWrapping,
     drawSelection(),
@@ -104,6 +227,11 @@ function createEditor() {
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         emit('updateContent', update.state.doc.toString())
+      }
+      if (update.selectionSet || update.docChanged) {
+        const { from, to } = update.state.selection.main
+        const text = update.state.doc.sliceString(from, to)
+        selectionStore.setSelection(from, to, text)
       }
     }),
     EditorState.tabSize.of(2),
@@ -192,6 +320,21 @@ function initTextEditor() {
   editorMounted = true
 }
 
+watch(
+  () => [metaStore.characters, metaStore.glossary] as const,
+  () => applyEntityLinks(),
+  { deep: true },
+)
+
+watch(isMarkdown, () => {
+  if (editorMounted) {
+    view?.destroy()
+    view = null
+    editorMounted = false
+    nextTick(initTextEditor)
+  }
+})
+
 watch(fileType, (newType) => {
   if (newType.category === 'text') {
     view?.destroy()
@@ -243,7 +386,23 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div v-if="fileType.category === 'text'" ref="editorRef" class="editor-area"></div>
+    <div v-if="fileType.category === 'text' && fileType.editable && isMarkdown" class="ai-toolbar">
+      <Sparkles :size="13" class="ai-toolbar-icon" />
+      <button
+        v-for="act in EDITOR_AI_ACTIONS"
+        :key="act.id"
+        type="button"
+        class="ai-toolbar-btn"
+        :class="{ disabled: !aiToolbarEnabled }"
+        :disabled="!aiToolbarEnabled"
+        :title="aiToolbarEnabled ? `对选区${act.label}` : '请先选中文字'"
+        @click="triggerAiToolbar(act.id)"
+      >
+        {{ act.label }}
+      </button>
+    </div>
+
+    <div v-if="fileType.category === 'text'" ref="editorRef" class="editor-area" @contextmenu="onEditorContextMenu" />
 
     <ImageViewer
       v-else-if="fileType.category === 'image'"
@@ -269,6 +428,26 @@ onUnmounted(() => {
       :file-name="title"
       :extension="fileType.extension"
     />
+
+    <Teleport to="body">
+      <div
+        v-if="aiMenu.visible"
+        class="ai-context-menu"
+        :style="{ left: aiMenu.x + 'px', top: aiMenu.y + 'px' }"
+        @click.stop
+      >
+        <button
+          v-for="act in EDITOR_AI_ACTIONS"
+          :key="act.id"
+          type="button"
+          class="ai-menu-item"
+          @click="triggerAiAction(act.id)"
+        >
+          {{ act.label }}
+        </button>
+      </div>
+    </Teleport>
+    <div v-if="aiMenu.visible" class="ai-menu-backdrop" @click="closeAiMenu" />
   </div>
 </template>
 
@@ -346,5 +525,90 @@ onUnmounted(() => {
 
 .editor-area :deep(.cm-scroller) {
   width: 100%;
+}
+
+.editor-area :deep(.cm-entity-character) {
+  color: var(--accent);
+  cursor: pointer;
+  border-bottom: 1px dashed color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.editor-area :deep(.cm-entity-glossary) {
+  color: var(--warning);
+  cursor: pointer;
+  border-bottom: 1px dotted color-mix(in srgb, var(--warning) 60%, transparent);
+}
+
+.ai-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.ai-toolbar-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.ai-toolbar-btn {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-sub);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ai-toolbar-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.ai-toolbar-btn.disabled,
+.ai-toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.ai-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+}
+
+.ai-context-menu {
+  position: fixed;
+  z-index: 151;
+  min-width: 140px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  box-shadow: 0 8px 24px color-mix(in srgb, #000 20%, transparent);
+}
+
+.ai-menu-item {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ai-menu-item:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
 }
 </style>

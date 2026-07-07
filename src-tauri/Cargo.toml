@@ -40,6 +40,7 @@ zip = "0.6"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 tauri-plugin-single-instance = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
 portable-pty = "0.8"
+notify = "6.1"
 
 # Environment variables
 dotenvy = "0.15"

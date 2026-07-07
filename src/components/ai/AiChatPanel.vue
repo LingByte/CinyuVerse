@@ -1,13 +1,10 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { useStoryAgent, type PipelineAction } from '@/features/story/composables/useStoryAgent'
 import { useStoryStore } from '@/features/story/stores/storyStore'
 import { parseStoryChapterPath } from '@/core/types/story'
 import {
-  Bot,
   BookOpen,
-  Wifi,
-  WifiOff,
   Loader2,
   ArrowUp,
   PenLine,
@@ -17,8 +14,10 @@ import {
   Sparkles,
   RefreshCw,
   ChevronDown,
+  MessageSquare,
+  Wrench,
+  ChevronRight,
 } from 'lucide-vue-next'
-import { isModKey, modEnterLabel } from '@/core/platform'
 import MarkdownContent from '@/components/ai/MarkdownContent.vue'
 
 const props = defineProps<{
@@ -50,12 +49,12 @@ const agent = useStoryAgent(currentChapterNumRef)
 const books = computed(() => storyStore.books ?? [])
 
 const instruction = ref('')
-const guidance = ref('')
 const error = ref('')
 const panelMode = ref<'agent' | 'pipeline'>('agent')
 const showBookMenu = ref(false)
+const showToolLog = ref(false)
 const chatEndRef = ref<HTMLDivElement>()
-const sendShortcutLabel = ref(modEnterLabel())
+const textareaRef = ref<HTMLTextAreaElement>()
 
 const pipelineActions: { id: PipelineAction; label: string; icon: typeof PenLine; desc: string; needsChapter?: boolean }[] = [
   { id: 'write-next', label: '写下一章', icon: PenLine, desc: '完整流水线：规划→写作→审核→修订' },
@@ -72,7 +71,8 @@ const visibleMessages = computed(() =>
 
 const canSend = computed(
   () =>
-    storyStore.connected
+    panelMode.value === 'agent'
+    && storyStore.connected
     && storyStore.currentBookId
     && instruction.value.trim()
     && !storyStore.busy,
@@ -84,14 +84,25 @@ const statusText = computed(() => {
   if (!storyStore.connected) return '后端离线'
   if (!storyStore.currentBookId) return '未识别书籍'
   const book = storyStore.currentBook?.title ?? storyStore.currentBookId
-  const ch = storyStore.chapters.length
-  return `${book} · ${ch} 章`
+  return book
+})
+
+const busyLabel = computed(() =>
+  storyStore.agentRunning ? '智能体思考中…' : '流水线执行中…',
+)
+
+const inputPlaceholder = computed(() => {
+  if (!storyStore.connected) return '后端未连接'
+  if (!storyStore.currentBookId) return '请先在左侧选择书籍…'
+  if (panelMode.value === 'pipeline') return '可选：补充写作指导…'
+  return 'Ask anything — 规划章节、续写、审核设定…'
 })
 
 async function handleSend() {
   if (!canSend.value) return
   const text = instruction.value.trim()
   instruction.value = ''
+  resetTextareaHeight()
   error.value = ''
   try {
     await agent.sendInstruction(text)
@@ -123,13 +134,31 @@ async function runAction(action: PipelineAction) {
 
 function useQuickPrompt(text: string) {
   instruction.value = text
+  nextTick(() => {
+    textareaRef.value?.focus()
+    autoResizeTextarea()
+  })
 }
 
 function onKeydown(e: KeyboardEvent) {
-  if (isModKey(e) && e.key === 'Enter') {
+  if (panelMode.value !== 'agent') return
+  if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     void handleSend()
   }
+}
+
+function autoResizeTextarea() {
+  const el = textareaRef.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+}
+
+function resetTextareaHeight() {
+  const el = textareaRef.value
+  if (!el) return
+  el.style.height = 'auto'
 }
 
 function scrollToBottom() {
@@ -137,51 +166,76 @@ function scrollToBottom() {
 }
 
 watch(() => agent.messages.value.length, scrollToBottom)
-watch(() => agent.eventLogs.value.length, scrollToBottom)
+watch(() => agent.eventLogs.value.length, () => {
+  if (storyStore.busy) showToolLog.value = true
+  scrollToBottom()
+})
+watch(() => storyStore.busy, (busy) => {
+  if (busy) showToolLog.value = true
+})
 </script>
 
 <template>
-  <div class="agent-panel" @click="showBookMenu = false">
-    <!-- Header -->
-    <div class="agent-header">
-      <div class="header-left">
-        <Bot :size="16" class="header-icon" />
-        <span class="header-title">故事智能体</span>
-        <span class="conn-badge" :class="{ ok: storyStore.connected }">
-          <Wifi v-if="storyStore.connected" :size="11" />
-          <WifiOff v-else :size="11" />
-        </span>
+  <div class="agent-panel ai-chat" @click="showBookMenu = false">
+    <!-- Compact toolbar -->
+    <div class="ai-toolbar">
+      <div class="mode-segment">
+        <button
+          type="button"
+          class="mode-btn"
+          :class="{ active: panelMode === 'agent' }"
+          title="智能对话"
+          @click="panelMode = 'agent'"
+        >
+          <MessageSquare :size="13" />
+          <span>对话</span>
+        </button>
+        <button
+          type="button"
+          class="mode-btn"
+          :class="{ active: panelMode === 'pipeline' }"
+          title="创作流水线"
+          @click="panelMode = 'pipeline'"
+        >
+          <Wrench :size="13" />
+          <span>创作</span>
+        </button>
       </div>
+
       <div class="book-select-wrap" @click.stop>
-        <button class="book-select" :disabled="!storyStore.connected" @click="showBookMenu = !showBookMenu">
+        <button
+          type="button"
+          class="book-pill"
+          :disabled="!storyStore.connected"
+          @click="showBookMenu = !showBookMenu"
+        >
           <BookOpen :size="12" />
           <span class="book-label">{{ statusText }}</span>
-          <ChevronDown :size="10" />
+          <ChevronDown :size="11" class="book-chevron" />
         </button>
         <div v-if="showBookMenu && books.length > 0" class="book-menu">
           <button
             v-for="b in books"
             :key="b.id"
+            type="button"
             class="book-option"
             :class="{ active: b.id === storyStore.currentBookId }"
             @click="storyStore.selectBook(b.id); showBookMenu = false"
           >
-            {{ b.title }}
+            <span class="book-option-title">{{ b.title }}</span>
             <span class="book-option-meta">{{ b.genre }}</span>
           </button>
         </div>
       </div>
+
+      <span class="conn-dot" :class="{ ok: storyStore.connected }" :title="storyStore.connected ? '已连接' : '离线'" />
     </div>
 
-    <!-- Mode tabs -->
-    <div class="mode-tabs">
-      <button :class="{ active: panelMode === 'agent' }" @click="panelMode = 'agent'">
-        <Bot :size="12" /> 智能对话
-      </button>
-      <button :class="{ active: panelMode === 'pipeline' }" @click="panelMode = 'pipeline'">
-        <PenLine :size="12" /> 写作流水线
-      </button>
-    </div>
+    <!-- Thread -->
+    <div class="ai-thread">
+      <div v-if="agent.loadingSession.value" class="thread-hint">
+        <Loader2 :size="14" class="spin" /> 加载历史…
+      </div>
 
     <!-- Offline / setup hints -->
     <div v-if="!props.folderOpen" class="offline-banner">
@@ -206,55 +260,74 @@ watch(() => agent.eventLogs.value.length, scrollToBottom)
       <button class="retry-btn" @click="storyStore.ping()">重试</button>
     </div>
 
-    <!-- Messages / logs -->
-    <div class="message-area">
-      <div v-if="agent.loadingSession.value" class="hint">加载对话历史…</div>
-
-      <div v-if="visibleMessages.length === 0 && !storyStore.busy" class="welcome">
-        <h3>CinyuVerse 故事智能体</h3>
-        <p v-if="panelMode === 'agent'">
-          通过自然语言驱动写作工具：规划章节、续写、审核、读取设定文件等。
-          模型由后端 <code>STORY_LLM_MODEL</code> 配置。
+      <div v-else-if="visibleMessages.length === 0 && !storyStore.busy" class="empty-state">
+        <div class="empty-icon"><Sparkles :size="22" /></div>
+        <h3 class="empty-title">有什么可以帮你？</h3>
+        <p class="empty-desc">
+          {{ panelMode === 'agent'
+            ? '用自然语言驱动写作：规划、续写、审核、读取设定'
+            : '选择下方工具执行单步写作流水线' }}
         </p>
-        <p v-else>直接调用写作流水线 API，适合明确的单步操作。</p>
-        <div v-if="panelMode === 'agent'" class="quick-prompts">
+        <div v-if="panelMode === 'agent'" class="suggestions">
           <button
             v-for="q in agent.quickPrompts"
             :key="q.label"
-            class="quick-btn"
+            type="button"
+            class="suggestion-chip"
             @click="useQuickPrompt(q.text)"
-          >{{ q.label }}</button>
+          >
+            {{ q.label }}
+          </button>
         </div>
       </div>
 
-      <div
-        v-for="(msg, i) in visibleMessages"
-        :key="i"
-        class="bubble"
-        :class="msg.role === 'user' ? 'user' : 'assistant'"
-      >
-        <div class="bubble-role">{{ msg.role === 'user' ? '你' : '智能体' }}</div>
-        <MarkdownContent
-          v-if="msg.role === 'assistant'"
-          class="bubble-content"
-          :content="msg.content"
-        />
-        <div v-else class="bubble-content user-text">{{ msg.content }}</div>
+      <template v-else>
+        <div
+          v-for="(msg, i) in visibleMessages"
+          :key="i"
+          class="ai-msg"
+          :class="msg.role === 'user' ? 'ai-msg--user' : 'ai-msg--assistant'"
+        >
+          <div v-if="msg.role === 'assistant'" class="ai-msg-avatar">
+            <Sparkles :size="13" />
+          </div>
+          <div class="ai-msg-body">
+            <MarkdownContent
+              v-if="msg.role === 'assistant'"
+              class="ai-msg-content"
+              :content="msg.content"
+            />
+            <div v-else class="ai-msg-content ai-msg-content--user">{{ msg.content }}</div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Tool activity (collapsible) -->
+      <div v-if="agent.eventLogs.value.length > 0" class="tool-log">
+        <button type="button" class="tool-log-toggle" @click="showToolLog = !showToolLog">
+          <ChevronRight :size="12" class="tool-log-chevron" :class="{ open: showToolLog }" />
+          <Loader2 v-if="storyStore.busy" :size="12" class="spin" />
+          <span>{{ storyStore.busy ? busyLabel : '工具调用记录' }}</span>
+          <span class="tool-log-count">{{ agent.eventLogs.value.length }}</span>
+        </button>
+        <div v-if="showToolLog" class="tool-log-body">
+          <div v-for="(ev, i) in agent.eventLogs.value" :key="'ev-' + i" class="tool-log-line">
+            <span class="ev-type">{{ ev.type }}</span>
+            <span v-if="ev.agent" class="ev-agent">{{ ev.agent }}</span>
+            <span class="ev-msg">{{ ev.message }}</span>
+          </div>
+        </div>
       </div>
 
-      <!-- Pipeline event log -->
-      <div v-for="(ev, i) in agent.eventLogs.value" :key="'ev-' + i" class="event-line">
-        <span class="ev-type">{{ ev.type }}</span>
-        <span v-if="ev.agent" class="ev-agent">{{ ev.agent }}</span>
-        <span class="ev-msg">{{ ev.message }}</span>
+      <div v-if="storyStore.busy && agent.eventLogs.value.length === 0" class="typing-indicator">
+        <span class="typing-dot" />
+        <span class="typing-dot" />
+        <span class="typing-dot" />
       </div>
 
-      <div v-if="storyStore.busy" class="busy-line">
-        <Loader2 :size="14" class="spin" />
-        {{ storyStore.agentRunning ? '智能体思考中（可能调用多个工具）…' : '流水线执行中…' }}
+      <div v-if="error || storyStore.lastError" class="thread-error">
+        {{ error || storyStore.lastError }}
       </div>
-
-      <div v-if="error || storyStore.lastError" class="error-line">{{ error || storyStore.lastError }}</div>
       <div ref="chatEndRef" />
     </div>
 
@@ -309,71 +382,110 @@ watch(() => agent.eventLogs.value.length, scrollToBottom)
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bg-secondary);
+  background: transparent;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13px;
 }
 
-.agent-header {
+/* ── Toolbar ── */
+.ai-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
   gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   flex-shrink: 0;
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.header-icon { color: var(--accent); flex-shrink: 0; }
-.header-title { font-weight: 600; color: var(--text-main); font-size: 13px; }
-
-.conn-badge {
+.mode-segment {
   display: inline-flex;
-  color: var(--danger);
+  padding: 2px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-hover) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
 }
-.conn-badge.ok { color: var(--success); }
 
-.book-select-wrap { position: relative; flex-shrink: 0; }
-
-.book-select {
+.mode-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg-input);
-  color: var(--text-sub);
-  cursor: pointer;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
   font-size: 11px;
-  max-width: 160px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
 }
+
+.mode-btn:hover {
+  color: var(--text-sub);
+}
+
+.mode-btn.active {
+  background: var(--bg-card);
+  color: var(--text-main);
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 12%, transparent);
+}
+
+.book-select-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.book-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-sub);
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.book-pill:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-main);
+}
+
+.book-pill:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .book-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.book-chevron {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
 .book-menu {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 4px);
+  left: 0;
   right: 0;
-  margin-top: 4px;
-  min-width: 180px;
+  min-width: 200px;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  z-index: 20;
-  max-height: 200px;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px color-mix(in srgb, #000 18%, transparent);
+  z-index: 30;
+  max-height: 220px;
   overflow-y: auto;
+  padding: 4px;
 }
 
 .book-option {
@@ -383,218 +495,447 @@ watch(() => agent.eventLogs.value.length, scrollToBottom)
   width: 100%;
   padding: 8px 10px;
   border: none;
+  border-radius: 6px;
   background: transparent;
   color: var(--text-main);
   cursor: pointer;
   font-size: 12px;
   text-align: left;
 }
-.book-option:hover { background: var(--bg-hover); }
-.book-option.active { background: color-mix(in oklab, var(--accent) 10%, transparent); }
-.book-option-meta { font-size: 10px; color: var(--text-muted); }
 
-.mode-tabs {
-  display: flex;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
+.book-option:hover {
+  background: var(--bg-hover);
 }
-.mode-tabs button {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 7px;
-  border: none;
-  background: transparent;
-  color: var(--text-sub);
-  cursor: pointer;
-  font-size: 11px;
+
+.book-option.active {
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+}
+
+.book-option-title {
   font-weight: 500;
 }
-.mode-tabs button.active {
-  color: var(--accent);
-  box-shadow: inset 0 -2px 0 var(--accent);
+
+.book-option-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 
-.offline-banner {
-  padding: 12px;
-  margin: 8px;
-  border: 1px dashed var(--border);
-  border-radius: 6px;
-  text-align: center;
-  color: var(--text-sub);
-}
-.offline-banner .sub { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
-.offline-banner code { font-size: 10px; background: var(--bg-input); padding: 1px 4px; border-radius: 3px; }
-.retry-btn {
-  margin-top: 8px;
-  padding: 4px 12px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: transparent;
-  color: var(--accent);
-  cursor: pointer;
-  font-size: 11px;
+.conn-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--danger);
 }
 
-.message-area {
+.conn-dot.ok {
+  background: var(--success);
+}
+
+/* ── Thread ── */
+.ai-thread {
   flex: 1;
   overflow-y: auto;
-  padding: 10px;
+  overflow-x: hidden;
+  padding: 12px 14px;
   min-height: 0;
+  scroll-behavior: smooth;
 }
 
-.welcome {
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-card);
-  margin-bottom: 10px;
+.thread-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 8px 0;
 }
-.welcome h3 { margin: 0 0 8px; font-size: 14px; color: var(--text-main); }
-.welcome p { margin: 0 0 8px; line-height: 1.5; color: var(--text-sub); font-size: 11px; }
-.welcome code { font-size: 10px; background: var(--bg-input); padding: 1px 4px; border-radius: 3px; }
 
-.quick-prompts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-.quick-btn {
-  padding: 4px 8px;
-  border: 1px solid var(--border);
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 32px 12px 24px;
+  gap: 8px;
+}
+
+.empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
   border-radius: 12px;
-  background: transparent;
-  color: var(--text-sub);
-  cursor: pointer;
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.empty-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.empty-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 280px;
+}
+
+.empty-code {
   font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-sub);
+  margin-top: 4px;
 }
-.quick-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-.bubble {
-  margin-bottom: 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  max-width: 95%;
-}
-.bubble.user {
-  margin-left: auto;
-  background: color-mix(in oklab, var(--accent) 15%, var(--bg-card));
-  border: 1px solid color-mix(in oklab, var(--accent) 25%, transparent);
-}
-.bubble.assistant {
-  background: var(--bg-card);
+.empty-action {
+  margin-top: 8px;
+  padding: 6px 14px;
   border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
 }
-.bubble-role { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
-.bubble-content.user-text { white-space: pre-wrap; line-height: 1.55; color: var(--text-main); font-size: 12px; }
-.bubble-content :deep(.md-content) { font-size: 12px; }
 
-.event-line {
+.empty-action:hover {
+  background: var(--bg-hover);
+}
+
+.suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 300px;
+  margin-top: 12px;
+}
+
+.suggestion-chip {
+  padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+  color: var(--text-sub);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.suggestion-chip:hover {
+  border-color: color-mix(in oklab, var(--accent) 40%, transparent);
+  color: var(--text-main);
+  background: color-mix(in oklab, var(--accent) 6%, transparent);
+}
+
+/* ── Messages ── */
+.ai-msg {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+  animation: msg-in 0.2s ease;
+}
+
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ai-msg--user {
+  flex-direction: row-reverse;
+}
+
+.ai-msg-avatar {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--accent) 15%, transparent);
+  color: var(--accent);
+  margin-top: 2px;
+}
+
+.ai-msg-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-msg--user .ai-msg-body {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ai-msg-content--user {
+  display: inline-block;
+  max-width: 92%;
+  padding: 8px 12px;
+  border-radius: 12px 12px 4px 12px;
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in oklab, var(--accent) 22%, transparent);
+  color: var(--text-main);
+  white-space: pre-wrap;
+  line-height: 1.55;
+  font-size: 13px;
+}
+
+.ai-msg--assistant .ai-msg-content {
+  padding-top: 2px;
+}
+
+.ai-msg-content :deep(.md-content) {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ── Tool log ── */
+.tool-log {
+  margin: 8px 0 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  overflow: hidden;
+}
+
+.tool-log-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  background: color-mix(in srgb, var(--bg-hover) 50%, transparent);
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.tool-log-chevron {
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+
+.tool-log-chevron.open {
+  transform: rotate(90deg);
+}
+
+.tool-log-count {
+  margin-left: auto;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.tool-log-body {
+  padding: 6px 10px 8px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.tool-log-line {
   font-size: 10px;
   color: var(--text-muted);
   padding: 2px 0;
   font-family: ui-monospace, monospace;
+  line-height: 1.45;
 }
+
 .ev-type { color: var(--accent); margin-right: 4px; }
 .ev-agent { color: var(--warning); margin-right: 4px; }
 
-.busy-line, .error-line, .hint {
+.typing-indicator {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 0;
-  font-size: 11px;
+  gap: 4px;
+  padding: 4px 0 8px 34px;
 }
-.busy-line { color: var(--warning); }
-.error-line { color: var(--danger); }
-.hint { color: var(--text-muted); }
 
-.pipeline-bar {
-  padding: 8px;
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
+.typing-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  animation: typing 1.2s ease-in-out infinite;
 }
-.guidance-input {
-  width: 100%;
-  padding: 6px 8px;
-  margin-bottom: 6px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg-input);
-  color: var(--text-main);
-  font-size: 11px;
-  box-sizing: border-box;
+
+.typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes typing {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
 }
-.pipeline-actions {
+
+.thread-error {
+  padding: 8px 10px;
+  margin-top: 4px;
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--danger) 10%, transparent);
+  border: 1px solid color-mix(in oklab, var(--danger) 25%, transparent);
+  color: var(--danger);
+  font-size: 12px;
+}
+
+/* ── Pipeline strip ── */
+.pipeline-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 5px;
+  padding: 8px 12px 0;
+  flex-shrink: 0;
 }
-.pipeline-btn {
+
+.pipeline-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  padding: 5px 9px;
+  border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+  border-radius: 999px;
   background: transparent;
   color: var(--text-sub);
+  font-size: 11px;
   cursor: pointer;
-  font-size: 10px;
+  transition: border-color 0.15s, color 0.15s;
 }
-.pipeline-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-.pipeline-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-.input-area {
-  padding: 8px;
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
+.pipeline-chip:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
 }
-.input-textarea {
+
+.pipeline-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Composer (Cursor-style) ── */
+.ai-composer {
+  flex-shrink: 0;
+  padding: 10px 12px 12px;
+}
+
+.composer-box {
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-input) 70%, transparent);
+  box-shadow: 0 1px 4px color-mix(in srgb, #000 8%, transparent);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.composer-box:focus-within {
+  border-color: color-mix(in oklab, var(--accent) 45%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 12%, transparent);
+}
+
+.composer-input {
+  display: block;
   width: 100%;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-input);
+  padding: 10px 12px 4px;
+  border: none;
+  background: transparent;
   color: var(--text-main);
-  font-size: 12px;
+  font-size: 13px;
   font-family: inherit;
+  line-height: 1.5;
   resize: none;
   box-sizing: border-box;
-  min-height: 52px;
+  max-height: 160px;
+  overflow-y: auto;
 }
-.input-textarea:focus { outline: none; border-color: var(--accent); }
-.input-footer {
+
+.composer-input:focus {
+  outline: none;
+}
+
+.composer-input::placeholder {
+  color: var(--text-muted);
+}
+
+.composer-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.composer-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 6px;
+  padding: 4px 8px 8px 12px;
   gap: 8px;
 }
-.hint-text { font-size: 10px; color: var(--text-muted); flex: 1; }
-.input-actions { display: flex; gap: 6px; align-items: center; }
-.insert-btn {
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-sub);
-  cursor: pointer;
+
+.composer-hint {
   font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.75;
 }
-.insert-btn:hover { border-color: var(--accent); color: var(--accent); }
-.send-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: none;
-  background: var(--accent);
-  color: white;
-  cursor: pointer;
+
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.composer-insert {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
 }
-.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.spin { animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.composer-insert:hover {
+  color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.composer-send {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+.composer-send:hover:not(:disabled) {
+  transform: scale(1.04);
+}
+
+.composer-send:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 </style>

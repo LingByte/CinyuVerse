@@ -4,6 +4,7 @@ export type EditorWorkspaceHandle = {
   openContent: (path: string, title: string, content: string, onSave?: (content: string) => Promise<void>) => void
   closeActive: () => void
   saveActive: () => Promise<void>
+  applyTextReplacement: (from: number, to: number, newText: string) => void
 }
 </script>
 
@@ -25,6 +26,13 @@ type TabState = FileViewerTabModel & {
 const emit = defineEmits<{
   dirtyChange: [dirty: boolean]
   saveStatus: [status: string]
+  aiRewrite: [payload: {
+    action: string
+    selection: string
+    from: number
+    to: number
+    fullText: string
+  }]
 }>()
 
 function setStatus(status: string) {
@@ -125,6 +133,23 @@ function onTabChange(id: string, value: string) {
   updateDirtyFlag()
 }
 
+function applyTextReplacement(from: number, to: number, newText: string) {
+  const tab = activeTab.value
+  if (!tab) return
+  const updated = tab.value.slice(0, from) + newText + tab.value.slice(to)
+  onTabChange(tab.id, updated)
+}
+
+function onAiRewrite(payload: {
+  action: string
+  selection: string
+  from: number
+  to: number
+  fullText: string
+}) {
+  emit('aiRewrite', payload)
+}
+
 async function saveActive() {
   const tab = activeTab.value
   if (!tab || tab.readOnly || !tab.isDirty) return
@@ -150,6 +175,7 @@ defineExpose<EditorWorkspaceHandle>({
   openContent,
   closeActive,
   saveActive,
+  applyTextReplacement,
 })
 
 watch(activeTab, (tab) => {
@@ -172,6 +198,7 @@ watch(activeTab, (tab) => {
         :tab="activeTab"
         :on-change="(v) => onTabChange(activeTab!.id, v)"
         @save="saveActive"
+        @ai-rewrite="onAiRewrite"
       />
       <div v-else class="editor-empty">
         <p>打开文件或从左侧目录选择章节</p>

@@ -1,167 +1,113 @@
 # AI 服务配置指南
 
-## ❌ 常见错误
+CinyuVerse 的 AI 对话由 **Rust 后端**（`src-tauri/src/ai.rs`）发起，前端通过 `desktopApi.aiChatStream()` 接收流式事件。配置写在 `src-tauri/.env` 中。
 
-如果您看到以下错误：
-```
-抱歉，连接 AI 服务时出现错误。请检查您的网络连接和 AI 配置。
-```
-
-这表示 AI 服务尚未正确配置。
-
-## 🔧 配置步骤
-
-### 1. 创建配置文件
-
-在 `src-tauri/` 目录下创建 `.env` 文件：
+## 创建配置文件
 
 ```bash
-# 复制示例配置文件
 cp src-tauri/.env.example src-tauri/.env
 ```
 
-### 2. 配置 AI 服务
+也可将 `.env` 放在仓库根目录，Rust 配置加载器会按优先级查找（见 `src-tauri/src/config.rs`）。
 
-编辑 `src-tauri/.env` 文件，根据您使用的 AI 服务提供商进行配置：
+## 配置项说明
 
-#### 🌟 选项 1：使用阿里云通义千问（推荐，免费）
+| 变量 | 说明 | 示例 |
+|------|------|------|
+| `AI_PROVIDER` | 提供方类型 | `Ollama` 或 `OpenAI` |
+| `AI_BASE_URL` | API 基地址 | `http://localhost:11434` |
+| `AI_API_KEY` | API 密钥 | `ollama`（本地可填占位） |
+| `AI_MODEL` | 模型名称 | `qwen2.5` |
+
+## 方案一：本地 Ollama（推荐入门）
+
+1. 安装 [Ollama](https://ollama.ai/)
+2. 拉取模型：
+
+```bash
+ollama pull qwen2.5
+```
+
+3. 配置 `src-tauri/.env`：
 
 ```env
-# AI 配置
+AI_PROVIDER=Ollama
+AI_BASE_URL=http://localhost:11434
+AI_API_KEY=ollama
+AI_MODEL=qwen2.5
+```
+
+4. 重启应用：`npm run dev:tauri`
+
+## 方案二：OpenAI 官方
+
+```env
+AI_PROVIDER=OpenAI
+AI_BASE_URL=https://api.openai.com/v1
+AI_API_KEY=sk-...
+AI_MODEL=gpt-4o-mini
+```
+
+## 方案三：OpenAI 兼容 API
+
+适用于通义千问、DeepSeek、Moonshot 等兼容接口。
+
+**通义千问（DashScope 兼容模式）示例：**
+
+```env
 AI_PROVIDER=OpenAI
 AI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 AI_API_KEY=your-dashscope-api-key
 AI_MODEL=qwen-turbo
 ```
 
-获取 API 密钥：
-1. 访问 [阿里云百炼平台](https://bailian.console.aliyun.com/)
-2. 注册并登录
-3. 在 API-KEY 管理中创建新的 API 密钥
-4. 将密钥填入 `AI_API_KEY`
-
-#### 🤖 选项 2：使用 OpenAI GPT
+**DeepSeek 示例：**
 
 ```env
-# AI 配置
 AI_PROVIDER=OpenAI
-AI_BASE_URL=https://api.openai.com/v1
-AI_API_KEY=your-openai-api-key
-AI_MODEL=gpt-3.5-turbo
+AI_BASE_URL=https://api.deepseek.com/v1
+AI_API_KEY=your-deepseek-key
+AI_MODEL=deepseek-chat
 ```
 
-获取 API 密钥：
-1. 访问 [OpenAI Platform](https://platform.openai.com/)
-2. 注册并登录
-3. 在 API Keys 页面创建新的密钥
-4. 将密钥填入 `AI_API_KEY`
+## 验证配置
 
-#### 🦙 选项 3：使用本地 Ollama（完全免费）
+启动 `npm run dev:tauri` 后，终端应出现：
 
-```env
-# AI 配置
-AI_PROVIDER=Ollama
-AI_BASE_URL=http://localhost:11434
-AI_API_KEY=ollama
-AI_MODEL=llama2
+```
+✅ 成功加载 AI 配置
+✅ AI 配置已自动设置到全局变量
 ```
 
-使用 Ollama：
-1. 下载并安装 [Ollama](https://ollama.ai/)
-2. 启动 Ollama 服务
-3. 下载模型：`ollama pull llama2`
-4. 确保 Ollama 在后台运行
+在 IDE 中 `Ctrl+L` 打开 AI 面板，发送测试消息。若失败，见 [ai-troubleshooting.md](./ai-troubleshooting.md)。
 
-### 3. 重启应用
-
-配置完成后，重启 GoPilot 应用：
+也可在 `src-tauri/` 目录运行测试脚本（若存在）：
 
 ```bash
-# 停止当前运行的应用
-# 然后重新启动
-npm run tauri:dev
+node test-ai-connection.cjs
 ```
 
-## 🧪 测试配置
+## 前端如何调用
 
-配置完成后，您可以在 AI 面板中测试连接：
-
-1. 打开 AI 面板
-2. 输入简单的测试消息，如："你好"
-3. 如果配置正确，AI 应该会回复
-
-## 🛠️ 故障排除
-
-### 问题 1：仍然显示连接错误
-
-**可能原因**：
-- API 密钥无效
-- 网络连接问题
-- AI 服务不可用
-
-**解决方案**：
-1. 检查 API 密钥是否正确复制
-2. 确认网络连接正常
-3. 尝试更换 AI 模型
-
-### 问题 2：Ollama 连接失败
-
-**可能原因**：
-- Ollama 服务未启动
-- 端口被占用
-- 模型未下载
-
-**解决方案**：
-1. 确保 Ollama 正在运行：`ollama serve`
-2. 检查端口：`netstat -an | grep 11434`
-3. 下载模型：`ollama pull llama2`
-
-### 问题 3：阿里云 API 调用失败
-
-**可能原因**：
-- API 密钥格式错误
-- 账户余额不足
-- 模型名称错误
-
-**解决方案**：
-1. 确认 API 密钥格式（通常以 `sk-` 开头）
-2. 检查账户余额和配额
-3. 使用正确的模型名称：`qwen-turbo`、`qwen-plus`、`qwen-max`
-
-## 🎯 推荐配置
-
-对于大多数用户，推荐使用阿里云通义千问：
-
-```env
-# 推荐配置 - 阿里云通义千问
-AI_PROVIDER=OpenAI
-AI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-AI_API_KEY=sk-your-dashscope-key-here
-AI_MODEL=qwen-turbo
+```
+AiChatPanel
+  → useLocalChat().sendMessage()
+  → desktopApi.aiChatStream({ model, messages }, onChunk)
+  → invoke('ai_chat_stream')
+  → 监听事件：ai-chat-chunk / ai-chat-end / ai-chat-error
 ```
 
-**优势**：
-- 🆓 免费额度充足
-- 🚀 响应速度快
-- 🇨🇳 中文支持优秀
-- 🔒 稳定可靠
+模型列表与 prompt 模板在前端 Pinia store 中管理：
 
-## 📝 配置验证
+- `src/features/chat/stores/llmStore.ts`
+- `src/features/chat/config/promptTemplates.ts`
 
-创建配置后，可以通过以下方式验证：
+## 安全提示
 
-1. **查看日志**：在开发者工具中查看网络请求
-2. **测试命令**：在终端中测试 API 连接
-3. **简单对话**：在 AI 面板中发送 "你好" 测试
+- 勿将含真实 API Key 的 `.env` 提交到 Git（已在 `.gitignore` 中）
+- 分享截图时注意遮挡密钥
 
-## 🆘 获取帮助
+## 相关文档
 
-如果配置过程中遇到问题：
-
-1. **查看文档**：阅读详细的配置说明
-2. **检查日志**：查看控制台错误信息
-3. **社区支持**：在项目 Issues 中寻求帮助
-
----
-
-**配置完成后，您就可以享受 AI 编程助手带来的便利了！** 🚀
+- [ai-panel-usage.md](./ai-panel-usage.md) — 面板功能说明
+- [ai-troubleshooting.md](./ai-troubleshooting.md) — 故障排除

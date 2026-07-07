@@ -58,7 +58,7 @@ const BINARY_EXTS: &[&str] = &[
     ".pdf", ".xlsx", ".xls",
 ];
 
-const SKIP_DIRS: &[&str] = &["node_modules", "__pycache__", ".git", "dist", "dist-electron", "target"];
+const SKIP_DIRS: &[&str] = &["node_modules", "__pycache__", ".git", "dist", "dist-electron", "target", ".cinyuverse"];
 
 fn ext_lower(path: &str) -> String {
     Path::new(path)

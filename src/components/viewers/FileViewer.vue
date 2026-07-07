@@ -7,6 +7,13 @@ const props = defineProps<FileViewerRenderParams & { renderers?: FileViewerRende
 
 const emit = defineEmits<{
   save: []
+  aiRewrite: [payload: {
+    action: string
+    selection: string
+    from: number
+    to: number
+    fullText: string
+  }]
 }>()
 
 const injected = useViewerRenderers()
@@ -47,6 +54,7 @@ function onUpdateContent(value: string) {
     v-bind="componentProps"
     @update-content="onUpdateContent"
     @save="emit('save')"
+    @ai-rewrite="emit('aiRewrite', $event)"
   />
   <div v-else class="viewer-empty">无法预览此文件</div>
 </template>
