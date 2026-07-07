@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, shallowRef, watch, nextTick } from 'vue'
-import { Files, BookOpen, List, Search } from 'lucide-vue-next'
+import { Files, BookOpen, List, Search, History, ListTodo, Archive } from 'lucide-vue-next'
 import MenuBar from '@/components/layouts/MenuBar.vue'
 import StatusBar from '@/components/layouts/StatusBar.vue'
 import ActivityBar from '@/components/layouts/ActivityBar.vue'
@@ -11,7 +11,6 @@ import OutlinePanel from '@/components/writing/OutlinePanel.vue'
 import EditorWorkspace from '@/components/editor/EditorWorkspace.vue'
 import type { EditorWorkspaceHandle } from '@/components/editor/EditorWorkspace.vue'
 import AiChatPanel from '@/components/ai/AiChatPanel.vue'
-import UnifiedAiPanel from '@/components/ai/UnifiedAiPanel.vue'
 import AiAssistantDrawer from '@/components/ai/AiAssistantDrawer.vue'
 import SearchPanel from '@/components/search/SearchPanel.vue'
 import BottomPanel, { type PanelTab } from '@/components/terminal/BottomPanel.vue'
@@ -30,6 +29,7 @@ import { computeWordStats } from '@/features/writing/utils/wordStats'
 import { buildWorkspaceExport, downloadText } from '@/features/workspace/utils/localExport'
 import BackgroundLayer from '@/components/theme/BackgroundLayer.vue'
 import { chapterFilePath } from '@/features/workspace/utils/bookProjectPaths'
+import { storyChapterPath } from '@/core/types/story'
 import { isModKey } from '@/core/platform'
 import ProjectSettings from '@/components/writing/ProjectSettings.vue'
 import ExportDialog from '@/components/writing/ExportDialog.vue'
@@ -72,7 +72,6 @@ const workspaceRef = ref<EditorWorkspaceHandle | null>(null)
 const shellSync = useShellSyncStore()
 const activePanelId = ref('explorer')
 const aiPanelOpen = ref(false)
-const aiPipelineTrigger = ref<PipelineTrigger | null>(null)
 const saveStatus = ref('就绪')
 const menuError = ref('')
 const menuLoading = ref(false)
@@ -80,6 +79,8 @@ const showCreateBookDialog = ref(false)
 const createBookError = ref('')
 const createBookStage = ref<'idle' | 'pick-folder' | 'creating' | 'generating'>('idle')
 const showPreferences = ref(false)
+const showProjectSettings = ref(false)
+const showExportDialog = ref(false)
 const editorAi = useEditorAi()
 const showDashboard = ref(false)
 const showExtensionHub = ref(false)
@@ -142,12 +143,6 @@ function toggleAiPanel() {
 }
 
 const currentFilePath = computed(() => workspace.currentFilePath.value)
-
-const activeStoryChapter = computed(() => {
-  const path = currentFilePath.value
-  if (!path || !isStoryChapterPath(path)) return null
-  return parseStoryChapterPath(path)
-})
 
 async function openFile(path: string) {
   currentChId.value = path
@@ -636,7 +631,7 @@ function onInsertToEditor(_text: string) {
   saveStatus.value = '请在编辑器中粘贴智能体返回的内容'
 }
 
-function openDashboard() {
+async function openDashboard() {
   if (!currentWorkspace.value) return
   wordStats.value = await loadRustWordStats()
   showDashboard.value = true
@@ -925,6 +920,29 @@ onUnmounted(() => {
       :error="createBookError"
       :is-library="isLibrary"
       @confirm="onCreateBookConfirm"
+    />
+    <ExportDialog
+      :visible="showExportDialog"
+      :workspace="currentWorkspace"
+      :workspace-root="localRootPath"
+      :load-chapter-content="workspace.loadChapterContent"
+      @close="showExportDialog = false"
+    />
+    <ProjectSettings
+      :visible="showProjectSettings"
+      @close="showProjectSettings = false"
+    />
+    <PlotAuditDialog
+      :visible="showPlotAudit"
+      :summary="plotAuditData.summary"
+      :markdown="plotAuditData.markdown"
+      :issues="plotAuditData.issues"
+      @close="showPlotAudit = false"
+    />
+    <ExtensionHub
+      :visible="showExtensionHub"
+      :workspace-root="localRootPath"
+      @close="showExtensionHub = false"
     />
     <div v-if="menuError" class="menu-error-banner" role="alert">
       {{ menuError }}

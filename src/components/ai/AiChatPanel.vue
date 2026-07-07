@@ -1,8 +1,9 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { useStoryAgent, type PipelineAction } from '@/features/story/composables/useStoryAgent'
 import { useStoryStore } from '@/features/story/stores/storyStore'
 import { parseStoryChapterPath } from '@/core/types/story'
+import { modEnterLabel } from '@/core/platform'
 import {
   BookOpen,
   Loader2,
@@ -49,12 +50,14 @@ const agent = useStoryAgent(currentChapterNumRef)
 const books = computed(() => storyStore.books ?? [])
 
 const instruction = ref('')
+const guidance = ref('')
 const error = ref('')
 const panelMode = ref<'agent' | 'pipeline'>('agent')
 const showBookMenu = ref(false)
 const showToolLog = ref(false)
 const chatEndRef = ref<HTMLDivElement>()
 const textareaRef = ref<HTMLTextAreaElement>()
+const sendShortcutLabel = ref(modEnterLabel())
 
 const pipelineActions: { id: PipelineAction; label: string; icon: typeof PenLine; desc: string; needsChapter?: boolean }[] = [
   { id: 'write-next', label: '写下一章', icon: PenLine, desc: '完整流水线：规划→写作→审核→修订' },
@@ -355,7 +358,7 @@ watch(() => storyStore.busy, (busy) => {
         v-model="instruction"
         class="input-textarea"
         rows="2"
-        placeholder="输入指令，如：帮我规划下一章、检查人设一致性…"
+        :placeholder="inputPlaceholder"
         :disabled="storyStore.busy"
         @keydown="onKeydown"
       />

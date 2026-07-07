@@ -18,6 +18,7 @@ import {
   Wifi,
   WifiOff,
 } from 'lucide-vue-next'
+import { useShellSyncStore } from '@/features/shell/stores/shellSyncStore'
 
 const props = defineProps<{
   tree: FsNode | null

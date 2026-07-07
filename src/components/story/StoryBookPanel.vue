@@ -184,25 +184,6 @@ const displayError = computed(() => localError.value || lastError.value)
         <p v-if="!loadingChapters && chapters.length === 0" class="hint">暂无章节</p>
       </div>
 
-      <div v-if="workspaceRoot" class="local-bridge">
-        <div class="section-title">本地 Rust 三层流水线</div>
-        <p class="bridge-hint">
-          与 Go 后端独立，使用本地工作区 API 配置执行大纲→正文→校对。
-        </p>
-        <button
-          type="button"
-          class="action-btn primary"
-          :disabled="!canRunLocalPipeline"
-          @click="onRunLocalPipeline"
-        >
-          <Layers :size="14" />
-          三层流水线处理当前章
-        </button>
-        <p v-if="!canRunLocalPipeline" class="hint">
-          请先在编辑器打开本书某一章
-        </p>
-      </div>
-
       <p v-if="displayError" class="err">{{ displayError }}</p>
   </div>
 </template>
