@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useStoryStore } from '@/features/story/stores/storyStore'
-import { storyChapterPath, storyChapterFileDir } from '@/core/types/story'
+import { storyChapterPath } from '@/core/types/story'
 import { RefreshCw, Plus, PenLine, Loader2, Wifi, WifiOff } from 'lucide-vue-next'
 
 const emit = defineEmits<{
@@ -37,14 +37,12 @@ onMounted(() => {
 async function refresh() {
   localError.value = ''
   try {
+    await storyStore.fetchBooks()
     if (!connected.value) {
       await storyStore.ping()
     }
-    if (connected.value) {
-      await storyStore.fetchBooks()
-      if (currentBookId.value) {
-        await storyStore.fetchChapters(currentBookId.value)
-      }
+    if (currentBookId.value) {
+      await storyStore.fetchChapters(currentBookId.value)
     }
   } catch (e: unknown) {
     localError.value = e instanceof Error ? e.message : '刷新失败'
@@ -98,10 +96,9 @@ async function onOpenChapter(ch: { number: number; title: string }) {
 async function onWriteNext() {
   localError.value = ''
   try {
-    await storyStore.writeNext()
-    const list = chapters.value
-    if (list.length > 0) {
-      await onOpenChapter(list[list.length - 1])
+    const out = await storyStore.writeNext()
+    if (out.chapterNumber) {
+      await onOpenChapter({ number: out.chapterNumber, title: out.title })
     }
   } catch (e: unknown) {
     localError.value = e instanceof Error ? e.message : '写章失败'
@@ -109,11 +106,6 @@ async function onWriteNext() {
 }
 
 const displayError = computed(() => localError.value || lastError.value)
-
-const storageHint = computed(() => {
-  if (!currentBookId.value) return ''
-  return storyChapterFileDir(currentBookId.value)
-})
 </script>
 
 <template>
@@ -130,29 +122,28 @@ const storageHint = computed(() => {
     </div>
 
     <div v-if="!connected" class="hint-block">
-      <p>无法连接 {{ baseUrl }}</p>
-      <p class="sub">请启动 Go 服务：<code>go run ./cmd/server</code></p>
+      <p>无法连接 {{ baseUrl }}（离线模式：可阅读/编辑本地书籍）</p>
+      <p class="sub">AI 写章需启动 Go 服务：<code>go run ./cmd/server</code></p>
       <button class="action-btn" @click="storyStore.ping()">重试连接</button>
       <p v-if="displayError" class="err">{{ displayError }}</p>
     </div>
 
-    <template v-else>
-      <div class="toolbar">
-        <button class="action-btn" @click="showCreate = !showCreate">
-          <Plus :size="14" /> 新建书籍
-        </button>
-        <button
-          class="action-btn primary"
-          :disabled="!currentBookId || writing"
-          @click="onWriteNext"
-        >
-          <Loader2 v-if="writing" :size="14" class="spin" />
-          <PenLine v-else :size="14" />
-          写下一章
-        </button>
-      </div>
+    <div class="toolbar">
+      <button class="action-btn" :disabled="!connected" @click="showCreate = !showCreate">
+        <Plus :size="14" /> 新建书籍
+      </button>
+      <button
+        class="action-btn primary"
+        :disabled="!connected || !currentBookId || writing"
+        @click="onWriteNext"
+      >
+        <Loader2 v-if="writing" :size="14" class="spin" />
+        <PenLine v-else :size="14" />
+        写下一章
+      </button>
+    </div>
 
-      <div v-if="showCreate" class="create-form">
+    <div v-if="showCreate && connected" class="create-form">
         <input v-model="newTitle" class="field" placeholder="书名" />
         <textarea v-model="newBrief" class="field area" placeholder="简介 / 设定（可选）" />
         <button class="action-btn primary" :disabled="creating || !newTitle.trim()" @click="onCreateBook">
@@ -178,9 +169,7 @@ const storageHint = computed(() => {
 
       <div v-if="currentBookId" class="chapter-section">
         <div class="section-title">章节</div>
-        <p v-if="storageHint" class="storage-hint" title="相对后端 STORY_PROJECT_ROOT 的路径">
-          正文目录：<code>{{ storageHint }}</code>
-        </p>
+        <p class="storage-hint">正文保存在本地浏览器存储，AI 运算由 Go 后端完成</p>
         <div v-if="loadingChapters" class="hint">加载章节…</div>
         <button
           v-for="ch in chapters"
@@ -195,7 +184,6 @@ const storageHint = computed(() => {
       </div>
 
       <p v-if="displayError" class="err">{{ displayError }}</p>
-    </template>
   </div>
 </template>
 

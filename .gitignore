@@ -22,7 +22,6 @@ build/
 packages/
 
 # Local
-workspace/
 data/
 *.db
 .gocache/

@@ -76,7 +76,7 @@ type SpinoffInput struct {
 }
 
 // GenerateSpinoffFoundation creates spinoff bible/outline from source book context.
-func (s *SpinoffArchitectAgent) GenerateSpinoffFoundation(ctx context.Context, st *store.ProjectStore, in SpinoffInput) (ArchitectOutput, error) {
+func (s *SpinoffArchitectAgent) GenerateSpinoffFoundation(ctx context.Context, st store.BookStore, in SpinoffInput) (ArchitectOutput, error) {
 	bible := st.ReadTextOrDefault(in.SourceBook.ID, "story/story_bible.md", "")
 	outline := st.ReadTextOrDefault(in.SourceBook.ID, "story/volume_outline.md", "")
 	user := fmt.Sprintf("Create spinoff foundation.\nSource: %s\nNew title: %s\nDirection: %s\n\nSource bible:\n%s\n\nSource outline:\n%s",
@@ -134,7 +134,7 @@ func (i *ImitationArchitectAgent) GenerateImitationFoundation(ctx context.Contex
 }
 
 // ReviseFoundationForBook runs foundation reviser and persists artifacts.
-func ReviseFoundationForBook(ctx context.Context, st *store.ProjectStore, router agent.Router, bookID, feedback string) error {
+func ReviseFoundationForBook(ctx context.Context, st store.BookStore, router agent.Router, bookID, feedback string) error {
 	book, err := st.LoadBookConfig(bookID)
 	if err != nil {
 		return err
@@ -146,7 +146,7 @@ func ReviseFoundationForBook(ctx context.Context, st *store.ProjectStore, router
 		PendingHooks:  st.ReadTextOrDefault(bookID, "story/pending_hooks.md", ""),
 		CurrentState:  st.ReadTextOrDefault(bookID, "story/current_state.md", ""),
 	}
-	ctxAgent, err := router.ContextFor(agent.NameFoundationReviser, st.Root, bookID)
+	ctxAgent, err := router.ContextFor(agent.NameFoundationReviser, st.Root(), bookID)
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func ReviseFoundationForBook(ctx context.Context, st *store.ProjectStore, router
 	return persistArchitectOutput(st, bookID, out)
 }
 
-func persistArchitectOutput(st *store.ProjectStore, bookID string, out ArchitectOutput) error {
+func persistArchitectOutput(st store.BookStore, bookID string, out ArchitectOutput) error {
 	if err := st.WriteText(bookID, "story/story_bible.md", out.StoryBible); err != nil {
 		return err
 	}

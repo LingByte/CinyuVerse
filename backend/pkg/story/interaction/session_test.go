@@ -56,8 +56,8 @@ func TestSessionToolLoop(t *testing.T) {
 	client := &toolClient{}
 	run := pipeline.NewRunner(pipeline.Config{
 		ProjectRoot: dir,
-		Router: agent.Router{DefaultClient: client, DefaultModel: "mock"},
-	})
+		Router:      agent.Router{DefaultClient: client, DefaultModel: "mock"},
+	}, st)
 	sess := interaction.NewSession(interaction.SessionConfig{
 		Router:      agent.Router{DefaultClient: client, DefaultModel: "mock"},
 		ProjectRoot: dir,

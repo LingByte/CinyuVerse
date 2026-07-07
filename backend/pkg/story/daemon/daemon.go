@@ -15,18 +15,18 @@ import (
 
 // Service runs background auto-write cycles for active books.
 type Service struct {
-	st     *store.ProjectStore
-	run    *pipeline.Runner
-	hub    *events.Hub
-	mu     sync.Mutex
-	state  models.DaemonRuntimeState
-	cancel context.CancelFunc
-	cfg    models.DaemonConfig
+	st       store.BookStore
+	run      *pipeline.Runner
+	hub      *events.Hub
+	mu       sync.Mutex
+	state    models.DaemonRuntimeState
+	cancel   context.CancelFunc
+	cfg      models.DaemonConfig
 	failures map[string]int // consecutive audit failures per book
 }
 
 // NewService creates a daemon bound to a pipeline runner and event hub.
-func NewService(st *store.ProjectStore, run *pipeline.Runner, hub *events.Hub) *Service {
+func NewService(st store.BookStore, run *pipeline.Runner, hub *events.Hub) *Service {
 	return &Service{st: st, run: run, hub: hub, failures: map[string]int{}}
 }
 

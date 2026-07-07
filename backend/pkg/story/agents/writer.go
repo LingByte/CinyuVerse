@@ -17,10 +17,10 @@ import (
 type WriterAgent struct {
 	ctx    agent.Context
 	router agent.Router
-	st     *store.ProjectStore
+	st     store.BookStore
 }
 
-func NewWriterAgent(ctx agent.Context, st *store.ProjectStore) *WriterAgent {
+func NewWriterAgent(ctx agent.Context, st store.BookStore) *WriterAgent {
 	return &WriterAgent{ctx: ctx, st: st}
 }
 

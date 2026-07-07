@@ -85,7 +85,7 @@ func buildArchitectUser(in InitBookInput, lang models.Language) string {
 }
 
 // WriteFoundationFiles persists architect output to the book directory.
-func WriteFoundationFiles(st *store.ProjectStore, bookID string, out ArchitectOutput, lang models.Language) error {
+func WriteFoundationFiles(st store.BookStore, bookID string, out ArchitectOutput, lang models.Language) error {
 	if err := st.WriteText(bookID, "story/story_bible.md", out.StoryBible); err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func WriteFoundationFiles(st *store.ProjectStore, bookID string, out ArchitectOu
 }
 
 // InitBook creates book config, control docs, and foundation with optional review loop.
-func InitBook(ctx context.Context, st *store.ProjectStore, router agent.Router, cfg models.BookConfig, brief string) error {
+func InitBook(ctx context.Context, st store.BookStore, router agent.Router, cfg models.BookConfig, brief string) error {
 	return InitBookWithOptions(ctx, st, router, cfg, brief, InitBookOptions{FoundationReviewRetries: 2})
 }
 
@@ -126,7 +126,7 @@ type InitBookOptions struct {
 }
 
 // InitBookWithOptions creates a book with architect + optional foundation reviewer.
-func InitBookWithOptions(ctx context.Context, st *store.ProjectStore, router agent.Router, cfg models.BookConfig, brief string, opts InitBookOptions) error {
+func InitBookWithOptions(ctx context.Context, st store.BookStore, router agent.Router, cfg models.BookConfig, brief string, opts InitBookOptions) error {
 	if cfg.ID == "" {
 		return fmt.Errorf("book id required")
 	}
@@ -152,7 +152,7 @@ func InitBookWithOptions(ctx context.Context, st *store.ProjectStore, router age
 	if err := st.EnsureControlDocuments(cfg.ID, cfg.Title, cfg.Language); err != nil {
 		return err
 	}
-	actx, err := router.ContextFor(agent.NameArchitect, st.Root, cfg.ID)
+	actx, err := router.ContextFor(agent.NameArchitect, st.Root(), cfg.ID)
 	if err != nil {
 		return err
 	}
@@ -162,7 +162,7 @@ func InitBookWithOptions(ctx context.Context, st *store.ProjectStore, router age
 	if opts.SkipFoundationReview {
 		out, err = arch.GenerateFoundation(ctx, in)
 	} else {
-		revCtx, rErr := router.ContextFor(agent.NameFoundationReviewer, st.Root, cfg.ID)
+		revCtx, rErr := router.ContextFor(agent.NameFoundationReviewer, st.Root(), cfg.ID)
 		if rErr != nil {
 			out, err = arch.GenerateFoundation(ctx, in)
 		} else {

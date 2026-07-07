@@ -14,10 +14,10 @@ import (
 // ContinuityAuditor performs LLM quality/continuity audit.
 type ContinuityAuditor struct {
 	ctx agent.Context
-	st  *store.ProjectStore
+	st  store.BookStore
 }
 
-func NewContinuityAuditor(ctx agent.Context, st *store.ProjectStore) *ContinuityAuditor {
+func NewContinuityAuditor(ctx agent.Context, st store.BookStore) *ContinuityAuditor {
 	return &ContinuityAuditor{ctx: ctx, st: st}
 }
 

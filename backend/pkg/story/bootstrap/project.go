@@ -67,7 +67,7 @@ func NewServerPipeline(projectRoot string, hub *events.Hub) (*pipeline.Runner, a
 		return nil, agent.Router{}, err
 	}
 	cfg := PipelineConfigFromProject(proj, projectRoot, router, hub)
-	return pipeline.NewRunner(cfg), router, nil
+	return pipeline.NewRunner(cfg, nil), router, nil
 }
 
 // MaxTokensFromEnv reads optional STORY_LLM_MAX_TOKENS.

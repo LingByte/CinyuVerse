@@ -156,7 +156,7 @@ func TestWriteNextChapterWithMockLLM(t *testing.T) {
 	run := pipeline.NewRunner(pipeline.Config{
 		ProjectRoot: dir,
 		Router:      router,
-	})
+	}, st)
 	result, err := run.WriteNextChapter(context.Background(), bookID, 0, "")
 	if err != nil {
 		t.Fatal(err)

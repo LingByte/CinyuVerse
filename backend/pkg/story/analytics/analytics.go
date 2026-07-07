@@ -9,17 +9,17 @@ import (
 
 // BookStats summarizes chapter and word metrics for a book.
 type BookStats struct {
-	BookID         string `json:"bookId"`
-	ChapterCount   int    `json:"chapterCount"`
-	TotalWords     int    `json:"totalWords"`
-	ApprovedCount  int    `json:"approvedCount"`
-	RejectedCount  int    `json:"rejectedCount"`
-	PendingCount   int    `json:"pendingCount"`
-	AvgWordsPerCh  int    `json:"avgWordsPerChapter"`
+	BookID        string `json:"bookId"`
+	ChapterCount  int    `json:"chapterCount"`
+	TotalWords    int    `json:"totalWords"`
+	ApprovedCount int    `json:"approvedCount"`
+	RejectedCount int    `json:"rejectedCount"`
+	PendingCount  int    `json:"pendingCount"`
+	AvgWordsPerCh int    `json:"avgWordsPerChapter"`
 }
 
 // ComputeBookStats aggregates chapter index metrics.
-func ComputeBookStats(st *store.ProjectStore, bookID string) (BookStats, error) {
+func ComputeBookStats(st store.BookStore, bookID string) (BookStats, error) {
 	index, err := st.LoadChapterIndex(bookID)
 	if err != nil {
 		return BookStats{}, err
@@ -92,7 +92,7 @@ func min(a, b int) int {
 }
 
 // FormatExport concatenates chapters into a single document.
-func FormatExport(st *store.ProjectStore, bookID, format string) (string, error) {
+func FormatExport(st store.BookStore, bookID, format string) (string, error) {
 	index, err := st.LoadChapterIndex(bookID)
 	if err != nil {
 		return "", err

@@ -23,21 +23,29 @@ import MarkdownContent from '@/components/ai/MarkdownContent.vue'
 
 const props = defineProps<{
   currentChapterPath?: string | null
+  currentChapterNum?: number | null
+  folderOpen?: boolean
+  isBookProject?: boolean
+  isLibrary?: boolean
 }>()
 
 const emit = defineEmits<{
   insert: [text: string]
   chapterWritten: [bookId: string, chapterNum: number, title: string, content: string]
+  createBook: []
 }>()
 
-const currentChapterNum = computed(() => {
+const currentChapterNumRef = computed(() => {
+  if (props.currentChapterNum != null && props.currentChapterNum > 0) {
+    return props.currentChapterNum
+  }
   if (!props.currentChapterPath) return null
   const parsed = parseStoryChapterPath(props.currentChapterPath)
   return parsed?.chapterNum ?? null
 })
 
 const storyStore = useStoryStore()
-const agent = useStoryAgent(currentChapterNum)
+const agent = useStoryAgent(currentChapterNumRef)
 
 const books = computed(() => storyStore.books ?? [])
 
@@ -71,8 +79,10 @@ const canSend = computed(
 )
 
 const statusText = computed(() => {
+  if (!props.folderOpen) return '未打开文件夹'
+  if (!props.isBookProject) return props.isLibrary ? '书库 · 选择或新建书籍' : '待新建书籍'
   if (!storyStore.connected) return '后端离线'
-  if (!storyStore.currentBookId) return '请选择书籍'
+  if (!storyStore.currentBookId) return '未识别书籍'
   const book = storyStore.currentBook?.title ?? storyStore.currentBookId
   const ch = storyStore.chapters.length
   return `${book} · ${ch} 章`
@@ -96,13 +106,9 @@ async function runAction(action: PipelineAction) {
   error.value = ''
   try {
     const out = await agent.runPipeline(action, guidance.value.trim())
-    if (action === 'write-next' && storyStore.currentBookId) {
-      await storyStore.fetchChapters(storyStore.currentBookId)
-      const last = storyStore.chapters[storyStore.chapters.length - 1]
-      if (last) {
-        const detail = await storyStore.loadChapter(storyStore.currentBookId, last.number)
-        emit('chapterWritten', storyStore.currentBookId, last.number, detail.meta.title, detail.content)
-      }
+    if (action === 'write-next' && storyStore.currentBookId && out && typeof out === 'object' && 'content' in out) {
+      const result = out as { chapterNumber: number; title: string; content: string }
+      emit('chapterWritten', storyStore.currentBookId, result.chapterNumber, result.title, result.content)
     }
     if (typeof out === 'string') {
       agent.lastResult.value = out
@@ -177,15 +183,27 @@ watch(() => agent.eventLogs.value.length, scrollToBottom)
       </button>
     </div>
 
-    <!-- Offline hint -->
-    <div v-if="!storyStore.connected" class="offline-banner">
-      <p>后端未连接（{{ storyStore.baseUrl }}）</p>
-      <p class="sub">启动：<code>cd backend && go run ./cmd/server</code></p>
-      <button class="retry-btn" @click="storyStore.ping()">重试</button>
+    <!-- Offline / setup hints -->
+    <div v-if="!props.folderOpen" class="offline-banner">
+      <p>请先在左侧打开或新建书籍文件夹</p>
     </div>
 
-    <div v-else-if="!storyStore.currentBookId" class="offline-banner">
-      <p>请先在左侧「后端」面板创建或选择书籍</p>
+    <div v-else-if="!props.isBookProject" class="offline-banner">
+      <p v-if="props.isLibrary">请从左侧书库打开一本书，或新建书籍</p>
+      <p v-else>当前文件夹不是书籍项目</p>
+      <p class="sub">
+        <template v-if="props.isLibrary">新书将保存在 <code>books/</code> 目录下</template>
+        <template v-else>新建书籍并选择保存位置，或打开含 <code>cinyuverse/book.json</code> 的文件夹</template>
+      </p>
+      <button class="retry-btn" @click="emit('createBook')">
+        {{ props.isLibrary ? '在书库中新建书籍' : '新建书籍…' }}
+      </button>
+    </div>
+
+    <div v-else-if="!storyStore.connected" class="offline-banner">
+      <p>后端未连接（{{ storyStore.baseUrl }}）</p>
+      <p class="sub">启动：<code>cd backend && go run cmd/server/main.go</code></p>
+      <button class="retry-btn" @click="storyStore.ping()">重试</button>
     </div>
 
     <!-- Messages / logs -->
@@ -241,7 +259,7 @@ watch(() => agent.eventLogs.value.length, scrollToBottom)
     </div>
 
     <!-- Pipeline mode toolbar -->
-    <div v-if="panelMode === 'pipeline' && storyStore.connected && storyStore.currentBookId" class="pipeline-bar">
+    <div v-if="panelMode === 'pipeline' && storyStore.connected && storyStore.currentBookId && props.isBookProject" class="pipeline-bar">
       <input v-model="guidance" class="guidance-input" placeholder="写作指导（可选）" />
       <div class="pipeline-actions">
         <button
@@ -259,13 +277,13 @@ watch(() => agent.eventLogs.value.length, scrollToBottom)
     </div>
 
     <!-- Agent input -->
-    <div v-if="panelMode === 'agent'" class="input-area">
+    <div v-if="panelMode === 'agent' && props.isBookProject && storyStore.connected && storyStore.currentBookId" class="input-area">
       <textarea
         v-model="instruction"
         class="input-textarea"
         rows="2"
-        :placeholder="storyStore.currentBookId ? '输入指令，如：帮我规划下一章、检查人设一致性…' : '请先选择书籍'"
-        :disabled="!storyStore.connected || !storyStore.currentBookId || storyStore.busy"
+        placeholder="输入指令，如：帮我规划下一章、检查人设一致性…"
+        :disabled="storyStore.busy"
         @keydown="onKeydown"
       />
       <div class="input-footer">

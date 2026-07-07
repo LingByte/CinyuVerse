@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	defaultPassScore       = 85
+	defaultPassScore        = 85
 	defaultReviewIterations = 1
 )
 
@@ -33,19 +33,22 @@ type Config struct {
 // Runner orchestrates plan → compose → write → audit → revise.
 type Runner struct {
 	cfg Config
-	st  *store.ProjectStore
+	st  store.BookStore
 }
 
-func NewRunner(cfg Config) *Runner {
+func NewRunner(cfg Config, st store.BookStore) *Runner {
 	if cfg.ReviewIterations <= 0 {
 		cfg.ReviewIterations = defaultReviewIterations
 	}
 	if cfg.ChapterReviewMode == "" {
 		cfg.ChapterReviewMode = "auto"
 	}
+	if st == nil {
+		st = store.NewProjectStore(cfg.ProjectRoot)
+	}
 	return &Runner{
 		cfg: cfg,
-		st:  store.NewProjectStore(cfg.ProjectRoot),
+		st:  st,
 	}
 }
 
@@ -58,13 +61,14 @@ func (r *Runner) InitBook(ctx context.Context, cfg models.BookConfig, brief stri
 
 // ChapterPipelineResult is the outcome of WriteNextChapter.
 type ChapterPipelineResult struct {
-	ChapterNumber int                      `json:"chapterNumber"`
-	Title         string                   `json:"title"`
-	WordCount     int                      `json:"wordCount"`
-	Revised       bool                     `json:"revised"`
-	Status        models.ChapterStatus     `json:"status"`
-	Audit         agents.AuditResult       `json:"audit"`
-	ChapterMeta   models.ChapterMeta       `json:"chapterMeta"`
+	ChapterNumber int                  `json:"chapterNumber"`
+	Title         string               `json:"title"`
+	Content       string               `json:"content"`
+	WordCount     int                  `json:"wordCount"`
+	Revised       bool                 `json:"revised"`
+	Status        models.ChapterStatus `json:"status"`
+	Audit         agents.AuditResult   `json:"audit"`
+	ChapterMeta   models.ChapterMeta   `json:"chapterMeta"`
 }
 
 // WriteNextChapter executes the full governed pipeline for the next chapter.
@@ -163,6 +167,7 @@ func (r *Runner) WriteNextChapter(ctx context.Context, bookID string, wordCount 
 	return ChapterPipelineResult{
 		ChapterNumber: chNum,
 		Title:         title,
+		Content:       strings.TrimSpace(content),
 		WordCount:     meta.WordCount,
 		Revised:       revised,
 		Status:        status,

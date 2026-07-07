@@ -11,7 +11,6 @@ import (
 	"github.com/LingByte/CinyuVerse/pkg/story/interaction"
 	"github.com/LingByte/CinyuVerse/pkg/story/models"
 	"github.com/LingByte/CinyuVerse/pkg/story/pipeline"
-	"github.com/LingByte/CinyuVerse/pkg/story/references"
 	"github.com/LingByte/CinyuVerse/pkg/story/store"
 )
 
@@ -20,7 +19,7 @@ type Server struct {
 	ProjectRoot string
 	Router      agent.Router
 	Pipeline    *pipeline.Runner
-	Store       *store.ProjectStore
+	Store       store.BookStore
 	Hub         *events.Hub
 	Daemon      *daemon.Service
 
@@ -28,13 +27,13 @@ type Server struct {
 	sessions map[string]*interaction.Session
 }
 
-// NewServer creates an API server for a project root.
+// NewServer creates an API server using in-memory book storage (no disk layout).
 func NewServer(projectRoot string, router agent.Router) *Server {
 	hub := events.NewHub()
-	st := store.NewProjectStore(projectRoot)
-	_ = references.NewLibrary(projectRoot).EnsureLayout()
+	st := store.NewMemoryStore(projectRoot)
 	proj, _ := st.LoadProjectConfig()
-	run := pipeline.NewRunner(bootstrapPipelineConfig(projectRoot, router, hub, proj))
+	cfg := bootstrapPipelineConfig(projectRoot, router, hub, proj)
+	run := pipeline.NewRunner(cfg, st)
 	return &Server{
 		ProjectRoot: projectRoot,
 		Router:      router,

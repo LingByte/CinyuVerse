@@ -30,7 +30,7 @@ type PlayStepInput struct {
 // PlayRunner orchestrates Play agents.
 type PlayRunner struct {
 	router      agent.Router
-	st          *store.ProjectStore
+	st          store.BookStore
 	projectRoot string
 }
 
@@ -69,9 +69,9 @@ func (p *PlayRunner) Start(ctx context.Context, in PlayStartInput) (models.PlayW
 		ID: in.SessionID, Title: in.Title, Mode: in.Mode,
 		Premise: in.Premise, WorldContract: in.WorldContract,
 		VisualContract: in.VisualContract,
-		CurrentScene: scene, HUD: "turn 1",
+		CurrentScene:   scene, HUD: "turn 1",
 		SuggestedActions: []string{"inspect surroundings", "talk to nearest character"},
-		Transcript: []models.PlayTurn{{Role: "narrator", Content: scene}},
+		Transcript:       []models.PlayTurn{{Role: "narrator", Content: scene}},
 	}
 	if err := p.st.WriteProjectJSON(playPath(in.SessionID), world); err != nil {
 		return models.PlayWorld{}, err
@@ -118,7 +118,9 @@ func interpretAction(ctx context.Context, c agent.Context, premise, action strin
 	if err != nil {
 		return action, err
 	}
-	var parsed struct{ Intent string `json:"intent"` }
+	var parsed struct {
+		Intent string `json:"intent"`
+	}
 	if err := jsonUnmarshal(extractJSON(resp.FirstContent()), &parsed); err != nil {
 		return action, nil
 	}

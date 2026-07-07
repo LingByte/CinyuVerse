@@ -24,16 +24,19 @@ const (
 
 // ProjectStore manages on-disk book projects (InkOS books/<id>/ layout).
 type ProjectStore struct {
-	Root string
+	root string
 }
 
 // NewProjectStore creates a store rooted at projectRoot.
 func NewProjectStore(projectRoot string) *ProjectStore {
-	return &ProjectStore{Root: projectRoot}
+	return &ProjectStore{root: projectRoot}
 }
 
+// Root returns the project root directory.
+func (s *ProjectStore) Root() string { return s.root }
+
 func (s *ProjectStore) bookDir(bookID string) string {
-	return filepath.Join(s.Root, dirBooks, bookID)
+	return filepath.Join(s.root, dirBooks, bookID)
 }
 
 func (s *ProjectStore) storyDir(bookID string) string {
@@ -85,7 +88,7 @@ func (s *ProjectStore) LoadBookConfig(bookID string) (models.BookConfig, error) 
 
 // ListBooks returns all book configs under the project root.
 func (s *ProjectStore) ListBooks() ([]models.BookConfig, error) {
-	root := filepath.Join(s.Root, dirBooks)
+	root := filepath.Join(s.root, dirBooks)
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -118,7 +121,7 @@ func (s *ProjectStore) WriteText(bookID, relPath, content string) error {
 
 // WriteProjectText writes a UTF-8 file relative to project root (shorts/, play/, etc.).
 func (s *ProjectStore) WriteProjectText(relPath, content string) error {
-	path := filepath.Join(s.Root, relPath)
+	path := filepath.Join(s.root, relPath)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -127,7 +130,7 @@ func (s *ProjectStore) WriteProjectText(relPath, content string) error {
 
 // WriteProjectJSON writes JSON relative to project root.
 func (s *ProjectStore) WriteProjectJSON(relPath string, v any) error {
-	path := filepath.Join(s.Root, relPath)
+	path := filepath.Join(s.root, relPath)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -136,7 +139,7 @@ func (s *ProjectStore) WriteProjectJSON(relPath string, v any) error {
 
 // ReadProjectJSON reads JSON relative to project root.
 func (s *ProjectStore) ReadProjectJSON(relPath string, dest any) error {
-	return readJSON(filepath.Join(s.Root, relPath), dest)
+	return readJSON(filepath.Join(s.root, relPath), dest)
 }
 
 // ReadText reads a UTF-8 text file under the book directory.

@@ -8,9 +8,11 @@ import type {
   AgentResponse,
   BookAnalytics,
   BookConfig,
+  BookState,
   ChapterDetail,
   ChapterMeta,
   CreateBookInput,
+  CreateBookResult,
   DaemonConfig,
   DaemonRuntimeState,
   DetectionConfig,
@@ -19,6 +21,7 @@ import type {
   ProjectConfig,
   ReviseChapterInput,
   WriteChapterInput,
+  WriteNextResult,
 } from '@/core/types/story'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4567'
@@ -113,7 +116,7 @@ export async function getBook(id: string): Promise<BookConfig> {
   return apiGet(bookPath(id))
 }
 
-export async function createBook(input: CreateBookInput): Promise<BookConfig> {
+export async function createBook(input: CreateBookInput): Promise<CreateBookResult> {
   return apiPost('/api/v1/books/create', input, true)
 }
 
@@ -138,8 +141,8 @@ export async function saveChapter(
 
 export async function writeNextChapter(
   bookId: string,
-  input?: WriteChapterInput,
-): Promise<unknown> {
+  input?: WriteChapterInput & { state?: BookState },
+): Promise<WriteNextResult> {
   return apiPost(bookPath(bookId, '/write-next'), input ?? {}, true)
 }
 

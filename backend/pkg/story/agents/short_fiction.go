@@ -26,7 +26,7 @@ type ShortFictionRunInput struct {
 // ShortFictionRunner orchestrates short-fiction agents.
 type ShortFictionRunner struct {
 	router      agent.Router
-	st          *store.ProjectStore
+	st          store.BookStore
 	projectRoot string
 }
 

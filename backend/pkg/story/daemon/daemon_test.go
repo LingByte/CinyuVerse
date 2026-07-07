@@ -16,7 +16,7 @@ func TestDaemonStartStop(t *testing.T) {
 	dir := t.TempDir()
 	hub := events.NewHub()
 	st := store.NewProjectStore(dir)
-	run := pipeline.NewRunner(pipeline.Config{ProjectRoot: dir, Events: hub})
+	run := pipeline.NewRunner(pipeline.Config{ProjectRoot: dir, Events: hub}, st)
 	svc := daemon.NewService(st, run, hub)
 
 	if err := svc.Start(context.Background()); err != nil {
@@ -50,7 +50,7 @@ func TestDaemonConfigPersist(t *testing.T) {
 	_ = time.Now()
 }
 
-func svcUpdate(st *store.ProjectStore, d models.DaemonConfig) error {
+func svcUpdate(st store.BookStore, d models.DaemonConfig) error {
 	p, err := st.LoadProjectConfig()
 	if err != nil {
 		return err

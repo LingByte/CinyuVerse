@@ -413,7 +413,7 @@ func runInteract(args []string) {
 		fatal(err.Error())
 	}
 	router := agent.Router{DefaultClient: client, DefaultModel: model}
-	run := pipeline.NewRunner(pipeline.Config{ProjectRoot: *root, Router: router})
+	run := pipeline.NewRunner(pipeline.Config{ProjectRoot: *root, Router: router}, nil)
 	sess := interaction.NewSession(interaction.SessionConfig{
 		Router: router, ProjectRoot: *root, Pipeline: run, BookID: *book, Language: "zh",
 	})
@@ -484,7 +484,7 @@ func newRunner(root string) (*pipeline.Runner, error) {
 	if err != nil {
 		return nil, err
 	}
-	return pipeline.NewRunner(bootstrap.PipelineConfigFromProject(proj, root, router, nil)), nil
+	return pipeline.NewRunner(bootstrap.PipelineConfigFromProject(proj, root, router, nil), nil), nil
 }
 
 func llmFromEnv() (protocol.ChatModel, string, error) {

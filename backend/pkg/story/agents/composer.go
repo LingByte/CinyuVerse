@@ -17,7 +17,7 @@ import (
 
 // ComposeChapterInput is local context assembly input (no LLM required by default).
 type ComposeChapterInput struct {
-	Store           *store.ProjectStore
+	Store           store.BookStore
 	Book            models.BookConfig
 	ChapterNumber   int
 	Plan            models.PlanChapterOutput
@@ -107,7 +107,7 @@ func collectContextEntries(in ComposeChapterInput) []models.ContextEntry {
 	// Outline section selection (InkOS composer outline selector)
 	var outlineSelector func(context.Context, []outlineSection, outlineSelectionHints) ([]outlineSection, error)
 	if in.Router.DefaultClient != nil {
-		if composerCtx, err := in.Router.ContextFor(agent.NameComposer, st.Root, bookID); err == nil {
+		if composerCtx, err := in.Router.ContextFor(agent.NameComposer, st.Root(), bookID); err == nil {
 			outlineSelector = LLMOutlineSectionSelector(composerCtx)
 		}
 	}
@@ -121,7 +121,7 @@ func collectContextEntries(in ComposeChapterInput) []models.ContextEntry {
 
 	// Memory retrieval (SQLite acceleration index)
 	snap, _ := st.LoadRuntimeSnapshot(bookID, lang)
-	bookDir := filepath.Join(st.Root, "books", bookID)
+	bookDir := filepath.Join(st.Root(), "books", bookID)
 	mem, _ := memory.Retrieve(memory.RetrieveInput{
 		BookDir: bookDir, ChapterNumber: in.ChapterNumber,
 		Goal: plan.Intent.Goal, MustKeep: plan.Intent.MustKeep, Snapshot: snap,
@@ -177,7 +177,7 @@ func collectContextEntries(in ComposeChapterInput) []models.ContextEntry {
 			Tokens:  estimateTokens(external),
 		})
 	}
-	if corpus, _ := references.NewLibrary(st.Root).LoadCorpus(); strings.TrimSpace(corpus) != "" {
+	if corpus, _ := references.NewLibrary(st.Root()).LoadCorpus(); strings.TrimSpace(corpus) != "" {
 		formatted := references.FormatCorpusSection(corpus)
 		entries = append(entries, models.ContextEntry{
 			Source: models.ContextReferenceStyle, Heading: references.CorpusHeading(),
@@ -187,7 +187,7 @@ func collectContextEntries(in ComposeChapterInput) []models.ContextEntry {
 	return entries
 }
 
-func buildRuleStack(book models.BookConfig, chapter int, st *store.ProjectStore, bookID string) models.RuleStack {
+func buildRuleStack(book models.BookConfig, chapter int, st store.BookStore, bookID string) models.RuleStack {
 	layers := []models.RuleLayer{
 		{Scope: models.RuleScopeGlobal, Name: "craft", Priority: 10, Content: CraftRulesForGenre(book.Language, book.Genre)},
 		{Scope: models.RuleScopeGenre, Name: book.Genre, Priority: 20, Content: fmt.Sprintf("Genre profile: %s", book.Genre)},
@@ -197,7 +197,7 @@ func buildRuleStack(book models.BookConfig, chapter int, st *store.ProjectStore,
 			Scope: models.RuleScopeBook, Name: "book_rules", Priority: 30, Content: rules,
 		})
 	}
-	if corpus, _ := references.NewLibrary(st.Root).LoadCorpus(); strings.TrimSpace(corpus) != "" {
+	if corpus, _ := references.NewLibrary(st.Root()).LoadCorpus(); strings.TrimSpace(corpus) != "" {
 		layers = append(layers, models.RuleLayer{
 			Scope: models.RuleScopeBook, Name: "reference_style", Priority: 25,
 			Content: references.FormatCorpusSection(corpus),

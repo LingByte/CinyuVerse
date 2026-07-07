@@ -14,10 +14,10 @@ import (
 // ConsolidatorAgent merges chapter summaries to reduce long-book context pressure.
 type ConsolidatorAgent struct {
 	ctx agent.Context
-	st  *store.ProjectStore
+	st  store.BookStore
 }
 
-func NewConsolidatorAgent(ctx agent.Context, st *store.ProjectStore) *ConsolidatorAgent {
+func NewConsolidatorAgent(ctx agent.Context, st store.BookStore) *ConsolidatorAgent {
 	return &ConsolidatorAgent{ctx: ctx, st: st}
 }
 
@@ -45,8 +45,8 @@ func (c *ConsolidatorAgent) ConsolidateSummaries(ctx context.Context, bookID str
 
 // RadarRecommendation is one trend suggestion.
 type RadarRecommendation struct {
-	Genre   string
-	Trend   string
+	Genre     string
+	Trend     string
 	Rationale string
 }
 

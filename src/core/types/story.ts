@@ -37,6 +37,42 @@ export interface ChapterDetail {
   content: string
 }
 
+export interface ChapterWithContent {
+  meta: ChapterMeta
+  content: string
+}
+
+/** Portable book snapshot — frontend owns persistence, backend uses for AI context. */
+export interface BookState {
+  config: BookConfig
+  chapters: ChapterWithContent[]
+  documents: Record<string, string>
+  runtime?: unknown
+}
+
+export interface CreateBookResult {
+  book: BookConfig
+  state: BookState
+  foundation: {
+    storyBible: string
+    volumeOutline: string
+    bookRules: string
+    pendingHooks: string
+    currentState: string
+  }
+}
+
+export interface WriteNextResult {
+  chapterNumber: number
+  title: string
+  content: string
+  wordCount: number
+  revised: boolean
+  status: ChapterStatus
+  chapterMeta: ChapterMeta
+  state: BookState
+}
+
 export interface Genre {
   id: string
   name: string
@@ -165,13 +201,4 @@ export function parseStoryChapterPath(path: string): { bookId: string; chapterNu
   const m = path.match(/^cinyuverse:\/\/story\/([^/]+)\/chapter\/(\d+)(?:\.md)?$/)
   if (!m) return null
   return { bookId: decodeURIComponent(m[1]), chapterNum: parseInt(m[2], 10) }
-}
-
-/** On-disk layout relative to STORY_PROJECT_ROOT on the Go backend. */
-export function storyBookDir(bookId: string) {
-  return `books/${bookId}/`
-}
-
-export function storyChapterFileDir(bookId: string) {
-  return `books/${bookId}/chapters/`
 }

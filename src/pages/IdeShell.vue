@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
-import { Files, BookOpen, List, Search, Server } from 'lucide-vue-next'
+import { ref, computed, onMounted, onUnmounted, shallowRef, watch, nextTick } from 'vue'
+import { Files, BookOpen, List, Search } from 'lucide-vue-next'
 import MenuBar from '@/components/layouts/MenuBar.vue'
 import StatusBar from '@/components/layouts/StatusBar.vue'
 import ActivityBar from '@/components/layouts/ActivityBar.vue'
@@ -16,6 +16,7 @@ import SearchPanel from '@/components/search/SearchPanel.vue'
 import BottomPanel, { type PanelTab } from '@/components/terminal/BottomPanel.vue'
 import ThemeSettings from '@/components/theme/ThemeSettings.vue'
 import WritingDashboard from '@/components/writing/WritingDashboard.vue'
+import CreateBookDialog from '@/components/story/CreateBookDialog.vue'
 import { provideViewerRegistry } from '@/components/viewers/ViewerRegistry'
 import { defaultRenderers } from '@/components/viewers/defaultRenderers'
 import { useWorkspace } from '@/features/workspace/composables/useWorkspace'
@@ -27,8 +28,7 @@ import type { ActivityBarItem } from '@/types/activity-bar'
 import { computeWordStats } from '@/features/writing/utils/wordStats'
 import { buildWorkspaceExport, downloadText } from '@/features/workspace/utils/localExport'
 import BackgroundLayer from '@/components/theme/BackgroundLayer.vue'
-import StoryBookPanel from '@/components/story/StoryBookPanel.vue'
-import { storyChapterPath } from '@/core/types/story'
+import { chapterFilePath } from '@/features/workspace/utils/bookProjectPaths'
 import { isModKey } from '@/core/platform'
 import { desktopApi } from '@/services/desktopApi'
 import { isDesktop } from '@/services/runtime'
@@ -40,7 +40,22 @@ const props = defineProps<{
 provideViewerRegistry(shallowRef(defaultRenderers))
 
 const workspace = useWorkspace()
-const { currentWorkspace, tree, folderName, refreshTree, restoreLastSession, localRootPath } = workspace
+const {
+  currentWorkspace,
+  tree,
+  folderName,
+  refreshTree,
+  restoreLastSession,
+  localRootPath,
+  isBookProject,
+  bookChapters,
+  libraryBooks,
+  libraryRootPath,
+  bookRootPath,
+  chapterPath,
+} = workspace
+
+const isLibrary = computed(() => !!libraryRootPath.value)
 
 const workspaceRef = ref<EditorWorkspaceHandle | null>(null)
 const activePanelId = ref('explorer')
@@ -48,6 +63,9 @@ const aiPanelOpen = ref(false)
 const saveStatus = ref('就绪')
 const menuError = ref('')
 const menuLoading = ref(false)
+const showCreateBookDialog = ref(false)
+const createBookError = ref('')
+const createBookStage = ref<'idle' | 'pick-folder' | 'creating' | 'generating'>('idle')
 const showPreferences = ref(false)
 const showDashboard = ref(false)
 const wordStats = ref<WordStats | null>(null)
@@ -82,9 +100,18 @@ const totalChapters = computed(() =>
 
 const totalVolumes = computed(() => currentWorkspace.value?.volumes.length ?? 0)
 
+const currentBookChapterNum = computed(() => {
+  const path = currentChId.value
+  if (!path || !isBookProject.value) return null
+  for (const ch of bookChapters.value) {
+    const p = chapterPath(ch.number)
+    if (p === path) return ch.number
+  }
+  return null
+})
+
 const activityItems: ActivityBarItem[] = [
-  { id: 'explorer', label: '目录', icon: Files },
-  { id: 'story', label: '后端', icon: Server },
+  { id: 'explorer', label: '书籍', icon: Files },
   { id: 'search', label: '搜索', icon: Search },
   { id: 'meta', label: '设定', icon: BookOpen },
   { id: 'outline', label: '大纲', icon: List },
@@ -121,6 +148,142 @@ async function onMenuOpenFolder() {
     menuError.value = err instanceof Error ? err.message : '打开文件夹失败'
   } finally {
     menuLoading.value = false
+  }
+}
+
+function onOpenAiPanel() {
+  aiPanelOpen.value = true
+}
+
+function onCreateBook() {
+  if (!isDesktop()) {
+    menuError.value = '仅桌面端支持新建书籍'
+    return
+  }
+  menuError.value = ''
+  createBookError.value = ''
+  createBookStage.value = 'idle'
+  showCreateBookDialog.value = true
+}
+
+async function onCreateBookConfirm({ title, brief }: { title: string; brief: string }) {
+  menuLoading.value = true
+  menuError.value = ''
+  createBookError.value = ''
+  try {
+    const {
+      createBookFolder,
+      createBookInLibrary,
+      emptyBookState,
+      loadBookState,
+      enrichBookFromBackend,
+    } = await import('@/services/bookProjectStore')
+
+    let parent: string | null = null
+    if (!libraryRootPath.value) {
+      createBookStage.value = 'pick-folder'
+      saveStatus.value = '请选择保存位置…'
+      showCreateBookDialog.value = false
+      await nextTick()
+      parent = await desktopApi.openFolder()
+      if (!parent) {
+        createBookError.value = '未选择保存位置'
+        createBookStage.value = 'idle'
+        saveStatus.value = '就绪'
+        showCreateBookDialog.value = true
+        return
+      }
+    }
+
+    createBookStage.value = 'creating'
+    saveStatus.value = '创建书籍文件夹…'
+    const state = emptyBookState(title)
+    let root: string
+    if (libraryRootPath.value) {
+      root = await createBookInLibrary(libraryRootPath.value, title, state)
+    } else {
+      root = await createBookFolder(parent!, title, state)
+    }
+
+    showCreateBookDialog.value = false
+    await workspace.openLocalFolder(root)
+    const loaded = await loadBookState(root)
+    storyStore.bindFolder(root, loaded)
+    currentChId.value = ''
+    aiPanelOpen.value = true
+    saveStatus.value = '就绪'
+
+    if (storyStore.connected && brief.trim()) {
+      createBookStage.value = 'generating'
+      saveStatus.value = '正在生成世界观设定…'
+      void enrichBookFromBackend(root, title, brief).then(async () => {
+        await workspace.refreshLocalFolder()
+        const refreshed = await loadBookState(root)
+        storyStore.bindFolder(root, refreshed)
+        saveStatus.value = '设定已生成'
+      }).catch(() => {
+        saveStatus.value = '本地书籍已创建（设定生成失败，可稍后重试）'
+      }).finally(() => {
+        createBookStage.value = 'idle'
+      })
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : '创建书籍失败'
+    createBookError.value = message
+    menuError.value = message
+    createBookStage.value = 'idle'
+    showCreateBookDialog.value = true
+  } finally {
+    menuLoading.value = false
+    if (createBookStage.value !== 'generating') {
+      createBookStage.value = 'idle'
+    }
+  }
+}
+
+async function onWriteNext() {
+  if (!storyStore.currentBookId) return
+  saveStatus.value = 'AI 写章中…'
+  try {
+    const out = await storyStore.writeNext()
+    await workspace.refreshLocalFolder()
+    if (out.chapterNumber) {
+      await onOpenBookChapter(out.chapterNumber)
+    }
+    saveStatus.value = '就绪'
+  } catch (err: unknown) {
+    menuError.value = err instanceof Error ? err.message : '写章失败'
+    saveStatus.value = '就绪'
+  }
+}
+
+async function onOpenBookChapter(chapterNum: number) {
+  const bookId = storyStore.currentBookId
+  if (!bookId) return
+  try {
+    const detail = await storyStore.loadChapter(bookId, chapterNum)
+    const path = chapterPath(chapterNum) ?? (bookRootPath.value
+      ? chapterFilePath(bookRootPath.value, detail.meta.fileName)
+      : '')
+    if (!path) throw new Error('章节路径未找到')
+    workspaceRef.value?.openContent(path, detail.meta.title, detail.content, async (newContent) => {
+      await storyStore.saveChapter(bookId, chapterNum, detail.meta.title, newContent)
+      await workspace.refreshLocalFolder()
+    })
+    currentChId.value = path
+    workspace.currentFilePath.value = path
+  } catch (err: unknown) {
+    menuError.value = err instanceof Error ? err.message : '打开章节失败'
+  }
+}
+
+async function onOpenLibraryBook(path: string) {
+  menuError.value = ''
+  try {
+    await workspace.openBookInLibrary(path)
+    currentChId.value = ''
+  } catch (err: unknown) {
+    menuError.value = err instanceof Error ? err.message : '打开书籍失败'
   }
 }
 
@@ -206,22 +369,8 @@ function onSearchOpenMatch(path: string, _line: number, _column: number) {
   void openFile(path)
 }
 
-async function onOpenStoryChapter(
-  path: string,
-  title: string,
-  content: string,
-  bookId: string,
-  chapterNum: number,
-) {
-  workspaceRef.value?.openContent(path, title, content, async (newContent) => {
-    await storyStore.saveChapter(bookId, chapterNum, title, newContent)
-  })
-  currentChId.value = path
-}
-
-function onChapterWritten(bookId: string, chapterNum: number, title: string, content: string) {
-  const path = storyChapterPath(bookId, chapterNum)
-  void onOpenStoryChapter(path, title, content, bookId, chapterNum)
+function onChapterWritten(_bookId: string, chapterNum: number, _title: string, _content: string) {
+  void onOpenBookChapter(chapterNum)
 }
 
 function onInsertToEditor(_text: string) {
@@ -291,6 +440,9 @@ watch(workspaceRef, async (ws) => {
 onMounted(async () => {
   document.addEventListener('keydown', onGlobalKeydown)
   themeStore.applyTheme()
+  workspace.setBookBoundHandler((root, state) => {
+    storyStore.bindFolder(root, state)
+  })
   void storyStore.init()
   if (isDesktop()) {
     await restoreLastSession()
@@ -318,8 +470,13 @@ onUnmounted(() => {
     <div v-if="props.detachPanel === 'ai'" class="detach-full">
       <AiChatPanel
         :current-chapter-path="currentChId"
+        :current-chapter-num="currentBookChapterNum"
+        :folder-open="!!localRootPath"
+        :is-book-project="isBookProject"
+        :is-library="isLibrary"
         @insert="onInsertToEditor"
         @chapter-written="onChapterWritten"
+        @create-book="onCreateBook"
       />
     </div>
     <div v-else-if="props.detachPanel === 'outline'" class="detach-full">
@@ -368,12 +525,23 @@ onUnmounted(() => {
             :tree="tree"
             :folder-name="folderName"
             :current-file-path="currentFilePath"
+            :is-book-project="isBookProject"
+            :is-library="isLibrary"
+            :book-chapters="bookChapters"
+            :library-books="libraryBooks"
+            :backend-connected="storyStore.connected"
+            :writing="storyStore.writing"
             @select-file="openFile"
             @create-file="onCreateFile"
             @create-dir="onCreateDir"
             @delete-path="onDeletePath"
-            @close-folder="workspace.closeCurrent()"
+            @close-folder="workspace.closeCurrent(); storyStore.unbindFolder()"
             @open-folder="onMenuOpenFolder"
+            @create-book="onCreateBook"
+            @write-next="onWriteNext"
+            @open-ai-panel="onOpenAiPanel"
+            @open-chapter="onOpenBookChapter"
+            @open-library-book="onOpenLibraryBook"
             @refresh-tree="refreshTree()"
           />
           <SearchPanel
@@ -381,9 +549,6 @@ onUnmounted(() => {
             :root-path="rootPath"
             :on-open-match="onSearchOpenMatch"
           />
-          <PanelShell v-show="activePanelId === 'story'" title="后端书籍" subtitle="Go Story API">
-            <StoryBookPanel @open-chapter="onOpenStoryChapter" />
-          </PanelShell>
           <PanelShell v-show="activePanelId === 'meta'" title="设定" subtitle="角色与词条">
             <MetaPanel :workspace-id="currentWorkspace?.id ?? null" />
           </PanelShell>
@@ -423,8 +588,13 @@ onUnmounted(() => {
             <AiAssistantDrawer :open="aiPanelOpen" @close="aiPanelOpen = false">
               <AiChatPanel
                 :current-chapter-path="currentChId"
+                :current-chapter-num="currentBookChapterNum"
+                :folder-open="!!localRootPath"
+                :is-book-project="isBookProject"
+                :is-library="isLibrary"
                 @insert="onInsertToEditor"
                 @chapter-written="onChapterWritten"
+                @create-book="onCreateBook"
               />
             </AiAssistantDrawer>
           </div>
@@ -445,6 +615,18 @@ onUnmounted(() => {
     </template>
 
     <ThemeSettings :visible="showPreferences" @close="showPreferences = false" />
+    <CreateBookDialog
+      v-model:open="showCreateBookDialog"
+      :loading="menuLoading"
+      :stage="createBookStage"
+      :error="createBookError"
+      :is-library="isLibrary"
+      @confirm="onCreateBookConfirm"
+    />
+    <div v-if="menuError" class="menu-error-banner" role="alert">
+      {{ menuError }}
+      <button type="button" class="dismiss-error" @click="menuError = ''">×</button>
+    </div>
     <WritingDashboard
       :visible="showDashboard"
       :workspace-id="currentWorkspace?.id ?? null"
@@ -461,6 +643,34 @@ onUnmounted(() => {
   height: 100%;
   overflow: hidden;
   background: transparent;
+}
+
+.menu-error-banner {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(90vw, 520px);
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.92);
+  color: #fecaca;
+  font-size: 13px;
+  transform: translateX(-50%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.dismiss-error {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.8;
 }
 
 .ide-bg {

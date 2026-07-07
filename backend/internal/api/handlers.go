@@ -8,6 +8,7 @@ import (
 
 	"github.com/LingByte/CinyuVerse/pkg/story/agents"
 	"github.com/LingByte/CinyuVerse/pkg/story/models"
+	"github.com/LingByte/CinyuVerse/pkg/story/store"
 )
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -69,25 +70,63 @@ func (s *Server) handleCreateBook(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusCreated, cfg)
-}
-
-func (s *Server) handleWriteNext(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Guidance  string `json:"guidance"`
-		WordCount int    `json:"wordCount"`
-	}
-	_ = readJSONBody(r, &req)
-	out, err := s.Pipeline.WriteNextChapter(r.Context(), bookID(r), req.WordCount, req.Guidance)
+	state, err := store.ExportBookState(s.Store, id)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, out)
+	result := models.CreateBookResult{Book: cfg, State: state}
+	result.Foundation.StoryBible = state.Documents["story/story_bible.md"]
+	result.Foundation.VolumeOutline = state.Documents["story/volume_outline.md"]
+	result.Foundation.BookRules = state.Documents["story/book_rules.md"]
+	result.Foundation.PendingHooks = state.Documents["story/pending_hooks.md"]
+	result.Foundation.CurrentState = state.Documents["story/current_state.md"]
+	writeJSON(w, http.StatusCreated, result)
+}
+
+func (s *Server) handleWriteNext(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Guidance  string            `json:"guidance"`
+		WordCount int               `json:"wordCount"`
+		State     *models.BookState `json:"state"`
+	}
+	if err := readJSONBody(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	id := bookID(r)
+	if req.State != nil {
+		if err := store.ApplyBookState(s.Store, *req.State); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+	}
+	out, err := s.Pipeline.WriteNextChapter(r.Context(), id, req.WordCount, req.Guidance)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	bookState, err := store.ExportBookState(s.Store, id)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, models.WriteNextResult{
+		ChapterNumber: out.ChapterNumber,
+		Title:         out.Title,
+		Content:       out.Content,
+		WordCount:     out.WordCount,
+		Revised:       out.Revised,
+		Status:        out.Status,
+		ChapterMeta:   out.ChapterMeta,
+		State:         bookState,
+	})
 }
 
 func (s *Server) handlePlan(w http.ResponseWriter, r *http.Request) {
-	var req struct{ Guidance string `json:"guidance"` }
+	var req struct {
+		Guidance string `json:"guidance"`
+	}
 	_ = readJSONBody(r, &req)
 	out, err := s.Pipeline.PlanChapter(r.Context(), bookID(r), req.Guidance)
 	if err != nil {
@@ -98,7 +137,9 @@ func (s *Server) handlePlan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCompose(w http.ResponseWriter, r *http.Request) {
-	var req struct{ Guidance string `json:"guidance"` }
+	var req struct {
+		Guidance string `json:"guidance"`
+	}
 	_ = readJSONBody(r, &req)
 	out, err := s.Pipeline.ComposeChapter(r.Context(), bookID(r), req.Guidance)
 	if err != nil {
@@ -179,7 +220,9 @@ func (s *Server) handleGetTruth(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handlePutTruth(w http.ResponseWriter, r *http.Request) {
 	rel := r.PathValue("file")
-	var req struct{ Content string `json:"content"` }
+	var req struct {
+		Content string `json:"content"`
+	}
 	if err := readJSONBody(r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return

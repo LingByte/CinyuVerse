@@ -26,7 +26,7 @@ type outlineSelectionHints struct {
 }
 
 // selectOutlineSections picks relevant outline sections for compose context.
-func selectOutlineSections(st *store.ProjectStore, bookID string, plan models.PlanChapterOutput, lang models.Language, selector func(context.Context, []outlineSection, outlineSelectionHints) ([]outlineSection, error), ctx context.Context) []models.ContextEntry {
+func selectOutlineSections(st store.BookStore, bookID string, plan models.PlanChapterOutput, lang models.Language, selector func(context.Context, []outlineSection, outlineSelectionHints) ([]outlineSection, error), ctx context.Context) []models.ContextEntry {
 	candidates := collectOutlineCandidates(st, bookID)
 	if len(candidates) == 0 {
 		return nil
@@ -53,7 +53,7 @@ func selectOutlineSections(st *store.ProjectStore, bookID string, plan models.Pl
 	return entries
 }
 
-func collectOutlineCandidates(st *store.ProjectStore, bookID string) []outlineSection {
+func collectOutlineCandidates(st store.BookStore, bookID string) []outlineSection {
 	paths := []struct {
 		path, kind string
 	}{

@@ -12,7 +12,7 @@ const projectConfigFile = "project.json"
 
 // LoadProjectConfig reads project.json or returns defaults.
 func (s *ProjectStore) LoadProjectConfig() (models.ProjectConfig, error) {
-	path := filepath.Join(s.Root, projectConfigFile)
+	path := filepath.Join(s.root, projectConfigFile)
 	var cfg models.ProjectConfig
 	if err := readJSON(path, &cfg); err != nil {
 		if os.IsNotExist(err) {
@@ -29,5 +29,5 @@ func (s *ProjectStore) LoadProjectConfig() (models.ProjectConfig, error) {
 // SaveProjectConfig writes project.json.
 func (s *ProjectStore) SaveProjectConfig(cfg models.ProjectConfig) error {
 	cfg.UpdatedAt = time.Now().UTC()
-	return writeJSON(filepath.Join(s.Root, projectConfigFile), cfg)
+	return writeJSON(filepath.Join(s.root, projectConfigFile), cfg)
 }

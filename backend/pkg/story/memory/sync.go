@@ -8,8 +8,8 @@ import (
 )
 
 // SyncFromSnapshot rebuilds the SQLite index from authoritative JSON state.
-func SyncFromSnapshot(st *store.ProjectStore, bookID string, snap models.RuntimeStateSnapshot) error {
-	bookDir := filepath.Join(st.Root, "books", bookID)
+func SyncFromSnapshot(st store.BookStore, bookID string, snap models.RuntimeStateSnapshot) error {
+	bookDir := filepath.Join(st.Root(), "books", bookID)
 	db, err := Open(bookDir)
 	if err != nil {
 		return err

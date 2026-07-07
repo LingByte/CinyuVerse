@@ -38,7 +38,7 @@ func (f *FanficCanonImporter) ImportCanon(ctx context.Context, sourceText, sourc
 }
 
 // InitFanficBook creates a fanfic book with imported canon and architect foundation.
-func InitFanficBook(ctx context.Context, st *store.ProjectStore, router agent.Router, cfg models.BookConfig, sourceText, sourceName string, mode models.FanficMode) error {
+func InitFanficBook(ctx context.Context, st store.BookStore, router agent.Router, cfg models.BookConfig, sourceText, sourceName string, mode models.FanficMode) error {
 	if cfg.Language == "" {
 		cfg.Language = models.LanguageZH
 	}
@@ -55,7 +55,7 @@ func InitFanficBook(ctx context.Context, st *store.ProjectStore, router agent.Ro
 		return err
 	}
 	_ = st.EnsureControlDocuments(cfg.ID, cfg.Title, cfg.Language)
-	importerCtx, err := router.ContextFor(agent.NameFanficCanonImporter, st.Root, cfg.ID)
+	importerCtx, err := router.ContextFor(agent.NameFanficCanonImporter, st.Root(), cfg.ID)
 	if err != nil {
 		return err
 	}
@@ -66,7 +66,7 @@ func InitFanficBook(ctx context.Context, st *store.ProjectStore, router agent.Ro
 	if err := st.WriteText(cfg.ID, "story/fanfic_canon.md", canon); err != nil {
 		return err
 	}
-	archCtx, err := router.ContextFor(agent.NameArchitect, st.Root, cfg.ID)
+	archCtx, err := router.ContextFor(agent.NameArchitect, st.Root(), cfg.ID)
 	if err != nil {
 		return err
 	}

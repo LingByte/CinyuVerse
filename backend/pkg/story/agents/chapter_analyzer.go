@@ -15,10 +15,10 @@ import (
 // ChapterAnalyzerAgent reverse-engineers runtime state from imported chapter text.
 type ChapterAnalyzerAgent struct {
 	ctx agent.Context
-	st  *store.ProjectStore
+	st  store.BookStore
 }
 
-func NewChapterAnalyzerAgent(ctx agent.Context, st *store.ProjectStore) *ChapterAnalyzerAgent {
+func NewChapterAnalyzerAgent(ctx agent.Context, st store.BookStore) *ChapterAnalyzerAgent {
 	return &ChapterAnalyzerAgent{ctx: ctx, st: st}
 }
 
@@ -96,7 +96,7 @@ type ImportChaptersResult struct {
 }
 
 // ImportChapters saves chapters and replays analyzer for each.
-func ImportChapters(ctx context.Context, st *store.ProjectStore, router agent.Router, projectRoot string, in ImportChaptersInput) (ImportChaptersResult, error) {
+func ImportChapters(ctx context.Context, st store.BookStore, router agent.Router, projectRoot string, in ImportChaptersInput) (ImportChaptersResult, error) {
 	book, err := st.LoadBookConfig(in.BookID)
 	if err != nil {
 		return ImportChaptersResult{}, err

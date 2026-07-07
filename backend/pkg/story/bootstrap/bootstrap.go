@@ -19,7 +19,8 @@ type LLMConfig struct {
 
 // LoadLLMConfig reads STORY_LLM_* environment variables.
 func LoadLLMConfig() (LLMConfig, error) {
-	provider := envOr("STORY_LLM_PROVIDER", "openai")
+	LoadDotEnv()
+	provider := envOr("STORY_LLM_PROVIDER", "ollama")
 	baseURL := os.Getenv("STORY_LLM_BASE_URL")
 	apiKey := os.Getenv("STORY_LLM_API_KEY")
 	model := envOr("STORY_LLM_MODEL", "gpt-4o-mini")
@@ -57,7 +58,7 @@ func NewPipelineRunner(projectRoot string, router agent.Router) *pipeline.Runner
 	return pipeline.NewRunner(pipeline.Config{
 		ProjectRoot: projectRoot,
 		Router:      router,
-	})
+	}, nil)
 }
 
 // NewPipelineFromEnv is the one-shot bootstrap for CLI and HTTP server.

@@ -16,10 +16,10 @@ const plannerMaxAttempts = 3
 // PlannerAgent produces chapter intent and memo via LLM.
 type PlannerAgent struct {
 	ctx agent.Context
-	st  *store.ProjectStore
+	st  store.BookStore
 }
 
-func NewPlannerAgent(ctx agent.Context, st *store.ProjectStore) *PlannerAgent {
+func NewPlannerAgent(ctx agent.Context, st store.BookStore) *PlannerAgent {
 	return &PlannerAgent{ctx: ctx, st: st}
 }
 
