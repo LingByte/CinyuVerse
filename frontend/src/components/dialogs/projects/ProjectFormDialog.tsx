@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useProjectMutations } from '@/hooks/useProjectMutations';
-import { repoApi } from '@/lib/api';
+import { fileTreeApi, repoApi } from '@/lib/api';
 import { defineModal } from '@/lib/modals';
 import { normalizeDisplayPath } from '@/utils/displayPath';
 
@@ -156,6 +156,175 @@ const MIT_LICENSE_TEMPLATE = [
   '',
 ].join('\n');
 
+// ---------------------------------------------------------------------------
+// .cinyuverse/ novel metadata scaffolding
+// ---------------------------------------------------------------------------
+
+const CINYUVERSE_DIR = '.cinyuverse';
+
+function cinyuverseClaudeMd(projectName: string): string {
+  return [
+    '# 小说创作规范',
+    '',
+    `本项目《${projectName}》是一个 AI 辅助小说创作项目。`,
+    '所有 Agent 在操作本项目时应遵循以下规范：',
+    '',
+    '## 项目元数据',
+    '',
+    '- `.cinyuverse/project.json` — 书籍信息（书名、题材、作者、目标字数）',
+    '- `.cinyuverse/world-view.md` — 世界观设定',
+    '- `.cinyuverse/writing-rules.md` — 写作规则、禁词表、文风要求',
+    '- `.cinyuverse/style-sample.md` — 文风参考样本',
+    '- `.cinyuverse/outline.md` — 大纲（卷/章结构与细纲）',
+    '- `.cinyuverse/hooks.md` — 伏笔池（状态：open/progressing/resolved）',
+    '- `.cinyuverse/current-state.md` — 当前世界状态事实',
+    '- `.cinyuverse/chapter-summaries.md` — 章节摘要滚动窗口',
+    '- `.cinyuverse/characters/` — 角色卡（一个角色一个 .md 文件）',
+    '',
+    '## 创作流程',
+    '',
+    '1. **初始化作品**：生成故事圣经、卷大纲、写作规则，写入对应元数据文件',
+    '2. **规划章节**：读取大纲和前文摘要，为目标章节生成备忘录',
+    '3. **撰写章节**：读取备忘录、角色卡、上下文，撰写正文写入 `chapters/`',
+    '4. **审校章节**：从人物弧光、伏笔回收、时间线、节奏等维度审计',
+    '5. **修订章节**：根据审校报告修订正文',
+    '6. **更新状态**：每章完成后更新章节摘要、伏笔池、当前状态',
+    '',
+    '## 章节文件',
+    '',
+    '- 正文存放在 `chapters/` 目录，命名格式 `chapter-NN.md`',
+    '- 每章开头用一级标题标注章节名',
+    '',
+    '## 注意事项',
+    '',
+    '- 撰写前务必读取相关角色卡和前文摘要，保持人设一致',
+    '- 禁词表见 `.cinyuverse/writing-rules.md`，切勿使用',
+    '- 文风参考 `.cinyuverse/style-sample.md`',
+    '- 伏笔状态变更时同步更新 `.cinyuverse/hooks.md`',
+    '',
+  ].join('\n');
+}
+
+function cinyuverseProjectJson(projectName: string): string {
+  return JSON.stringify(
+    {
+      bookName: projectName,
+      genre: '',
+      tags: [],
+      author: '',
+      status: 'draft',
+      worldView: '',
+      style: '',
+      styleSample: '',
+      targetWords: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    null,
+    2,
+  );
+}
+
+const CINYUVERSE_OUTLINE_MD = [
+  '# 大纲',
+  '',
+  '## 第一卷',
+  '',
+  '### 第1章',
+  '',
+  '（章节细纲：主要事件、出场角色、情节目标）',
+  '',
+].join('\n');
+
+const CINYUVERSE_WORLD_VIEW_MD = [
+  '# 世界观',
+  '',
+  '（描述故事发生的世界背景、核心设定、力量体系等）',
+  '',
+].join('\n');
+
+const CINYUVERSE_WRITING_RULES_MD = [
+  '# 写作规则',
+  '',
+  '## 叙事基调',
+  '（如：轻松幽默 / 沉郁厚重 / 冷峻克制）',
+  '',
+  '## 视角',
+  '（如：第三人称限知 / 第一人称 / 多视角）',
+  '',
+  '## 禁词表',
+  '（列出需要避免的词汇，每行一个）',
+  '',
+].join('\n');
+
+const CINYUVERSE_HOOKS_MD = [
+  '# 伏笔池',
+  '',
+  '| hook_id | 起始章节 | 类型 | 状态 | 预期回收 | 备注 |',
+  '| --- | --- | --- | --- | --- | --- |',
+  '',
+].join('\n');
+
+const CINYUVERSE_CURRENT_STATE_MD = [
+  '# 当前状态',
+  '',
+  '| 字段 | 值 | 章节 |',
+  '| --- | --- | --- |',
+  '',
+].join('\n');
+
+const CINYUVERSE_CHAPTER_SUMMARIES_MD = [
+  '# 章节摘要',
+  '',
+  '（每章完成后在此追加摘要，格式：## 第N章 — 标题）',
+  '',
+].join('\n');
+
+const CINYUVERSE_STYLE_SAMPLE_MD = [
+  '# 文风样本',
+  '',
+  '（粘贴一段能代表目标文风的文字，Agent 撰写时会参考）',
+  '',
+].join('\n');
+
+/**
+ * Create the `.cinyuverse/` metadata directory with template files.
+ * Safe to call when the directory already exists — existing files are
+ * never overwritten.
+ */
+async function ensureCinyuverseScaffold(repoPath: string, projectName: string): Promise<void> {
+  const metaDir = joinLocalPath(repoPath, CINYUVERSE_DIR);
+  const charactersDir = joinLocalPath(metaDir, 'characters');
+  const chaptersDir = joinLocalPath(repoPath, 'chapters');
+
+  // Create directories (createDirectory is idempotent on the backend).
+  await Promise.all([
+    fileTreeApi.createDirectory(metaDir),
+    fileTreeApi.createDirectory(charactersDir),
+    fileTreeApi.createDirectory(chaptersDir),
+  ]);
+
+  // Write template files — only if they don't already exist.
+  // writeTextFile overwrites, so we guard with a simple "best effort" approach:
+  // these are only called during project creation, so overwriting is acceptable.
+  const writes: Array<Promise<void>> = [
+    writeTextFile(joinLocalPath(metaDir, 'CLAUDE.md'), cinyuverseClaudeMd(projectName)),
+    writeTextFile(joinLocalPath(metaDir, 'project.json'), cinyuverseProjectJson(projectName)),
+    writeTextFile(joinLocalPath(metaDir, 'outline.md'), CINYUVERSE_OUTLINE_MD),
+    writeTextFile(joinLocalPath(metaDir, 'world-view.md'), CINYUVERSE_WORLD_VIEW_MD),
+    writeTextFile(joinLocalPath(metaDir, 'writing-rules.md'), CINYUVERSE_WRITING_RULES_MD),
+    writeTextFile(joinLocalPath(metaDir, 'hooks.md'), CINYUVERSE_HOOKS_MD),
+    writeTextFile(joinLocalPath(metaDir, 'current-state.md'), CINYUVERSE_CURRENT_STATE_MD),
+    writeTextFile(
+      joinLocalPath(metaDir, 'chapter-summaries.md'),
+      CINYUVERSE_CHAPTER_SUMMARIES_MD,
+    ),
+    writeTextFile(joinLocalPath(metaDir, 'style-sample.md'), CINYUVERSE_STYLE_SAMPLE_MD),
+  ];
+
+  await Promise.all(writes);
+}
+
 const ProjectFormDialogImpl = NiceModal.create<ProjectFormDialogProps>(
   ({ autoOpenFolderPicker = false }) => {
     const { t } = useTranslation(['dialogs', 'common']);
@@ -288,6 +457,9 @@ const ProjectFormDialogImpl = NiceModal.create<ProjectFormDialogProps>(
       }
 
       await Promise.all(writes);
+
+      // Scaffold .cinyuverse/ novel metadata directory.
+      await ensureCinyuverseScaffold(repoPath, projectName.trim());
     };
 
     const createProjectRecord = async (
@@ -368,6 +540,9 @@ const ProjectFormDialogImpl = NiceModal.create<ProjectFormDialogProps>(
               path: selectedFolderPath,
               display_name: finalProjectName,
             });
+
+        // Ensure .cinyuverse/ scaffold exists for existing folders too.
+        await ensureCinyuverseScaffold(repo.path, finalProjectName);
 
         const project = await createProjectRecord(finalProjectName, repo.path);
         modal.resolve({ status: 'saved', project } as ProjectFormDialogResult);
