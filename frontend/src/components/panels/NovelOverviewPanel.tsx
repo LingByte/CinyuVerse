@@ -45,7 +45,7 @@ import {
 } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectRepos } from '@/hooks/useProjectRepos';
-import { fileTreeApi, storyGraphApi } from '@/lib/api';
+import { fileTreeApi } from '@/lib/api';
 import { getWritingPrompt } from '@/lib/writingPrompts';
 import { useLayoutStore } from '@/stores/useLayoutStore';
 import { useComposerPrefillStore } from '@/stores/useComposerPrefillStore';
@@ -57,7 +57,6 @@ import type {
   StoryBeat,
   StoryGraph,
   BeatContext,
-  UpdateBeatInput,
 } from 'shared/types';
 
 // ---------------------------------------------------------------------------
@@ -299,7 +298,6 @@ export function NovelOverviewPanel() {
 
   const [selectedBeatId, setSelectedBeatId] = useState<string | null>(null);
   const [beatContext, setBeatContext] = useState<BeatContext | null>(null);
-  const [contextLoading, setContextLoading] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
@@ -317,53 +315,85 @@ export function NovelOverviewPanel() {
     }
   }, [rootPath]);
 
-  // ----- refresh graph -----
+  // ----- story graph file path -----
+  const storyGraphPath = rootPath ? `${rootPath}/.cinyuverse/story-graph.json` : '';
+
+  // ----- refresh graph (read from .cinyuverse/story-graph.json) -----
   const refreshGraph = useCallback(async () => {
-    if (!projectId) {
+    if (!storyGraphPath) {
       setGraph(null);
       return;
     }
     setGraphLoading(true);
     setGraphError(null);
     try {
-      const result = await storyGraphApi.getGraph(projectId);
-      setGraph(result);
-    } catch (err) {
-      setGraphError(err instanceof Error ? err.message : String(err));
-      setGraph(null);
+      const content = await fileTreeApi.readFile(storyGraphPath);
+      const parsed = JSON.parse(content) as StoryGraph;
+      // Ensure required arrays exist and edges have required fields
+      setGraph({
+        beats: parsed.beats ?? [],
+        edges: (parsed.edges ?? []).map((e) => ({
+          from_beat: e.from_beat,
+          to_beat: e.to_beat,
+          edge_type: e.edge_type,
+          note: e.note ?? null,
+        })),
+      });
+    } catch {
+      // File may not exist yet or be empty — show empty graph
+      setGraph({ beats: [], edges: [] });
     } finally {
       setGraphLoading(false);
     }
-  }, [projectId]);
+  }, [storyGraphPath]);
+
+  // ----- save graph (write to .cinyuverse/story-graph.json) -----
+  const saveGraph = useCallback(
+    async (nextGraph: StoryGraph) => {
+      if (!storyGraphPath) return;
+      try {
+        const content = JSON.stringify(nextGraph, null, 2);
+        await fileTreeApi.saveFile(storyGraphPath, content);
+        setGraph(nextGraph);
+      } catch (err) {
+        setGraphError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [storyGraphPath]
+  );
 
   useEffect(() => {
     refreshStats();
     refreshGraph();
   }, [refreshStats, refreshGraph]);
 
-  // ----- build context when selection changes -----
+  // ----- build context when selection changes (computed from local graph) -----
   useEffect(() => {
-    if (!selectedBeatId) {
+    if (!selectedBeatId || !graph) {
       setBeatContext(null);
       return;
     }
-    setContextLoading(true);
-    let cancelled = false;
-    storyGraphApi
-      .buildBeatContext(selectedBeatId)
-      .then((ctx: BeatContext) => {
-        if (!cancelled) setBeatContext(ctx);
-      })
-      .catch(() => {
-        if (!cancelled) setBeatContext(null);
-      })
-      .finally(() => {
-        if (!cancelled) setContextLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedBeatId]);
+    const beat = graph.beats.find((b) => b.id === selectedBeatId);
+    if (!beat) {
+      setBeatContext(null);
+      return;
+    }
+    const predecessorIds = new Set(
+      graph.edges.filter((e) => e.to_beat === selectedBeatId).map((e) => e.from_beat)
+    );
+    const successorIds = new Set(
+      graph.edges.filter((e) => e.from_beat === selectedBeatId).map((e) => e.to_beat)
+    );
+    const predecessors = graph.beats.filter((b) => predecessorIds.has(b.id));
+    const successors = graph.beats.filter((b) => successorIds.has(b.id));
+    setBeatContext({
+      beat,
+      predecessors,
+      successors,
+      characters: beat.characters ?? [],
+      related_hooks: beat.hooks ?? [],
+    } as BeatContext);
+  }, [selectedBeatId, graph]);
 
   // ----- React Flow nodes/edges -----
   const positions = useMemo(
@@ -427,17 +457,18 @@ export function NovelOverviewPanel() {
     (connection) => {
       const fromBeat = connection.source;
       const toBeat = connection.target;
-      if (projectId && fromBeat && toBeat) {
-        storyGraphApi
-          .createEdge({ from_beat: fromBeat, to_beat: toBeat, edge_type: 'sequential', note: null })
-          .then(() => refreshGraph())
-          .catch(() => undefined);
+      if (graph && fromBeat && toBeat) {
+        const newEdge = { from_beat: fromBeat, to_beat: toBeat, edge_type: 'sequential', note: null };
+        void saveGraph({
+          beats: graph.beats,
+          edges: [...graph.edges, newEdge],
+        });
       }
       setRfEdges((eds) =>
         addEdge({ ...connection, type: 'smoothstep' }, eds)
       );
     },
-    [projectId, refreshGraph]
+    [graph, saveGraph]
   );
 
   const onNodeClick = useCallback((_: unknown, node: Node) => {
@@ -565,45 +596,30 @@ export function NovelOverviewPanel() {
     void fillPromptIntoSession(prompt);
   }, [selectedBeat, beatContext, fillPromptIntoSession]);
 
-  // ----- status update (quick actions, no form) -----
+  // ----- status update (modify local graph, save to JSON) -----
   const updateStatus = useCallback(
     async (beatId: string, status: string) => {
-      try {
-        const payload: UpdateBeatInput = {
-          status,
-          title: null,
-          description: null,
-          beat_type: null,
-          chapter_hint: null,
-          completed_chapter: null,
-          characters: null,
-          hooks: null,
-          volume: null,
-          arc: null,
-          sort_order: null,
-          completion_criteria: null,
-        };
-        await storyGraphApi.updateBeat(beatId, payload);
-        await refreshGraph();
-      } catch (err) {
-        setGraphError(err instanceof Error ? err.message : String(err));
-      }
+      if (!graph) return;
+      const nextBeats = graph.beats.map((b) =>
+        b.id === beatId ? { ...b, status } : b
+      );
+      await saveGraph({ beats: nextBeats, edges: graph.edges });
     },
-    [refreshGraph]
+    [graph, saveGraph]
   );
 
   const deleteBeat = useCallback(
     async (beatId: string) => {
+      if (!graph) return;
       if (!confirm(t('panels:overview.deleteConfirm'))) return;
-      try {
-        await storyGraphApi.deleteBeat(beatId);
-        if (selectedBeatId === beatId) setSelectedBeatId(null);
-        await refreshGraph();
-      } catch (err) {
-        setGraphError(err instanceof Error ? err.message : String(err));
-      }
+      const nextBeats = graph.beats.filter((b) => b.id !== beatId);
+      const nextEdges = graph.edges.filter(
+        (e) => e.from_beat !== beatId && e.to_beat !== beatId
+      );
+      if (selectedBeatId === beatId) setSelectedBeatId(null);
+      await saveGraph({ beats: nextBeats, edges: nextEdges });
     },
-    [selectedBeatId, refreshGraph, t]
+    [graph, saveGraph, selectedBeatId, t]
   );
 
   // ----- derived stats -----
@@ -779,11 +795,7 @@ export function NovelOverviewPanel() {
               </div>
             )}
 
-            {contextLoading ? (
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" /> {t('panels:overview.graphLoading')}
-              </div>
-            ) : beatContext ? (
+            {beatContext ? (
               <div className="space-y-2 text-xs">
                 {beatContext.predecessors.length > 0 && (
                   <div>
