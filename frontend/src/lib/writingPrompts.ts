@@ -46,6 +46,14 @@ export interface WritingPromptInput {
   characterName?: string;
   /** Volume number (1-based) */
   volumeNumber?: number;
+  /** Story beat ID (for beat-level prompts) */
+  beatId?: string;
+  /** Story beat title */
+  beatTitle?: string;
+  /** Story beat description */
+  beatDescription?: string;
+  /** Pre-built beat context JSON (predecessors, successors, characters, hooks) */
+  beatContext?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -512,9 +520,169 @@ const exportPrep: WritingPromptTemplate = {
 // Registry
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Story graph templates — generate / infer / write story beats
+// ---------------------------------------------------------------------------
+
+const generateStoryGraph: WritingPromptTemplate = {
+  id: 'generate-story-graph',
+  category: 'foundation',
+  label: '生成故事节拍图',
+  description: '根据世界观、大纲和伏笔池，规划完整的故事节拍图（节点+关系）',
+  build: (input) =>
+    [
+      `请为《${input.bookName ?? '未命名作品'}》规划故事节拍图（Story Beat Graph）。`,
+      '',
+      '## 任务',
+      '',
+      '1. 读取以下文件了解已有设定：',
+      '   - `.cinyuverse/project.json` — 书籍信息',
+      '   - `.cinyuverse/world-view.md` — 世界观设定',
+      '   - `.cinyuverse/outline.md` — 大纲',
+      '   - `.cinyuverse/hooks.md` — 伏笔池',
+      '   - `.cinyuverse/characters/` — 角色卡',
+      '',
+      '2. 根据大纲和伏笔，设计故事节拍图，包括：',
+      '   - **节拍节点（beat）**：每个节点代表一个故事事件，包含标题、描述、类型、状态',
+      '   - **节拍类型**：plot_point / character_arc / hook_plant / hook_advance / hook_resolve / world_change / relationship_shift / climax / turning_point',
+      '   - **节拍状态**：planned（计划）/ current（当前）/ completed（已完成）/ skipped（跳过）',
+      '   - **边（edge）**：节点之间的关系，类型包括 sequential / causal / foreshadow / parallel / alternative / character_arc / item_flow',
+      '',
+      '3. 将结果写入 `.cinyuverse/story-graph.json`，格式如下：',
+      '```json',
+      '{',
+      '  "beats": [',
+      '    {',
+      '      "id": "beat-001",',
+      '      "title": "故事开端",',
+      '      "description": "主角的日常世界，引出核心矛盾",',
+      '      "beat_type": "plot_point",',
+      '      "chapter_hint": 1,',
+      '      "status": "planned",',
+      '      "characters": ["主角"],',
+      '      "hooks": ["hook-001"],',
+      '      "volume": 1,',
+      '      "arc": "第一幕",',
+      '      "sort_order": 0,',
+      '      "completion_criteria": ["引出主角", "建立日常世界"]',
+      '    }',
+      '  ],',
+      '  "edges": [',
+      '    { "from_beat": "beat-001", "to_beat": "beat-002", "edge_type": "sequential" }',
+      '  ]',
+      '}',
+      '```',
+      '',
+      '## 要求',
+      '',
+      '- 节拍数量不少于 15 个，覆盖整个故事弧线',
+      '- 伏笔的埋设（hook_plant）、推进（hook_advance）、回收（hook_resolve）都要有对应节点',
+      '- 角色弧光节点要标注相关角色',
+      '- 因果关系和伏笔关系要用对应类型的边连接',
+      '- 第一个节拍状态设为 current，其余为 planned',
+      '- sort_order 按故事推进顺序递增',
+      input.guidance ? `\n## 作者补充\n\n${input.guidance}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n'),
+};
+
+const inferBeat: WritingPromptTemplate = {
+  id: 'infer-beat',
+  category: 'chapter',
+  label: '推演节拍',
+  description: '推演当前节拍的发展方向和具体内容',
+  build: (input) =>
+    [
+      `请推演故事节拍「${input.beatTitle ?? '未命名节拍'}」的发展方向。`,
+      '',
+      '## 当前节拍',
+      '',
+      `- 标题：${input.beatTitle ?? '未命名'}`,
+      input.beatDescription ? `- 描述：${input.beatDescription}` : '',
+      '',
+      '## 上下文',
+      '',
+      input.beatContext
+        ? `节拍上下文（前驱、后继、角色、伏笔）：\n\`\`\`json\n${input.beatContext}\n\`\`\``
+        : '请读取 `.cinyuverse/story-graph.json` 了解当前节拍及其前后关系。',
+      '',
+      '## 任务',
+      '',
+      '1. 读取 `.cinyuverse/` 下的世界观、大纲、角色卡、伏笔池、当前状态',
+      '2. 分析当前节拍在整体故事中的位置和作用',
+      '3. 推演这个节拍应该发生什么：',
+      '   - 具体场景和事件',
+      '   - 出场角色及其行为',
+      '   - 与前驱节拍的衔接',
+      '   - 为后继节拍做的铺垫',
+      '   - 涉及的伏笔（埋设/推进/回收）',
+      '4. 给出这个节拍的写作建议（视角、节奏、情绪基调）',
+      '',
+      '## 输出格式',
+      '',
+      '用 Markdown 输出推演结果，包含：',
+      '- **场景设计**：具体场景描述',
+      '- **角色行动**：各角色的行为和对话要点',
+      '- **伏笔处理**：本节拍涉及的伏笔及处理方式',
+      '- **衔接分析**：与前后的关系',
+      '- **写作建议**：视角、节奏、情绪',
+      input.guidance ? `\n## 作者补充\n\n${input.guidance}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n'),
+};
+
+const writeBeat: WritingPromptTemplate = {
+  id: 'write-beat',
+  category: 'chapter',
+  label: '撰写节拍',
+  description: '根据节拍推演结果，撰写对应的章节正文',
+  build: (input) =>
+    [
+      `请撰写故事节拍「${input.beatTitle ?? '未命名节拍'}」对应的章节正文。`,
+      '',
+      '## 当前节拍',
+      '',
+      `- 标题：${input.beatTitle ?? '未命名'}`,
+      input.beatDescription ? `- 描述：${input.beatDescription}` : '',
+      input.chapterNumber ? `- 目标章节：第 ${input.chapterNumber} 章` : '',
+      input.wordCount ? `- 目标字数：${input.wordCount} 字` : '',
+      '',
+      '## 上下文',
+      '',
+      input.beatContext
+        ? `节拍上下文（前驱、后继、角色、伏笔）：\n\`\`\`json\n${input.beatContext}\n\`\`\``
+        : '请读取 `.cinyuverse/story-graph.json` 了解当前节拍及其前后关系。',
+      '',
+      '## 任务',
+      '',
+      '1. 读取 `.cinyuverse/` 下的所有设定文件',
+      '2. 读取 `chapters/` 下已有的章节正文，保持文风和人设一致',
+      '3. 根据当前节拍的内容撰写章节正文，写入 `chapters/chapter-NN.md`',
+      '4. 撰写完成后：',
+      '   - 更新 `.cinyuverse/chapter-summaries.md`',
+      '   - 更新 `.cinyuverse/current-state.md`',
+      '   - 如有伏笔状态变化，更新 `.cinyuverse/hooks.md`',
+      '',
+      '## 要求',
+      '',
+      '- 文风参考 `.cinyuverse/style-sample.md`',
+      '- 禁词表见 `.cinyuverse/writing-rules.md`',
+      '- 保持角色人设一致',
+      '- 自然融入伏笔，不要生硬',
+      input.guidance ? `\n## 作者补充\n\n${input.guidance}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n'),
+};
+
 export const WRITING_PROMPT_TEMPLATES: WritingPromptTemplate[] = [
   initFoundation,
   reviseFoundation,
+  generateStoryGraph,
+  inferBeat,
+  writeBeat,
   planChapter,
   writeChapter,
   auditChapter,
