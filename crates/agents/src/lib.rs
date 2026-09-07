@@ -223,7 +223,7 @@ pub use runtime::{
     AgentRuntime, CancelAgentPromptInput, ConnectAgentInput, EnsureAgentSessionInput,
     NoopEventSink, RespondAgentElicitationInput, RespondAgentPermissionInput,
     ResumeAgentSessionInput, RuntimeEventSink, RuntimeSnapshot, SendAgentPromptInput,
-    SteerAgentPromptInput, runtime_event_channel,
+    SetAutoApproveModeInput, SteerAgentPromptInput, runtime_event_channel,
 };
 pub use session::{AgentPromptQueue, QueueTransition};
 pub use session_gate::{

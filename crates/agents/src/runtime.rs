@@ -119,6 +119,12 @@ pub struct RespondAgentPermissionInput {
 }
 
 #[derive(Debug, Clone)]
+pub struct SetAutoApproveModeInput {
+    pub connection_id: AgentConnectionId,
+    pub mode: crate::permissions::AgentAutoApproveMode,
+}
+
+#[derive(Debug, Clone)]
 pub struct RespondAgentElicitationInput {
     pub connection_id: AgentConnectionId,
     pub elicitation_id: AgentElicitationId,
@@ -1350,6 +1356,15 @@ impl AgentRuntime {
     pub async fn respond_permission(&self, input: RespondAgentPermissionInput) -> AgentResult<()> {
         self.connection_manager
             .respond_permission(input.connection_id, input.permission_id, input.response)
+            .await
+    }
+
+    /// Update the Cinyuverse-side auto-approve mode for a connection at runtime.
+    /// When set to `Bypass`, all subsequent permission requests are
+    /// auto-approved without user interaction.
+    pub async fn set_auto_approve_mode(&self, input: SetAutoApproveModeInput) -> AgentResult<()> {
+        self.connection_manager
+            .set_auto_approve_mode(input.connection_id, input.mode)
             .await
     }
 

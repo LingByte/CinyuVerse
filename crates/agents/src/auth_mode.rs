@@ -522,7 +522,7 @@ pub fn auto_approve_mode_for_launch(
     }
     let mode = env.get("GROK_PERMISSION_MODE").map(String::as_str);
     if grok_mode_skips_permission_prompts(mode.map(str::trim)) {
-        AgentAutoApproveMode::Yolo
+        AgentAutoApproveMode::Bypass
     } else {
         AgentAutoApproveMode::Off
     }
@@ -712,7 +712,7 @@ mod tests {
                     "bypassPermissions".to_string(),
                 )])
             ),
-            crate::permissions::AgentAutoApproveMode::Yolo
+            crate::permissions::AgentAutoApproveMode::Bypass
         );
 
         let mut openclaw_args = vec!["acp".to_string()];

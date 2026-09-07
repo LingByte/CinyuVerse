@@ -11,14 +11,17 @@ pub enum AgentAutoApproveMode {
     #[default]
     Off,
     AllowAlways,
-    Yolo,
+    /// Auto-approve every permission request without user interaction.
+    /// Exposed in the permission card as "ByPass" — once activated, all
+    /// subsequent permission requests in this session are auto-approved.
+    Bypass,
 }
 
 impl AgentAutoApproveMode {
     pub fn from_setting(value: &str) -> Self {
         match value {
             "allow_always" => Self::AllowAlways,
-            "yolo" => Self::Yolo,
+            "bypass" | "yolo" => Self::Bypass,
             _ => Self::Off,
         }
     }
@@ -137,7 +140,7 @@ pub fn decide_auto_permission_response(
             .map(|option| AgentPermissionResponse::Selected {
                 option_id: option.id.clone(),
             }),
-        AgentAutoApproveMode::Yolo => request
+        AgentAutoApproveMode::Bypass => request
             .options
             .iter()
             .find(|option| option.kind.is_allow())
@@ -182,7 +185,7 @@ mod tests {
     }
 
     #[test]
-    fn auto_permission_yolo_selects_first_allow_option() {
+    fn auto_permission_bypass_selects_first_allow_option() {
         let request = request_with_options(vec![
             option("reject", AgentPermissionOptionKind::RejectOnce),
             option("allow-once", AgentPermissionOptionKind::AllowOnce),
@@ -190,7 +193,7 @@ mod tests {
         ]);
 
         assert_eq!(
-            decide_auto_permission_response(AgentAutoApproveMode::Yolo, &request),
+            decide_auto_permission_response(AgentAutoApproveMode::Bypass, &request),
             Some(AgentPermissionResponse::Selected {
                 option_id: "allow-once".to_string()
             })
@@ -220,7 +223,7 @@ mod tests {
         )]);
 
         assert_eq!(
-            decide_auto_permission_response(AgentAutoApproveMode::Yolo, &request),
+            decide_auto_permission_response(AgentAutoApproveMode::Bypass, &request),
             None
         );
     }

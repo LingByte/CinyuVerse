@@ -479,6 +479,13 @@ pub enum AgentConnectionCommand {
         value: serde_json::Value,
         result_tx: oneshot::Sender<AgentResult<AgentSessionControlsSnapshot>>,
     },
+    /// Update the Cinyuverse-side auto-approve mode for this connection at
+    /// runtime. Used by the permission card's "ByPass" action to start
+    /// auto-approving all subsequent permission requests.
+    SetAutoApproveMode {
+        mode: crate::permissions::AgentAutoApproveMode,
+        result_tx: oneshot::Sender<AgentResult<()>>,
+    },
     Disconnect,
 }
 
@@ -700,6 +707,25 @@ impl AgentConnectionManager {
             },
         )
         .await
+    }
+
+    /// Update the Cinyuverse-side auto-approve mode for a connection at runtime.
+    /// When set to `Bypass`, all subsequent permission requests are
+    /// auto-approved without user interaction.
+    pub async fn set_auto_approve_mode(
+        &self,
+        connection_id: AgentConnectionId,
+        mode: crate::permissions::AgentAutoApproveMode,
+    ) -> AgentResult<()> {
+        let (result_tx, result_rx) = oneshot::channel();
+        self.send_command(
+            connection_id,
+            AgentConnectionCommand::SetAutoApproveMode { mode, result_tx },
+        )
+        .await?;
+        result_rx.await.map_err(|_| {
+            AgentError::Runtime("agent connection closed before auto-approve mode was set".into())
+        })?
     }
 
     pub async fn respond_elicitation(
@@ -982,7 +1008,7 @@ struct AgentConnectionRunner {
     capabilities: Arc<RwLock<AcpCapabilitySnapshot>>,
     pending_permissions: Arc<Mutex<HashMap<String, PendingPermission>>>,
     pending_elicitations: Arc<Mutex<HashMap<String, PendingElicitation>>>,
-    auto_approve_mode: AgentAutoApproveMode,
+    auto_approve_mode: Arc<RwLock<AgentAutoApproveMode>>,
     delegation_injector: Option<Arc<dyn DelegationInjector>>,
     // Per-session streaming-text accumulator shared with the ACP client bridge so
     // redundant full-message snapshots can be dropped (see `dedup_stream_text`).
@@ -1095,7 +1121,7 @@ impl AgentConnectionRunner {
         event_tx: mpsc::UnboundedSender<AgentConnectionManagerEvent>,
         delegation_injector: Option<Arc<dyn DelegationInjector>>,
     ) -> Self {
-        let auto_approve_mode = snapshot.auto_approve_mode;
+        let auto_approve_mode = Arc::new(RwLock::new(snapshot.auto_approve_mode));
         Self {
             snapshot,
             event_tx,
@@ -1318,6 +1344,15 @@ impl AgentConnectionRunner {
                     );
                     let _ = result_tx.send(Ok(self.session_controls_snapshot(session_id).await));
                 }
+                AgentConnectionCommand::SetAutoApproveMode { mode, result_tx } => {
+                    *self.auto_approve_mode.write().await = mode;
+                    tracing::info!(
+                        connection_id = %self.snapshot.connection_id,
+                        ?mode,
+                        "auto-approve mode updated at runtime"
+                    );
+                    let _ = result_tx.send(Ok(()));
+                }
                 AgentConnectionCommand::Disconnect => break,
             }
         }
@@ -1445,7 +1480,7 @@ impl AgentConnectionRunner {
         );
 
         let auto_approve_mode =
-            effective_auto_approve_mode(self.auto_approve_mode, &self.session_controls, session_id)
+            effective_auto_approve_mode(*self.auto_approve_mode.read().await, &self.session_controls, session_id)
                 .await;
         if let Some(response) = decide_auto_permission_response(auto_approve_mode, &request) {
             self.emit(
@@ -1708,7 +1743,7 @@ impl AgentConnectionRunner {
             Arc::clone(&self.session_controls),
             Arc::clone(&self.pending_permissions),
             Arc::clone(&self.pending_elicitations),
-            self.auto_approve_mode,
+            Arc::clone(&self.auto_approve_mode),
             Arc::clone(&self.stream_dedup),
             Arc::clone(&self.last_activity),
             Arc::clone(&self.grok_subagent),
@@ -2118,6 +2153,15 @@ impl AgentConnectionRunner {
                                 .set_live_session_config_option(&conn, session_id, &key, &value)
                                 .await;
                             let _ = result_tx.send(result);
+                        }
+                        AgentConnectionCommand::SetAutoApproveMode { mode, result_tx } => {
+                            *runner.auto_approve_mode.write().await = mode;
+                            tracing::info!(
+                                connection_id = %runner.snapshot.connection_id,
+                                ?mode,
+                                "auto-approve mode updated at runtime (streaming)"
+                            );
+                            let _ = result_tx.send(Ok(()));
                         }
                         AgentConnectionCommand::Disconnect => break,
                     }
@@ -3566,7 +3610,7 @@ struct AcpClientBridge {
     session_controls: Arc<RwLock<HashMap<AgentSessionId, SessionControlState>>>,
     pending_permissions: Arc<Mutex<HashMap<String, PendingPermission>>>,
     pending_elicitations: Arc<Mutex<HashMap<String, PendingElicitation>>>,
-    auto_approve_mode: AgentAutoApproveMode,
+    auto_approve_mode: Arc<RwLock<AgentAutoApproveMode>>,
     // Shared with the owning `AgentConnectionRunner` so a turn boundary can reset
     // it; keyed by ACP session id.
     stream_dedup: Arc<Mutex<HashMap<String, StreamDedupState>>>,
@@ -3589,7 +3633,7 @@ impl AcpClientBridge {
         session_controls: Arc<RwLock<HashMap<AgentSessionId, SessionControlState>>>,
         pending_permissions: Arc<Mutex<HashMap<String, PendingPermission>>>,
         pending_elicitations: Arc<Mutex<HashMap<String, PendingElicitation>>>,
-        auto_approve_mode: AgentAutoApproveMode,
+        auto_approve_mode: Arc<RwLock<AgentAutoApproveMode>>,
         stream_dedup: Arc<Mutex<HashMap<String, StreamDedupState>>>,
         last_activity: Arc<Mutex<Instant>>,
         grok_subagent: Arc<Mutex<GrokSubagentTracker>>,
@@ -3768,7 +3812,7 @@ impl AcpClientBridge {
         });
 
         let auto_approve_mode =
-            effective_auto_approve_mode(self.auto_approve_mode, &self.session_controls, session_id)
+            effective_auto_approve_mode(*self.auto_approve_mode.read().await, &self.session_controls, session_id)
                 .await;
         if let Some(response) = decide_auto_permission_response(auto_approve_mode, &request) {
             let _ = self.event_tx.send(AgentConnectionManagerEvent {
@@ -5963,8 +6007,8 @@ mod tests {
         );
         // An explicit agent-level setting always wins over the session mode.
         assert_eq!(
-            effective_auto_approve_mode(AgentAutoApproveMode::Yolo, &controls, session_id).await,
-            AgentAutoApproveMode::Yolo
+            effective_auto_approve_mode(AgentAutoApproveMode::Bypass, &controls, session_id).await,
+            AgentAutoApproveMode::Bypass
         );
         // Sessions without a tracked auto mode keep interception on.
         assert_eq!(
