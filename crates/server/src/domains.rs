@@ -230,6 +230,13 @@ impl ServerApplicationDomains {
             | DomainCommand::ScratchCreate
             | DomainCommand::ScratchUpdate
             | DomainCommand::ScratchDelete
+            | DomainCommand::StoryGraphGet
+            | DomainCommand::StoryBeatCreate
+            | DomainCommand::StoryBeatUpdate
+            | DomainCommand::StoryBeatDelete
+            | DomainCommand::StoryBeatEdgeCreate
+            | DomainCommand::StoryBeatEdgeDelete
+            | DomainCommand::StoryBeatContext
             | DomainCommand::TagList
             | DomainCommand::TagCreate
             | DomainCommand::TagUpdate
@@ -2224,8 +2231,11 @@ async fn download_marketplace_archive(url: &str) -> Result<std::path::PathBuf, A
         .await
         .map_err(|error| ApplicationError::internal(error.to_string()))?;
     let suffix = plugins::marketplace_archive_suffix(url);
-    let path =
-        std::env::temp_dir().join(format!("cinyuverse-market-{}.{}", uuid::Uuid::new_v4(), suffix));
+    let path = std::env::temp_dir().join(format!(
+        "cinyuverse-market-{}.{}",
+        uuid::Uuid::new_v4(),
+        suffix
+    ));
     std::fs::write(&path, bytes).map_err(|error| ApplicationError::internal(error.to_string()))?;
     Ok(path)
 }

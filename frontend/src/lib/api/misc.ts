@@ -17,6 +17,13 @@ import type {
   Tag,
   TagSearchParams,
   UpdateTag,
+  StoryBeat,
+  StoryBeatEdge,
+  StoryGraph,
+  CreateBeatInput,
+  UpdateBeatInput,
+  CreateBeatEdgeInput,
+  BeatContext,
 } from 'shared/types';
 
 import { backendCall } from './base';
@@ -675,4 +682,44 @@ export const skillsMarketApi = {
     }),
   uninstall: (skillId: string): Promise<LocalSkill[]> =>
     backendCall<LocalSkill[]>('uninstall_skill', { skillId }),
+};
+
+// Story graph API (novel beats + edges)
+export const storyGraphApi = {
+  getGraph: async (projectId: string): Promise<StoryGraph> =>
+    backendCall<StoryGraph>('novel_get_story_graph', { projectId }),
+
+  createBeat: async (input: CreateBeatInput): Promise<StoryBeat> =>
+    backendCall<StoryBeat>('novel_create_beat', input as unknown as Record<string, unknown>),
+
+  updateBeat: async (beatId: string, payload: UpdateBeatInput): Promise<StoryBeat> =>
+    backendCall<StoryBeat>('novel_update_beat', {
+      beatId,
+      payload: payload as unknown as Record<string, unknown>,
+    }),
+
+  deleteBeat: async (beatId: string): Promise<void> => {
+    await backendCall<void>('novel_delete_beat', { beatId });
+  },
+
+  createEdge: async (input: CreateBeatEdgeInput): Promise<StoryBeatEdge> =>
+    backendCall<StoryBeatEdge>(
+      'novel_create_beat_edge',
+      input as unknown as Record<string, unknown>
+    ),
+
+  deleteEdge: async (
+    fromBeat: string,
+    toBeat: string,
+    edgeType: string
+  ): Promise<void> => {
+    await backendCall<void>('novel_delete_beat_edge', {
+      fromBeat,
+      toBeat,
+      edgeType,
+    });
+  },
+
+  buildBeatContext: async (beatId: string): Promise<BeatContext> =>
+    backendCall<BeatContext>('novel_build_beat_context', { beatId }),
 };

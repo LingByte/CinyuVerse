@@ -2147,3 +2147,23 @@ export type ConflictHunk = { index: number, ours: string, theirs: string, };
 export type ConflictStageContent = { present: boolean, content?: string | null, };
 
 export type WriteConflictResolutionResult = { path: string, is_resolved: boolean, };
+
+export type BeatContext = { beat: StoryBeat, predecessors: Array<StoryBeat>, successors: Array<StoryBeat>, related_hooks: Array<string>, characters: Array<string>, };
+
+export type BeatEdgeType = "sequential" | "causal" | "foreshadow" | "parallel" | "alternative" | "character_arc" | "item_flow";
+
+export type BeatStatus = "planned" | "current" | "completed" | "skipped" | "revised";
+
+export type BeatType = "plot_point" | "character_arc" | "hook_plant" | "hook_advance" | "hook_resolve" | "world_change" | "relationship_shift" | "climax" | "turning_point";
+
+export type CreateBeatEdgeInput = { from_beat: string, to_beat: string, edge_type: string | null, note: string | null, };
+
+export type CreateBeatInput = { project_id: string, title: string, description: string | null, beat_type: string | null, chapter_hint: bigint | null, characters: Array<string> | null, hooks: Array<string> | null, volume: bigint | null, arc: string | null, sort_order: bigint | null, completion_criteria: Array<string> | null, };
+
+export type StoryBeat = { id: string, project_id: string, title: string, description: string | null, beat_type: string, chapter_hint: bigint | null, completed_chapter: bigint | null, characters: string | null, hooks: string | null, status: string, volume: bigint | null, arc: string | null, sort_order: bigint, completion_criteria: string | null, created_at: string, updated_at: string, };
+
+export type StoryBeatEdge = { from_beat: string, to_beat: string, edge_type: string, note: string | null, };
+
+export type StoryGraph = { beats: Array<StoryBeat>, edges: Array<StoryBeatEdge>, };
+
+export type UpdateBeatInput = { title: string | null, description: string | null, beat_type: string | null, chapter_hint: bigint | null, completed_chapter: bigint | null, characters: Array<string> | null, hooks: Array<string> | null, status: string | null, volume: bigint | null, arc: string | null, sort_order: bigint | null, completion_criteria: Array<string> | null, };

@@ -28,6 +28,7 @@ pub mod repo;
 pub mod scratch;
 pub mod session;
 pub mod session_checkpoint;
+pub mod story_graph;
 pub mod tag;
 pub mod task;
 pub mod vendor_usage;

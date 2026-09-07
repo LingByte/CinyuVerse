@@ -119,6 +119,7 @@ export {
   searchApi,
   skillsApi,
   skillsMarketApi,
+  storyGraphApi,
 } from './misc';
 export type {
   LogLevel,

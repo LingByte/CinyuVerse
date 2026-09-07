@@ -12,6 +12,7 @@ use db::models::{
     repo::{Repo, UpdateRepo},
     scratch::{CreateScratch, Scratch, ScratchType, UpdateScratch},
     session::{CreateSession, Session, SessionStatus},
+    story_graph::{self, CreateBeatEdgeInput, CreateBeatInput, UpdateBeatInput},
     tag::{CreateTag, Tag, UpdateTag},
     task::{CreateTask, Task, TaskStatus},
     workspace::{CreateWorkspace, Workspace},
@@ -168,6 +169,33 @@ struct ScratchWriteArgs<T> {
     scratch_type: ScratchType,
     id: Uuid,
     payload: T,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StoryGraphArgs {
+    project_id: Uuid,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BeatIdArgs {
+    beat_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateBeatArgs {
+    beat_id: String,
+    payload: UpdateBeatInput,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DeleteBeatEdgeArgs {
+    from_beat: String,
+    to_beat: String,
+    edge_type: String,
 }
 
 #[derive(Deserialize)]
@@ -499,6 +527,65 @@ impl ServerApplicationDomains {
                     .await
                     .map_err(internal_error)?;
                 Ok(Value::Null)
+            }
+            DomainCommand::StoryGraphGet => {
+                let args: StoryGraphArgs = parse(args)?;
+                serialize(
+                    story_graph::get_story_graph(&self.pool, args.project_id)
+                        .await
+                        .map_err(internal_error)?,
+                )
+            }
+            DomainCommand::StoryBeatCreate => {
+                let args: CreateBeatInput = parse(args)?;
+                serialize(
+                    story_graph::create_beat(&self.pool, args)
+                        .await
+                        .map_err(internal_error)?,
+                )
+            }
+            DomainCommand::StoryBeatUpdate => {
+                let args: UpdateBeatArgs = parse(args)?;
+                serialize(
+                    story_graph::update_beat(&self.pool, &args.beat_id, args.payload)
+                        .await
+                        .map_err(internal_error)?,
+                )
+            }
+            DomainCommand::StoryBeatDelete => {
+                let args: BeatIdArgs = parse(args)?;
+                story_graph::delete_beat(&self.pool, &args.beat_id)
+                    .await
+                    .map_err(internal_error)?;
+                Ok(Value::Null)
+            }
+            DomainCommand::StoryBeatEdgeCreate => {
+                let args: CreateBeatEdgeInput = parse(args)?;
+                serialize(
+                    story_graph::create_beat_edge(&self.pool, args)
+                        .await
+                        .map_err(internal_error)?,
+                )
+            }
+            DomainCommand::StoryBeatEdgeDelete => {
+                let args: DeleteBeatEdgeArgs = parse(args)?;
+                story_graph::delete_beat_edge(
+                    &self.pool,
+                    &args.from_beat,
+                    &args.to_beat,
+                    &args.edge_type,
+                )
+                .await
+                .map_err(internal_error)?;
+                Ok(Value::Null)
+            }
+            DomainCommand::StoryBeatContext => {
+                let args: BeatIdArgs = parse(args)?;
+                serialize(
+                    story_graph::build_beat_context(&self.pool, &args.beat_id)
+                        .await
+                        .map_err(internal_error)?,
+                )
             }
             DomainCommand::TagList => {
                 let args: TagListArgs = parse(args).unwrap_or(TagListArgs { search: None });

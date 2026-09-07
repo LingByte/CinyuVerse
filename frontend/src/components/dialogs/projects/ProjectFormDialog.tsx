@@ -180,6 +180,7 @@ function cinyuverseClaudeMd(projectName: string): string {
     '- `.cinyuverse/current-state.md` — 当前世界状态事实',
     '- `.cinyuverse/chapter-summaries.md` — 章节摘要滚动窗口',
     '- `.cinyuverse/characters/` — 角色卡（一个角色一个 .md 文件）',
+    '- `.cinyuverse/story-graph.json` — 故事节拍图（节点=故事事件，边=依赖关系）',
     '',
     '## 创作流程',
     '',
@@ -287,6 +288,29 @@ const CINYUVERSE_STYLE_SAMPLE_MD = [
   '',
 ].join('\n');
 
+const CINYUVERSE_STORY_GRAPH_JSON = JSON.stringify(
+  {
+    beats: [
+      {
+        id: 'beat-001',
+        title: '故事开端',
+        description: '主角的日常世界，引出核心矛盾',
+        beat_type: 'plot_point',
+        chapter_hint: 1,
+        status: 'planned',
+        characters: [],
+        hooks: [],
+        volume: 1,
+        arc: '第一幕',
+        sort_order: 0,
+      },
+    ],
+    edges: [],
+  },
+  null,
+  2,
+);
+
 /**
  * Create the `.cinyuverse/` metadata directory with template files.
  * Safe to call when the directory already exists — existing files are
@@ -320,6 +344,10 @@ async function ensureCinyuverseScaffold(repoPath: string, projectName: string): 
       CINYUVERSE_CHAPTER_SUMMARIES_MD,
     ),
     writeTextFile(joinLocalPath(metaDir, 'style-sample.md'), CINYUVERSE_STYLE_SAMPLE_MD),
+    writeTextFile(
+      joinLocalPath(metaDir, 'story-graph.json'),
+      CINYUVERSE_STORY_GRAPH_JSON,
+    ),
   ];
 
   await Promise.all(writes);

@@ -79,6 +79,20 @@ use api_types::{
     UserAgentDistributionView, UserAgentEnvironmentVariableView, UserAgentIntegrityKind,
 };
 use application::{ConversationLiveFeedbackNote, ConversationOutputView};
+use cinyuverse::{
+    commands::{
+        artifact_preview::ArtifactPreviewLeaseDto,
+        attention::{AttentionInbox, AttentionItem, AttentionItemKind},
+        conversations::{ConversationActiveBinding, ConversationCurrentTurn, DbConversationDetail},
+        crash_reports::{CrashReportMeta, CrashReportsInfo},
+        sessions::{SessionContinuityMode, SessionSummary},
+    },
+    conversation_bundle::{
+        ConversationExportResult, ConversationForkContinuity, ConversationForkResult,
+        ConversationImportResult,
+    },
+    conversation_service::ConversationTurnSnapshot,
+};
 use conversations::{
     ConversationChildSummaryView, ConversationInputStatus, ConversationInputSubmission,
     ConversationInputView, ConversationRelationView, ConversationSearchHit,
@@ -90,6 +104,10 @@ use db::models::{
     execution_process::ExecutionProcessRunReason,
     scratch::{CreateScratch, DraftFollowUpData, Scratch, ScratchUpdateOutcome, UpdateScratch},
     session::{CreateSession, Session, SessionStatus},
+    story_graph::{
+        BeatContext, BeatEdgeType, BeatStatus, BeatType, CreateBeatEdgeInput, CreateBeatInput,
+        StoryBeat, StoryBeatEdge, StoryGraph, UpdateBeatInput,
+    },
     task::{CreateTask, Task, TaskRelationships, TaskStatus, TaskWithAttemptStatus, UpdateTask},
     workspace::{Workspace, WorkspaceWithStatus},
     workspace_repo::{RepoWithTargetBranch, WorkspaceRepo},
@@ -120,20 +138,6 @@ use services::services::{
     },
 };
 use ts_rs::TS;
-use cinyuverse::{
-    commands::{
-        artifact_preview::ArtifactPreviewLeaseDto,
-        attention::{AttentionInbox, AttentionItem, AttentionItemKind},
-        conversations::{ConversationActiveBinding, ConversationCurrentTurn, DbConversationDetail},
-        crash_reports::{CrashReportMeta, CrashReportsInfo},
-        sessions::{SessionContinuityMode, SessionSummary},
-    },
-    conversation_bundle::{
-        ConversationExportResult, ConversationForkContinuity, ConversationForkResult,
-        ConversationImportResult,
-    },
-    conversation_service::ConversationTurnSnapshot,
-};
 use workflows::{
     AgentStepSpec, ApprovalStepSpec, ClaimedWorkflowStep, CompletionPolicy, DebugRunScope,
     NotifyStepSpec, SideEffectClass, WorkflowBinding, WorkflowDefinition,
@@ -850,6 +854,18 @@ fn replacement_declarations() -> BTreeMap<String, String> {
     insert_declaration::<RemoteEvent>(&mut decls);
     insert_declaration::<SubscriptionSnapshot>(&mut decls);
     insert_declaration::<SubscriptionBootstrap>(&mut decls);
+
+    // Story graph (novel beats + edges)
+    insert_declaration::<BeatType>(&mut decls);
+    insert_declaration::<BeatStatus>(&mut decls);
+    insert_declaration::<BeatEdgeType>(&mut decls);
+    insert_declaration::<StoryBeat>(&mut decls);
+    insert_declaration::<StoryBeatEdge>(&mut decls);
+    insert_declaration::<StoryGraph>(&mut decls);
+    insert_declaration::<CreateBeatInput>(&mut decls);
+    insert_declaration::<UpdateBeatInput>(&mut decls);
+    insert_declaration::<CreateBeatEdgeInput>(&mut decls);
+    insert_declaration::<BeatContext>(&mut decls);
     decls
 }
 
