@@ -1,0 +1,23 @@
+[package]
+name = "application"
+version = "0.2.0"
+edition = "2024"
+
+[dependencies]
+async-trait = { workspace = true }
+agents = { path = "../agents" }
+artifacts = { path = "../artifacts" }
+chrono = { workspace = true }
+conversations = { path = "../conversations" }
+workflows = { path = "../workflows" }
+db = { path = "../db" }
+executors = { path = "../executors" }
+remote-protocol = { path = "../remote-protocol" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "chrono", "uuid"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+ts-rs = { workspace = true }
+uuid = { workspace = true }
