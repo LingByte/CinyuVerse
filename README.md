@@ -5,180 +5,93 @@
 </p>
 
 <p align="center">
-  <strong>IADE · Integrated Agent Development Environment</strong><br />
-  An all-in-one VibeCoding platform for agents, workspaces, and collaboration.
+  <strong>AI Native Novel Creation Platform</strong><br />
+  Multi-agent writing workflows with local-first ownership.
 </p>
 
 <p align="center">
   <a href="https://cinyuverse.com"><img src="https://img.shields.io/badge/Website-cinyuverse.com-111111?style=flat-square" alt="Official website" /></a>
   <a href="https://github.com/LingByte/CinyuVerse/releases/latest"><img src="https://img.shields.io/badge/Download-Latest_Release-111111?style=flat-square" alt="Download latest release" /></a>
   <img src="https://img.shields.io/badge/Desktop-macOS_%7C_Windows_%7C_Linux-111111?style=flat-square" alt="Desktop platforms" />
-  <img src="https://img.shields.io/badge/Server-cinyuverse--server_%7C_WebUI-111111?style=flat-square" alt="Server and WebUI" />
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-111111?style=flat-square" alt="Apache 2.0 License" /></a>
 </p>
 
 <p align="center">
   <a href="https://cinyuverse.com">Website</a> ·
   <a href="https://cinyuverse.com/docs">Docs</a> ·
-  <a href="https://github.com/LingByte/CinyuVerse/releases/latest">Download</a> ·
-  <a href="https://github.com/LingByte/CinyuVerse/issues">GitHub Issues</a>
+  <a href="https://github.com/LingByte/CinyuVerse/releases/latest">Download</a>
 </p>
 
-![Cinyuverse IADE connects built-in and ACP Registry agents to one Host, used from WebUI, Desktop, CLI, and Mobile APP](./docs/readme/iade-architecture.svg)
+Cinyuverse is an AI-native novel creation platform. It coordinates multiple writing agents — planner, writer, auditor, reviser, character designer — through structured workflows, while keeping every file, conversation, and metadata artifact on the machine you control.
 
-Agents needed a new IDE, so Cinyuverse exists.
+## Why Cinyuverse
 
-Cinyuverse is an IADE (Integrated Agent Development Environment). It connects multiple coding agents to one pipeline for install, authentication, conversation, and delivery, and keeps files, Git, the terminal, and the browser on the workspace bound to the current conversation. A person states the task. Agents edit files, run commands, and request permissions through the [Agent Client Protocol (ACP)](https://agentclientprotocol.com/). The file tree, terminal, diffs, and built-in browser follow that workspace.
+Writing a novel with a single coding agent produces a mess. The agent edits files but has no concept of foreshadowing pools, character arcs, timeline continuity, or chapter rhythm. Cinyuverse fixes this by giving agents a domain-specific workspace and structured handoffs.
 
-Built-in agents include Claude Code, Codex, DeepSeek Harness, Google Antigravity, Cursor, OpenCode, Pi, Grok, OpenClaw, Hermes, Kimi Code, CodeBuddy, and Cline. Compatible agents from the official ACP Registry use the same pipeline.
+### What agents see
 
-> [!IMPORTANT]
-> **Local operation and data ownership:** Cinyuverse is a local-first Host. Projects, conversations, configuration, and diagnostics stay on the Host you control. Cinyuverse does not operate cloud storage and does not automatically upload that data to a Cinyuverse-operated service. When a remote client connects to a user-controlled desktop or `cinyuverse-server`, the data required for the selected remote workflows is sent to that Host.
->
-> **Testing-stage notice:** Cinyuverse is still in testing. Use version control, keep backups of important projects, and review agent-generated changes before committing, syncing, or merging them.
->
-> Enabled agents, model providers, MCP servers, plugins, messaging channels, and browser sessions may connect to third-party services according to your configuration. Those services handle data under their own policies.
+When a project is created, Cinyuverse scaffolds a `.cinyuverse/` metadata directory:
 
-## Capabilities
+```text
+.cinyuverse/
+  CLAUDE.md             — writing conventions (auto-read by ACP agents)
+  project.json          — book info (title, genre, target words)
+  outline.md            — volume/chapter outline
+  world-view.md         — world-building document
+  writing-rules.md      — tone, POV, banned words
+  hooks.md              — foreshadowing pool (open / progressing / resolved)
+  current-state.md      — runtime world facts
+  chapter-summaries.md  — rolling chapter summaries
+  style-sample.md       — style reference text
+  characters/           — one .md per character card
+chapters/               — chapter prose (chapter-NN.md)
+```
 
-### All-in-one agent lifecycle
+Agents read these files to gain context and write results back to the correct locations. No prompt engineering required from the author — the workspace IS the context.
 
-The Agents page in Settings covers detection, installation, authentication, native configuration, updates, preflight, repair, and uninstall. Built-in profiles and agents added from the ACP Registry have different identities and share one pipeline.
+### Writing workflows
 
-Compatible local CLIs are reused after validation. Missing components install at pinned versions. Agents that need npm use a Node.js runtime managed by Cinyuverse. Authentication and official configuration remain in each agent's own directory, for example `~/.claude` for Claude Code. Model, mode, and reasoning controls follow the capabilities of that agent.
+Cinyuverse ships 14 prompt templates that drive agents through the full novel creation lifecycle:
 
-See the [user guide](https://cinyuverse.com/docs) and [IADE](https://cinyuverse.com/docs/reference/iade).
+| Phase | Templates | What happens |
+| --- | --- | --- |
+| **Foundation** | `init-foundation`, `revise-foundation` | Generate story bible, volume outline, writing rules, initial hooks |
+| **Chapter** | `plan-chapter`, `write-chapter`, `update-state` | Plan memo → write prose → update summaries/hooks/state |
+| **Review** | `audit-chapter`, `revise-chapter` | 8-dimension audit → targeted revision |
+| **Character** | `create-character`, `refine-character` | Generate and refine character cards |
+| **Worldbuilding** | `expand-world-view`, `add-glossary` | Deepen world settings, add glossary entries |
+| **Tools** | `continuity-check`, `writing-stats`, `export-prep` | Full-book consistency, word counts, export preparation |
 
-### Multi-workspace collaboration and Git lifecycle
-
-A conversation is bound to a workspace. The workspace is either the project root or a Git worktree carved from the same repository. Parallel tasks keep uncommitted files on separate trees.
-
-Worktree-bound conversations expose rebase and merge-back actions and share the tree with the Git panel. The Git panel covers changes, diffs, history, branches, stashes, issues, and pull requests. The file tree, previews, review comments, and integrated terminal use the same workspace as the current conversation. The session board lists parallel conversations by project and state.
-
-See [Worktree](https://cinyuverse.com/docs/worktree) and [Git and review](https://cinyuverse.com/docs/git-review).
-
-### Rust and Tauri architecture
-
-The desktop shell is Tauri 2. Domain logic lives in Rust crates. The UI is React and TypeScript. Desktop commands, web routes, and remote adapters call the same Application Core.
-
-The Host owns one data directory and serves the remote protocol. Agent processes, worktrees, plugin workers, the automation engine, and chat-channel adapters run on that Host. One data directory accepts one Host at a time. The Rust toolchain is pinned in `rust-toolchain.toml`.
-
-See [platform architecture](https://cinyuverse.com/docs/developers/platform-overview).
-
-### A plugin ecosystem that can take any contribution
-
-A Cinyuverse plugin is an installable, toggleable, configurable product unit. One package can contribute to the UI, agents, the Host, and runtimes. Install, enable, configuration, diagnostics, rollback, and uninstall go through the plugin control plane.
-
-Official bundled plugins cover session extras, multi-agent delegation, workflow authoring, Office previews, and plugin development. MCP servers and Skills are hosted by the Host. Authors can use the TypeScript, JavaScript, Python, and Rust SDKs, then publish through the [plugin marketplace](https://cinyuverse.com/marketplace) or link a development directory.
-
-See [Plugin](https://cinyuverse.com/docs/reference/plugin) and [plugin architecture](https://cinyuverse.com/docs/developers/plugin-overview).
-
-### WebUI, Desktop, CLI, and Mobile APP
-
-| Surface | Role |
-| --- | --- |
-| **Desktop** | Default entry. The desktop app includes the window and a full Host. |
-| **Server + WebUI** | `cinyuverse-server` is the headless Host. Open the packaged `web/` tree in a browser for WebUI. |
-| **CLI** | `npx cinyuverse` downloads the Host-family archive for this platform, verifies checksums, and starts the Server. |
-| **Mobile APP** | The Android companion pairs to a Host and is used to read conversations, send input, and handle permissions. |
-
-Desktop and Server share the data directory, agents, conversations, automations, and plugins. The same data directory cannot run Desktop and Server as Host at the same time. A workstation desktop can connect as a client to a Host that already occupies that directory.
-
-See [One Host](https://cinyuverse.com/docs/reference/one-host) and [Connect a Host](https://cinyuverse.com/docs/connect-host).
+Each template is a pure function that builds a structured prompt telling the agent which files to read, what to do, and where to write the result.
 
 ### Multi-agent collaboration
 
-![Cinyuverse multi-agent workflow from session to delivery](./docs/readme/collaboration-flow.svg)
+Agents collaborate through delegation and graph workflows:
 
-Collaboration splits into delegation and Graph Workflow. Automation decides when to start.
-
-- **Delegation:** A parent agent hands work to another enabled agent during a conversation. `&` in the input box is a structured mention. Child conversations have their own timeline and turns. This capability comes from the official Multi-agent collaboration plugin.
-- **Graph Workflow:** Steps and dependencies are described as a JSON DAG, then executed. Source files can live in Git. A published definition version is immutable. This capability comes from the official Workflow creator plugin.
+- **Delegation:** A parent agent hands work to another enabled agent during a conversation. Child conversations have their own timeline and turns.
+- **Graph Workflow:** Steps and dependencies are described as a JSON DAG, then executed. Source files can live in Git. A published definition version is immutable.
 - **Automation:** A manual action or a schedule starts an ordinary turn, or a published Workflow version.
 
-Use delegation for a one-off review chain. Write a Graph when the flow must be reused, versioned, and started on a schedule.
+Use delegation for a one-off review chain (plan → write → audit → revise). Write a Graph when the flow must be reused, versioned, and started on a schedule.
 
-See [Delegation](https://cinyuverse.com/docs/delegation) and [Graph Workflow](https://cinyuverse.com/docs/graph-workflow).
+## Capabilities
 
-## Download and installation
+### ACP-native agent runtime
 
-Desktop installers and Host-family archives come from [GitHub Releases](https://github.com/LingByte/CinyuVerse/releases/latest). Signing and notarization status are stated on the Release.
+Cinyuverse connects to coding agents through the [Agent Client Protocol (ACP)](https://agentclientprotocol.com/). Built-in agents include Claude Code, Codex, DeepSeek Harness, Cursor, OpenCode, and more. Compatible agents from the official ACP Registry use the same pipeline.
 
-### Desktop
+The agent runtime manages live connections, sessions, prompts, permissions, terminals, MCP/skills/config surfaces, and conversation streaming. Conversations are event-sourced and render as a timeline.
 
-The desktop app is the default entry. The installer includes the Server and the app UI.
+### Local-first ownership
 
-| Platform | Baseline | Architecture | Package | Installation |
-| --- | --- | --- | --- | --- |
-| macOS | macOS 12 or later | Intel / Apple Silicon | `.dmg` | Open the image and drag `Cinyuverse.app` into Applications. |
-| Windows | Windows 10 / 11 | x64 / ARM64 | `.exe` / `.msi` | Run the installer and follow the setup wizard. |
-| Linux | Ubuntu 22.04 equivalent | x64 / ARM64 | `.AppImage` / `.deb` | Run the AppImage, or install the deb with the system package manager. |
+Projects, conversations, configuration, and diagnostics stay on the host you control. Cinyuverse does not operate cloud storage and does not automatically upload data to a Cinyuverse-operated service.
 
-Windows installers include the offline WebView2 installer. The integrated Chromium / CEF child window on Linux requires X11 or XWayland. The `.deb` declares an `xwayland` dependency. Pure Wayland systems using the AppImage must install and enable XWayland first.
+> [!IMPORTANT]
+> Cinyuverse is in active development. Use version control, keep backups, and review agent-generated changes before committing.
 
-First launch runs onboarding, probes local agent runtimes, and asks for enabled agents, a default agent, and an external editor. Missing managed components install in the background. Account login, browser authorization, and API configuration stay in each agent's official flow. When a runtime or ACP adapter is unhealthy, Settings → Agents shows version, location, diagnostics, and the available repair action.
+### Rust + Tauri architecture
 
-If macOS blocks the first launch, confirm the installer came from the [official Releases page](https://github.com/LingByte/CinyuVerse/releases/latest), then allow only that download under System Settings → Privacy & Security.
-
-Full steps: [Install the desktop app](https://cinyuverse.com/docs/install-desktop).
-
-### Server
-
-`cinyuverse-server` is the headless Host and the service base for WebUI, IM channels, and the mobile app. The desktop app already contains a full Server. Install Server on its own when you need a windowless process or browser access.
-
-Download, verify, and start with the official helper:
-
-```bash
-npx cinyuverse
-# or: curl -fsSL https://raw.githubusercontent.com/LingByte/CinyuVerse/master/install.sh | sh
-```
-
-`npx cinyuverse` fetches `Cinyuverse-${VERSION}-{linux-x86_64,linux-aarch64,darwin-aarch64,windows-x86_64,windows-aarch64}-server.tar.gz` for this platform, checks the sidecar `.sha256` and the inner `SHA256SUMS`, starts `cinyuverse-server`, and points `CINYUVERSE_STATIC_ROOT` at the packaged `web/` tree. The same archive can be installed with `install.sh` or `install.ps1`.
-
-The extracted tree contains `cinyuverse-server`, `cinyuverse-mcp`, `web/`, and `plugins/bundled/`.
-
-| Platform | Baseline | Artifacts |
-| --- | --- | --- |
-| macOS | 12 or later | darwin-aarch64 |
-| Windows | 10 / 11 | windows-x86_64 / windows-aarch64 |
-| Linux | Ubuntu 22.04 equivalent | linux-x86_64 / linux-aarch64; Docker is also available |
-
-The default listen address is `127.0.0.1:17891`. Open that address in a local browser for WebUI. Chrome-family browsers are recommended. LAN access requires `CINYUVERSE_SERVER_ALLOW_LAN=1` and a TLS reverse proxy in front. The access token is at least 32 bytes and is printed to stdout only once when first generated.
-
-One data directory accepts one Host at a time. Desktop and Server must be the same version. The mobile app may be one minor version behind and negotiates capabilities.
-
-Full steps: [Install Server and WebUI](https://cinyuverse.com/docs/install-server).
-
-## Development
-
-Official developer docs:
-
-- [Platform development](https://cinyuverse.com/docs/developers/platform-overview)
-- [Plugin development](https://cinyuverse.com/docs/developers/plugin-overview)
-- [Plugin development workflow](https://cinyuverse.com/docs/developers/plugin-dev-flow)
-
-### Platform development
-
-This repository is a pnpm workspace plus a Cargo workspace. Use it to change Host capabilities, Application Core, the desktop shell, or the remote protocol.
-
-Prerequisites:
-
-- Node.js 22 and pnpm 10.x (the repo `packageManager` is `pnpm@10.13.1`)
-- Rust nightly, pinned in `rust-toolchain.toml`
-- The [Tauri system dependencies](https://v2.tauri.app/start/prerequisites/) for your platform
-- At least one agent CLI for integration testing
-
-```bash
-pnpm install
-pnpm run dev
-pnpm run check
-pnpm run lint
-cd frontend && pnpm test
-cargo test --workspace
-pnpm run tauri:build
-```
-
-`pnpm run dev` starts the React / Vite frontend, the Tauri desktop shell, and the Rust services. That window is **Cinyuverse Dev** (`com.cinyuverse.app.dev`) and can run beside an installed Cinyuverse app. Run `pnpm run generate-types` after changing shared Rust types. Platform-specific bundles: `pnpm run tauri:build:macos`, `pnpm run tauri:build:windows`, and `pnpm run tauri:build:linux`.
+The desktop shell is Tauri 2. Domain logic lives in Rust crates. The UI is React and TypeScript. Desktop commands, web routes, and remote adapters call the same Application Core.
 
 ```text
 frontend/        React + TypeScript + Vite user interface
@@ -188,49 +101,47 @@ packages/        Plugin SDK and CLI
 shared/          TypeScript types generated from Rust
 ```
 
-See [build environment](https://cinyuverse.com/docs/developers/platform-build) and [review and security](https://cinyuverse.com/docs/developers/platform-pr-security).
+### Plugin ecosystem
 
-### Plugin development
+A Cinyuverse plugin is an installable, toggleable, configurable product unit. One package can contribute to the UI, agents, the host, and runtimes. Official bundled plugins cover session extras, multi-agent delegation, workflow authoring, Office previews, and plugin development.
 
-A plugin package is identified by Publisher and Plugin ID, and declares contributions to the UI, agents, Host, or runtimes. Host, protocol, and SDK versions for the current release are listed in the developer docs.
+## Download and installation
 
-Locate the contract and initialize a template from the repository root:
+Desktop installers come from [GitHub Releases](https://github.com/LingByte/CinyuVerse/releases/latest).
+
+| Platform | Baseline | Architecture | Package |
+| --- | --- | --- | --- |
+| macOS | macOS 12 or later | Intel / Apple Silicon | `.dmg` |
+| Windows | Windows 10 / 11 | x64 / ARM64 | `.exe` / `.msi` |
+| Linux | Ubuntu 22.04 equivalent | x64 / ARM64 | `.AppImage` / `.deb` |
+
+First launch runs onboarding, probes local agent runtimes, and asks for enabled agents and a default agent. Missing managed components install in the background.
+
+## Development
+
+### Prerequisites
+
+- Node.js 22 and pnpm 10.x
+- Rust nightly, pinned in `rust-toolchain.toml`
+- The [Tauri system dependencies](https://v2.tauri.app/start/prerequisites/) for your platform
+- At least one agent CLI for integration testing
+
+### Commands
 
 ```bash
-python3 .agents/skills/cinyuverse-plugin-development/scripts/locate_toolchain.py
-node packages/plugin-cli/dist/cli.js toolchain
-node packages/plugin-cli/dist/cli.js init my-notes --publisher you --template full
+pnpm install
+pnpm run dev          # launch desktop app with HMR
+pnpm run check        # tsc --noEmit + cargo check
+pnpm run lint         # eslint + clippy
+pnpm run format       # cargo fmt + prettier
+cd frontend && pnpm test
+cargo test --workspace
+pnpm run tauri:build
 ```
 
-Implement the Worker or App, validate it, link it to a running Host, then pack a `.vxp`. The built CLI also supports `cinyuverse plugin pack .`. Publish through the [plugin marketplace](https://cinyuverse.com/marketplace).
-
-Language guides: [TypeScript SDK](https://cinyuverse.com/docs/developers/sdk-typescript), [JavaScript SDK](https://cinyuverse.com/docs/developers/sdk-javascript), [Python SDK](https://cinyuverse.com/docs/developers/sdk-python), and [Rust SDK](https://cinyuverse.com/docs/developers/sdk-rust).
-
-## Community
-
-### WeChat
-
-Scan the QR code to join the Cinyuverse WeChat group.
-
-<p align="center">
-  <img src="./docs/readme/wechat.jpg" alt="Cinyuverse WeChat group QR code" width="240" />
-</p>
-
-### QQ
-
-Scan the QR code to join the Cinyuverse QQ group.
-
-<p align="center">
-  <img src="./docs/readme/qq.jpg" alt="Cinyuverse QQ group QR code" width="240" />
-</p>
-
-### GitHub Issues
-
-Bug reports and feature requests go to [GitHub Issues](https://github.com/LingByte/CinyuVerse/issues). Pull requests are welcome. Run the checks and tests that cover your changes before you submit code.
+`pnpm run dev` starts the React / Vite frontend, the Tauri desktop shell, and the Rust services. Run `pnpm run generate-types` after changing shared Rust types. Run `pnpm run prepare-db` after changing SQL queries or migrations.
 
 ## Acknowledgements
-
-### ACP
 
 Cinyuverse agent ingress is built on the [Agent Client Protocol](https://agentclientprotocol.com/). Built-in agents and Registry agents enter the same install, authentication, conversation, and delivery pipeline through ACP.
 
