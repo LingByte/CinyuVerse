@@ -286,7 +286,7 @@ export function NovelOverviewPanel() {
   }
 
   return (
-    <div className="overview-panel flex h-full flex-col overflow-hidden">
+    <div className="overview-panel flex h-full flex-col overflow-hidden bg-background text-foreground">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">

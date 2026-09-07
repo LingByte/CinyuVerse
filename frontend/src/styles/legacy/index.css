@@ -3389,6 +3389,7 @@
   }
 
   .kanban-overlay,
+  .overview-overlay,
   .kanban-loading-state {
     color: var(--text-muted);
     background: var(--surface-page-solid);
