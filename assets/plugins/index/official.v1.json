@@ -1,0 +1,44 @@
+{
+  "listings": [
+    {
+      "publisher": "cinyuverse",
+      "pluginId": "cinyuverse.office",
+      "version": "3.0.0",
+      "summary": "在 Cinyuverse 中创建、编辑、分析和预览 DOCX、XLSX 与 PPTX 文件。",
+      "packageDigest": "builtin:cinyuverse.office",
+      "archive": "builtin://cinyuverse.office"
+    },
+    {
+      "publisher": "cinyuverse",
+      "pluginId": "cinyuverse.session-enhance",
+      "version": "1.0.0",
+      "summary": "在会话里向智能体提供提问、纠偏、会话查询和控制。",
+      "packageDigest": "builtin:cinyuverse.session-enhance",
+      "archive": "builtin://cinyuverse.session-enhance"
+    },
+    {
+      "publisher": "cinyuverse",
+      "pluginId": "cinyuverse.multi-agent",
+      "version": "1.0.0",
+      "summary": "让父 Agent 把子任务委托给其它 Agent。",
+      "packageDigest": "builtin:cinyuverse.multi-agent",
+      "archive": "builtin://cinyuverse.multi-agent"
+    },
+    {
+      "publisher": "cinyuverse",
+      "pluginId": "cinyuverse.workflow-creator",
+      "version": "1.0.0",
+      "summary": "Create, inspect, debug, and safely revise Cinyuverse DAG Workflows from Agent conversations and editable file tabs.",
+      "packageDigest": "builtin:cinyuverse.workflow-creator",
+      "archive": "builtin://cinyuverse.workflow-creator"
+    },
+    {
+      "publisher": "cinyuverse",
+      "pluginId": "cinyuverse.plugin-development",
+      "version": "1.0.0",
+      "summary": "让 Agent 在本机用当前 Host 的 SDK 与 CLI 开发、校验并链接插件。",
+      "packageDigest": "builtin:cinyuverse.plugin-development",
+      "archive": "builtin://cinyuverse.plugin-development"
+    }
+  ]
+}
