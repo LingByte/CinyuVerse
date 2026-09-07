@@ -14,7 +14,7 @@ export interface SessionPanelPlacement {
   /** Detached element holding the session content, or null when absent. */
   host: HTMLElement | null;
   /** Which page currently owns the session content. */
-  placement: 'workspace' | 'kanban';
+  placement: 'workspace' | 'kanban' | 'overview';
 }
 
 export const RightPanelSlotContext = createContext<SessionPanelPlacement>({

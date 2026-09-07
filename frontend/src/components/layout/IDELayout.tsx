@@ -1209,7 +1209,12 @@ export function IDELayout({
   const sessionPlacement = useMemo<SessionPanelPlacement>(
     () => ({
       host: rightPanelContent ? sessionContentHost : null,
-      placement: effectiveActiveTab === 'kanban' ? 'kanban' : 'workspace',
+      placement:
+        effectiveActiveTab === 'kanban'
+          ? 'kanban'
+          : effectiveActiveTab === 'overview'
+            ? 'overview'
+            : 'workspace',
     }),
     [effectiveActiveTab, rightPanelContent, sessionContentHost]
   );

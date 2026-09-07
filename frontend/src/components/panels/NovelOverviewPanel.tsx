@@ -11,7 +11,6 @@
 import '@xyflow/react/dist/style.css';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   ReactFlow,
@@ -47,10 +46,12 @@ import {
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectRepos } from '@/hooks/useProjectRepos';
 import { fileTreeApi, sessionsApi, storyGraphApi } from '@/lib/api';
-import { paths } from '@/lib/paths';
 import { getWritingPrompt } from '@/lib/writingPrompts';
+import { useLayoutStore } from '@/stores/useLayoutStore';
+import { useKanbanSessionContext } from '@/contexts/KanbanSessionContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { OverviewSessionSlot } from '@/components/panels/OverviewSessionSlot';
 import type {
   StoryBeat,
   StoryGraph,
@@ -288,7 +289,6 @@ export function NovelOverviewPanel() {
   const { projectId } = useProject();
   const { data: repos } = useProjectRepos(projectId);
   const rootPath = repos?.[0]?.path ?? '';
-  const navigate = useNavigate();
 
   const [stats, setStats] = useState<OverviewStats>(EMPTY_STATS);
   const [graph, setGraph] = useState<StoryGraph | null>(null);
@@ -449,6 +449,11 @@ export function NovelOverviewPanel() {
   );
 
   // ----- agent session actions -----
+  const { replaceRightSession } = useKanbanSessionContext();
+  const setRightPanelVisible = useLayoutStore(
+    (state) => state.setRightPanelVisible
+  );
+
   const openAgentSession = useCallback(
     async (promptText: string, sessionName: string) => {
       if (!projectId) return;
@@ -473,11 +478,14 @@ export function NovelOverviewPanel() {
           initial_prompt: promptText,
         });
 
-        // Navigate to the session
+        // Show the right panel with the new session — no navigation,
+        // the conversation renders inline in the overview's session slot.
         if (workspaceId) {
-          navigate(paths.projectSession(projectId, workspaceId, session.id));
-        } else {
-          navigate(paths.projectSessions(projectId));
+          replaceRightSession({
+            sessionId: session.id,
+            workspaceId,
+          });
+          setRightPanelVisible(true);
         }
       } catch (err) {
         setGraphError(err instanceof Error ? err.message : String(err));
@@ -485,7 +493,7 @@ export function NovelOverviewPanel() {
         setActionLoading(false);
       }
     },
-    [projectId, navigate]
+    [projectId, replaceRightSession, setRightPanelVisible]
   );
 
   const handleGenerateGraph = useCallback(() => {
@@ -883,6 +891,9 @@ export function NovelOverviewPanel() {
             </div>
           </div>
         )}
+
+        {/* Inline conversation session slot — adopts the shared right panel host */}
+        <OverviewSessionSlot visible={true} />
       </div>
     </div>
   );
