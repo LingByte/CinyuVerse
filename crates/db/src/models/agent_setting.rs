@@ -252,7 +252,7 @@ mod tests {
                 env_json TEXT,
                 config_json TEXT,
                 auto_approve_mode TEXT NOT NULL DEFAULT 'off'
-                    CHECK (auto_approve_mode IN ('off', 'allow_always', 'yolo')),
+                    CHECK (auto_approve_mode IN ('off', 'allow_always', 'bypass')),
                 runtime_cli_path TEXT,
                 runtime_cli_version TEXT,
                 runtime_cli_revision TEXT,

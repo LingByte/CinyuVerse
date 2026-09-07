@@ -5,13 +5,14 @@ use std::{
 };
 
 use agents::{
-    AgentConnectionId, AgentContentBlock, AgentId, AgentKind, AgentPermissionId,
-    AgentPermissionResponse, AgentPromptId, AgentSessionControlsSnapshot, AgentSessionId,
-    AgentTerminalId, CancelAgentPromptInput, ConnectAgentInput, EnsureAgentSessionInput,
-    HistoryPathDestination, ImportedAgentMessageRole, LocalHistoryDestination,
-    LocalHistoryImportJobSnapshot, OfficialRegistryHttpFetcher, REGISTRY_REFRESH_TIMEOUT,
-    RegistryCache, RegistryCacheFreshness, RegistrySnapshotClient, RespondAgentPermissionInput,
-    ResumeAgentSessionInput, SendAgentPromptInput, SystemClock,
+    AgentAutoApproveMode, AgentConnectionId, AgentContentBlock, AgentId, AgentKind,
+    AgentPermissionId, AgentPermissionResponse, AgentPromptId, AgentSessionControlsSnapshot,
+    AgentSessionId, AgentTerminalId, CancelAgentPromptInput, ConnectAgentInput,
+    EnsureAgentSessionInput, HistoryPathDestination, ImportedAgentMessageRole,
+    LocalHistoryDestination, LocalHistoryImportJobSnapshot, OfficialRegistryHttpFetcher,
+    REGISTRY_REFRESH_TIMEOUT, RegistryCache, RegistryCacheFreshness, RegistrySnapshotClient,
+    RespondAgentPermissionInput, ResumeAgentSessionInput, SendAgentPromptInput,
+    SetAutoApproveModeInput, SystemClock,
     conversation::{ConversationEvent, ConversationInputBlock},
     load_configured_history_session, scan_configured_history,
     scan_configured_history_with_progress,
@@ -101,6 +102,13 @@ struct AgentRespondPermissionArgs {
     connection_id: String,
     permission_id: String,
     response: AgentPermissionResponse,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentSetAutoApproveModeArgs {
+    connection_id: String,
+    mode: AgentAutoApproveMode,
 }
 
 #[derive(Deserialize)]
@@ -289,6 +297,9 @@ impl ServerApplicationDomains {
             DomainCommand::AgentCancelPrompt => self.agent_cancel_prompt(args).await,
             DomainCommand::AgentDisconnect => self.agent_disconnect(args).await,
             DomainCommand::AgentRespondPermission => self.agent_respond_permission(args).await,
+            DomainCommand::AgentSetAutoApproveMode => {
+                self.agent_set_auto_approve_mode(args).await
+            }
             DomainCommand::AgentRuntimeSnapshot => {
                 serialize(self.conversations.agent_runtime.snapshot().await)
             }
@@ -828,6 +839,22 @@ impl ServerApplicationDomains {
                 connection_id: parse_connection_id(&args.connection_id)?,
                 permission_id: parse_permission_id(&args.permission_id)?,
                 response: args.response,
+            })
+            .await
+            .map_err(|error| ApplicationError::bad_request(error.to_string()))?;
+        Ok(Value::Null)
+    }
+
+    async fn agent_set_auto_approve_mode(
+        &self,
+        args: Value,
+    ) -> Result<Value, ApplicationError> {
+        let args: AgentSetAutoApproveModeArgs = parse(args)?;
+        self.conversations
+            .agent_runtime
+            .set_auto_approve_mode(SetAutoApproveModeInput {
+                connection_id: parse_connection_id(&args.connection_id)?,
+                mode: args.mode,
             })
             .await
             .map_err(|error| ApplicationError::bad_request(error.to_string()))?;

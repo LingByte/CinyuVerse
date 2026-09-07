@@ -332,6 +332,7 @@ domain_commands! {
     AgentRuntimeSnapshot => "agent_runtime_snapshot" / "application.call",
     AgentSendPrompt => "agent_send_prompt" / "application.call",
     AgentSessionDefaults => "agent_session_defaults" / "application.call",
+    AgentSetAutoApproveMode => "agent_set_auto_approve_mode" / "application.call",
     AgentSetPreparedSessionConfig => "agent_set_prepared_session_config" / "application.call",
     AgentSetPreparedSessionMode => "agent_set_prepared_session_mode" / "application.call",
     AgentSetSessionDefaults => "agent_set_session_defaults" / "application.call",

@@ -10,10 +10,11 @@ use agents::{
     AgentSessionControlsSnapshot, AgentSessionId, AgentSessionListPage, AgentSessionSnapshot,
     AgentTerminalId, AgentTerminalOutputSnapshot, CancelAgentPromptInput, ConnectAgentInput,
     LaunchComponentEvidence, LaunchGate, LaunchGateError, RespondAgentPermissionInput,
-    ResumeAgentSessionInput, RuntimeSnapshot, SendAgentPromptInput, SessionAuthenticationEvidence,
-    SessionControlPreferences, SessionGate, SessionGateInput, SessionLaunchLock,
-    discover_path_acp_launch_lock, lifecycle_ready_for_path_acp,
-    resolve_session_authentication_evidence, terminal::agent_terminal_registry,
+    ResumeAgentSessionInput, RuntimeSnapshot, SendAgentPromptInput,
+    SessionAuthenticationEvidence, SessionControlPreferences, SessionGate, SessionGateInput,
+    SessionLaunchLock, SetAutoApproveModeInput, discover_path_acp_launch_lock,
+    lifecycle_ready_for_path_acp, resolve_session_authentication_evidence,
+    terminal::agent_terminal_registry,
 };
 use api_types::{AgentAuthenticationStatus, AgentId, AgentLifecycleState};
 use db::models::{
@@ -136,6 +137,13 @@ pub struct AgentRespondPermissionRequest {
     pub connection_id: String,
     pub permission_id: String,
     pub response: AgentPermissionResponse,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSetAutoApproveModeRequest {
+    pub connection_id: String,
+    pub mode: AgentAutoApproveMode,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1474,6 +1482,21 @@ pub async fn agent_respond_permission(
             connection_id: parse_agent_connection_id(&request.connection_id)?,
             permission_id: parse_agent_permission_id(&request.permission_id)?,
             response: request.response,
+        })
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn agent_set_auto_approve_mode(
+    state: tauri::State<'_, AppState>,
+    request: AgentSetAutoApproveModeRequest,
+) -> Result<(), AppError> {
+    state
+        .agent_runtime
+        .set_auto_approve_mode(SetAutoApproveModeInput {
+            connection_id: parse_agent_connection_id(&request.connection_id)?,
+            mode: request.mode,
         })
         .await
         .map_err(Into::into)
