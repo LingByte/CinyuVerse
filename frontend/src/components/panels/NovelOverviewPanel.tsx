@@ -45,15 +45,14 @@ import {
 } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectRepos } from '@/hooks/useProjectRepos';
-import { fileTreeApi, scratchApi, storyGraphApi } from '@/lib/api';
+import { fileTreeApi, storyGraphApi } from '@/lib/api';
 import { getWritingPrompt } from '@/lib/writingPrompts';
 import { useLayoutStore } from '@/stores/useLayoutStore';
+import { useComposerPrefillStore } from '@/stores/useComposerPrefillStore';
 import { useKanbanSessionContext } from '@/contexts/KanbanSessionContext';
-import { useUserSystem } from '@/components/ConfigProvider';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { OverviewSessionSlot } from '@/components/panels/OverviewSessionSlot';
-import { ScratchType } from 'shared/types';
 import type {
   StoryBeat,
   StoryGraph,
@@ -291,14 +290,11 @@ export function NovelOverviewPanel() {
   const { projectId } = useProject();
   const { data: repos } = useProjectRepos(projectId);
   const rootPath = repos?.[0]?.path ?? '';
-  const { config } = useUserSystem();
-  const configuredExecutor = config?.executor_profile?.executor;
 
   const [stats, setStats] = useState<OverviewStats>(EMPTY_STATS);
   const [graph, setGraph] = useState<StoryGraph | null>(null);
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphError, setGraphError] = useState<string | null>(null);
-  const [actionLoading, setActionLoading] = useState(false);
   const [promptNotice, setPromptNotice] = useState<string | null>(null);
 
   const [selectedBeatId, setSelectedBeatId] = useState<string | null>(null);
@@ -458,9 +454,10 @@ export function NovelOverviewPanel() {
   const setRightPanelVisible = useLayoutStore(
     (state) => state.setRightPanelVisible
   );
+  const requestPrefill = useComposerPrefillStore((s) => s.requestPrefill);
 
   const fillPromptIntoSession = useCallback(
-    async (promptText: string) => {
+    (promptText: string) => {
       setPromptNotice(null);
       // Require an existing session on the right panel — do NOT create one.
       if (!visibleRightSession?.sessionId) {
@@ -468,34 +465,12 @@ export function NovelOverviewPanel() {
         setRightPanelVisible(true);
         return;
       }
-      setActionLoading(true);
-      try {
-        await scratchApi.update(
-          ScratchType.DRAFT_FOLLOW_UP,
-          visibleRightSession.sessionId,
-          {
-            payload: {
-              type: 'DRAFT_FOLLOW_UP',
-              data: {
-                message: promptText,
-                images: [],
-                executor_config: {
-                  executor: configuredExecutor ?? 'claude_code',
-                },
-                queued: false,
-                config_overrides: {},
-              },
-            },
-          }
-        );
-        setRightPanelVisible(true);
-      } catch (err) {
-        setPromptNotice(err instanceof Error ? err.message : String(err));
-      } finally {
-        setActionLoading(false);
-      }
+      // Push the prompt into the composer via the prefill store — the
+      // SessionComposerInput will consume it and replace its text.
+      requestPrefill(promptText);
+      setRightPanelVisible(true);
     },
-    [visibleRightSession, configuredExecutor, setRightPanelVisible, t]
+    [visibleRightSession, requestPrefill, setRightPanelVisible, t]
   );
 
   const handleGenerateGraph = useCallback(() => {
@@ -662,7 +637,7 @@ export function NovelOverviewPanel() {
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          <Button size="sm" variant="secondary" onClick={handleGenerateGraph} disabled={actionLoading}>
+          <Button size="sm" variant="secondary" onClick={handleGenerateGraph} disabled={false}>
             <Wand2 className="h-3.5 w-3.5" />
             {t('panels:overview.generateStoryGraph')}
           </Button>
@@ -738,18 +713,10 @@ export function NovelOverviewPanel() {
           {!graphLoading && graph && graph.beats.length === 0 && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3">
               <p className="text-sm text-muted-foreground">{t('panels:overview.graphEmpty')}</p>
-              <Button size="sm" variant="secondary" onClick={handleGenerateGraph} disabled={actionLoading}>
+              <Button size="sm" variant="secondary" onClick={handleGenerateGraph} disabled={false}>
                 <Wand2 className="h-3.5 w-3.5" />
                 {t('panels:overview.generateStoryGraph')}
               </Button>
-            </div>
-          )}
-          {actionLoading && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/60">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-sm text-muted-foreground">
-                {t('panels:overview.openingSession')}
-              </span>
             </div>
           )}
           {graph && graph.beats.length > 0 && (
@@ -881,10 +848,10 @@ export function NovelOverviewPanel() {
 
             {/* Agent actions — primary */}
             <div className="flex flex-col gap-1.5 pt-2 border-t">
-              <Button size="sm" variant="secondary" onClick={handleInferBeat} disabled={actionLoading || !beatContext}>
+              <Button size="sm" variant="secondary" onClick={handleInferBeat} disabled={!beatContext}>
                 <Sparkles className="h-3.5 w-3.5" /> {t('panels:overview.inferBeat')}
               </Button>
-              <Button size="sm" variant="secondary" onClick={handleWriteBeat} disabled={actionLoading || !beatContext}>
+              <Button size="sm" variant="secondary" onClick={handleWriteBeat} disabled={!beatContext}>
                 <PenLine className="h-3.5 w-3.5" /> {t('panels:overview.writeBeat')}
               </Button>
             </div>

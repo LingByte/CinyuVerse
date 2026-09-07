@@ -58,6 +58,7 @@ import { usePluginHostContributions } from '@/hooks/usePluginHostContributions';
 import { cn } from '@/lib/utils';
 import { useOptionalUserSystem } from '@/components/ConfigProvider';
 import { useComposerSelectionStore } from '@/stores/useComposerSelectionStore';
+import { useComposerPrefillStore } from '@/stores/useComposerPrefillStore';
 import {
   extractImageFilesFromClipboardData,
   readImageFilesFromNavigatorClipboard,
@@ -1173,6 +1174,18 @@ export function SessionComposerInput({
     insertFileReferenceTokenAtCaret,
     pendingComposerSelection,
   ]);
+
+  // Consume a prefill message requested from an external panel (e.g. the
+  // novel overview "生成故事图" button). Replaces the entire input text.
+  const pendingPrefill = useComposerPrefillStore((s) => s.pending);
+  const consumePrefill = useComposerPrefillStore((s) => s.consume);
+  useEffect(() => {
+    if (pendingPrefill === null || disabled) return;
+    const consumed = consumePrefill();
+    if (consumed === null) return;
+    onChange(consumed);
+    window.requestAnimationFrame(() => composerHandleRef.current?.focus());
+  }, [consumePrefill, disabled, onChange, pendingPrefill]);
 
   const insertDroppedFileReference = useCallback(
     (payload: FileReferencePayload | null) => {
