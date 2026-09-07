@@ -49,6 +49,7 @@ import { fileTreeApi, sessionsApi, storyGraphApi } from '@/lib/api';
 import { getWritingPrompt } from '@/lib/writingPrompts';
 import { useLayoutStore } from '@/stores/useLayoutStore';
 import { useKanbanSessionContext } from '@/contexts/KanbanSessionContext';
+import { useUserSystem } from '@/components/ConfigProvider';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { OverviewSessionSlot } from '@/components/panels/OverviewSessionSlot';
@@ -289,6 +290,8 @@ export function NovelOverviewPanel() {
   const { projectId } = useProject();
   const { data: repos } = useProjectRepos(projectId);
   const rootPath = repos?.[0]?.path ?? '';
+  const { config } = useUserSystem();
+  const configuredExecutor = config?.executor_profile?.executor;
 
   const [stats, setStats] = useState<OverviewStats>(EMPTY_STATS);
   const [graph, setGraph] = useState<StoryGraph | null>(null);
@@ -474,6 +477,7 @@ export function NovelOverviewPanel() {
         const session = await sessionsApi.createProject({
           project_id: projectId,
           workspace_id: workspaceId,
+          executor: configuredExecutor ?? undefined,
           name: sessionName,
           initial_prompt: promptText,
         });
@@ -493,7 +497,7 @@ export function NovelOverviewPanel() {
         setActionLoading(false);
       }
     },
-    [projectId, replaceRightSession, setRightPanelVisible]
+    [projectId, replaceRightSession, setRightPanelVisible, configuredExecutor]
   );
 
   const handleGenerateGraph = useCallback(() => {
