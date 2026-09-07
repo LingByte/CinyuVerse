@@ -2438,8 +2438,9 @@ impl PluginControlPlane {
             })
             .collect::<Vec<_>>();
         if !skill_paths.is_empty() || !runtime_paths.is_empty() {
-            let mut context =
-                vec!["Cinyuverse has resolved this workflow to verified local resources:".to_owned()];
+            let mut context = vec![
+                "Cinyuverse has resolved this workflow to verified local resources:".to_owned(),
+            ];
             context.extend(
                 skill_paths
                     .iter()

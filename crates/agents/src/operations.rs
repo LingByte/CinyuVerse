@@ -183,7 +183,10 @@ impl InstallOrchestrator {
             let resource = resource_for(component.distribution_kind).unwrap_or("none");
             let mut env = HashMap::new();
             env.insert("CINYUVERSE_AGENT_ID".to_string(), plan.agent_id.to_string());
-            env.insert("CINYUVERSE_SHARED_RESOURCE".to_string(), resource.to_string());
+            env.insert(
+                "CINYUVERSE_SHARED_RESOURCE".to_string(),
+                resource.to_string(),
+            );
             let mut args = vec![component.resolved_source.clone()];
             args.extend(component.args.clone());
             let output = self

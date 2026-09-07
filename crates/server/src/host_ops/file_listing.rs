@@ -553,9 +553,11 @@ mod tests {
 
     #[test]
     fn missing_root_returns_empty_listing() {
-        let listing =
-            list_directory_children_at_path(Path::new("/definitely-missing-cinyuverse-listing"), "")
-                .unwrap();
+        let listing = list_directory_children_at_path(
+            Path::new("/definitely-missing-cinyuverse-listing"),
+            "",
+        )
+        .unwrap();
         assert_eq!(listing, super::empty_listing());
     }
 

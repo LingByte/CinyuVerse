@@ -2207,7 +2207,10 @@ fn validate_v4_contract(contract: V4Contract<'_>) -> Result<(), PluginError> {
             "unknown v4 engine `{name}`"
         )));
     }
-    for (name, actual) in [("cinyuverse", env!("CARGO_PKG_VERSION")), ("pluginSdk", "1.0.0")] {
+    for (name, actual) in [
+        ("cinyuverse", env!("CARGO_PKG_VERSION")),
+        ("pluginSdk", "1.0.0"),
+    ] {
         let requirement = engines
             .get(name)
             .and_then(Value::as_str)

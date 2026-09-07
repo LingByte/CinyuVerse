@@ -141,7 +141,10 @@ async fn replaced_generation_retires_only_after_old_leases_drain() {
         )
         .await
         .unwrap();
-    let old_lease = control.activation_lease("dev.cinyuverse.drain").await.unwrap();
+    let old_lease = control
+        .activation_lease("dev.cinyuverse.drain")
+        .await
+        .unwrap();
     control
         .update_and_activate(
             &node,
@@ -298,7 +301,12 @@ async fn enabled_worker_is_restored_after_host_restart() {
         .await
         .unwrap();
     assert!(failures.is_empty());
-    assert!(restored.activation_lease("dev.cinyuverse.drain").await.is_some());
+    assert!(
+        restored
+            .activation_lease("dev.cinyuverse.drain")
+            .await
+            .is_some()
+    );
     let generations: Vec<(i64, String)> = sqlx::query_as(
         "SELECT generation_id, state FROM plugin_generations_v4 WHERE plugin_id = ? ORDER BY generation_id",
     )
@@ -367,8 +375,17 @@ async fn linked_worker_refreezes_source_when_its_candidate_snapshot_is_lost() {
         .unwrap();
 
     assert!(failures.is_empty());
-    assert!(restored.activation_lease("dev.cinyuverse.drain").await.is_some());
-    let installed = restored.plugin("dev.cinyuverse.drain").await.unwrap().unwrap();
+    assert!(
+        restored
+            .activation_lease("dev.cinyuverse.drain")
+            .await
+            .is_some()
+    );
+    let installed = restored
+        .plugin("dev.cinyuverse.drain")
+        .await
+        .unwrap()
+        .unwrap();
     assert!(installed.package.content_root().is_dir());
     assert_eq!(
         installed.package.source.path,
@@ -392,8 +409,18 @@ async fn runtime_artifacts_are_content_addressed_and_locks_are_package_scoped() 
             .unwrap();
     }
     for (plugin_id, version, digest, path) in [
-        ("dev.cinyuverse.one", "1.0.0", "sha256:one", "/runtime/one/tool"),
-        ("dev.cinyuverse.two", "2.0.0", "sha256:two", "/runtime/two/tool"),
+        (
+            "dev.cinyuverse.one",
+            "1.0.0",
+            "sha256:one",
+            "/runtime/one/tool",
+        ),
+        (
+            "dev.cinyuverse.two",
+            "2.0.0",
+            "sha256:two",
+            "/runtime/two/tool",
+        ),
     ] {
         control
             .record_runtime(
@@ -427,7 +454,8 @@ async fn runtime_artifacts_are_content_addressed_and_locks_are_package_scoped() 
             .any(|runtime| { runtime.version == "1.0.0" && runtime.referenced_plugins.is_empty() })
     );
     assert!(inventory.iter().any(|runtime| {
-        runtime.version == "2.0.0" && runtime.referenced_plugins == ["dev.cinyuverse.two".to_owned()]
+        runtime.version == "2.0.0"
+            && runtime.referenced_plugins == ["dev.cinyuverse.two".to_owned()]
     }));
 }
 

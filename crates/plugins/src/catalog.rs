@@ -10,7 +10,8 @@ pub const DEFAULT_MARKETPLACE_ORIGIN: &str = "https://cinyuverse.xforever.xin";
 pub const COMMUNITY_PAGE_SIZE: u32 = 50;
 
 /// Retired package id → successor. Official marketplace must show one product.
-pub const REPLACED_PLUGIN_IDS: &[(&str, &str)] = &[("cinyuverse.collaboration", "cinyuverse.multi-agent")];
+pub const REPLACED_PLUGIN_IDS: &[(&str, &str)] =
+    &[("cinyuverse.collaboration", "cinyuverse.multi-agent")];
 
 /// Topic categories for Host-bundled packages. "official" is the cinyuverse owner, not a topic.
 const BUNDLED_TOPIC_CATEGORIES: &[(&str, &str)] = &[
@@ -886,7 +887,9 @@ mod tests {
             Some("github")
         );
         assert_eq!(
-            origin_kind(Some("https://cinyuverse.xforever.xin/marketplace/cinyuverse/office")),
+            origin_kind(Some(
+                "https://cinyuverse.xforever.xin/marketplace/cinyuverse/office"
+            )),
             Some("marketplace")
         );
         assert!(source_allows_remote_update(
@@ -1062,7 +1065,10 @@ mod tests {
         session.category = "official".into();
         normalize_listing_category(&mut session);
         assert_eq!(session.category, "productivity");
-        assert_eq!(bundled_topic_category("cinyuverse.multi-agent"), Some("agent"));
+        assert_eq!(
+            bundled_topic_category("cinyuverse.multi-agent"),
+            Some("agent")
+        );
         assert_eq!(
             bundled_topic_category("cinyuverse.workflow-creator"),
             Some("workflow")

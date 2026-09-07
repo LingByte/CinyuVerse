@@ -1479,9 +1479,12 @@ impl AgentConnectionRunner {
             },
         );
 
-        let auto_approve_mode =
-            effective_auto_approve_mode(*self.auto_approve_mode.read().await, &self.session_controls, session_id)
-                .await;
+        let auto_approve_mode = effective_auto_approve_mode(
+            *self.auto_approve_mode.read().await,
+            &self.session_controls,
+            session_id,
+        )
+        .await;
         if let Some(response) = decide_auto_permission_response(auto_approve_mode, &request) {
             self.emit(
                 Some(session_id),
@@ -3811,9 +3814,12 @@ impl AcpClientBridge {
             },
         });
 
-        let auto_approve_mode =
-            effective_auto_approve_mode(*self.auto_approve_mode.read().await, &self.session_controls, session_id)
-                .await;
+        let auto_approve_mode = effective_auto_approve_mode(
+            *self.auto_approve_mode.read().await,
+            &self.session_controls,
+            session_id,
+        )
+        .await;
         if let Some(response) = decide_auto_permission_response(auto_approve_mode, &request) {
             let _ = self.event_tx.send(AgentConnectionManagerEvent {
                 connection_id: self.connection_id,

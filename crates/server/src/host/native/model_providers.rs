@@ -2667,7 +2667,11 @@ async fn apply_claude(
     ] {
         env.remove(key);
     }
-    insert_string(env, "ANTHROPIC_BASE_URL", &strip_api_version_suffix(&provider.api_url));
+    insert_string(
+        env,
+        "ANTHROPIC_BASE_URL",
+        &strip_api_version_suffix(&provider.api_url),
+    );
     insert_string(env, "ANTHROPIC_AUTH_TOKEN", &provider.api_key);
     let model = parse_model(&provider.model);
     let mappings = [
@@ -2761,7 +2765,10 @@ async fn apply_codex(
             toml::Value::String(provider.api_url.clone()),
         );
     }
-    provider_table.insert("name".to_string(), toml::Value::String("cinyuverse".to_string()));
+    provider_table.insert(
+        "name".to_string(),
+        toml::Value::String("cinyuverse".to_string()),
+    );
     provider_table.insert(
         "wire_api".to_string(),
         toml::Value::String("responses".to_string()),

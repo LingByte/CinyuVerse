@@ -17,8 +17,8 @@ use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 #[tokio::test]
 #[ignore = "requires an explicitly selected local ACP executable"]
 async fn installed_agent_completes_a_real_acp_initialize_handshake() {
-    let command =
-        std::env::var("CINYUVERSE_REAL_ACP_COMMAND").expect("CINYUVERSE_REAL_ACP_COMMAND is required");
+    let command = std::env::var("CINYUVERSE_REAL_ACP_COMMAND")
+        .expect("CINYUVERSE_REAL_ACP_COMMAND is required");
     assert!(
         std::path::Path::new(&command).is_absolute(),
         "the release probe must use an absolute executable path"

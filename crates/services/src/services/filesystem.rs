@@ -287,7 +287,8 @@ impl FilesystemService {
                         return false;
                     }
 
-                    if utils::path::normalize_macos_private_alias(path).starts_with(&cinyuverse_temp_dir)
+                    if utils::path::normalize_macos_private_alias(path)
+                        .starts_with(&cinyuverse_temp_dir)
                     {
                         return false;
                     }

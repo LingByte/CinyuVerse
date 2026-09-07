@@ -10,11 +10,10 @@ use agents::{
     AgentSessionControlsSnapshot, AgentSessionId, AgentSessionListPage, AgentSessionSnapshot,
     AgentTerminalId, AgentTerminalOutputSnapshot, CancelAgentPromptInput, ConnectAgentInput,
     LaunchComponentEvidence, LaunchGate, LaunchGateError, RespondAgentPermissionInput,
-    ResumeAgentSessionInput, RuntimeSnapshot, SendAgentPromptInput,
-    SessionAuthenticationEvidence, SessionControlPreferences, SessionGate, SessionGateInput,
-    SessionLaunchLock, SetAutoApproveModeInput, discover_path_acp_launch_lock,
-    lifecycle_ready_for_path_acp, resolve_session_authentication_evidence,
-    terminal::agent_terminal_registry,
+    ResumeAgentSessionInput, RuntimeSnapshot, SendAgentPromptInput, SessionAuthenticationEvidence,
+    SessionControlPreferences, SessionGate, SessionGateInput, SessionLaunchLock,
+    SetAutoApproveModeInput, discover_path_acp_launch_lock, lifecycle_ready_for_path_acp,
+    resolve_session_authentication_evidence, terminal::agent_terminal_registry,
 };
 use api_types::{AgentAuthenticationStatus, AgentId, AgentLifecycleState};
 use db::models::{

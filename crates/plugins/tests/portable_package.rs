@@ -63,7 +63,10 @@ fn v4_product_package_reads_readme_summary_content_and_mutable_root_config() {
     let mut package =
         PluginPackage::inspect(root.path(), PluginSourceKind::Snapshot).expect("product package");
 
-    assert_eq!(package.summary, "Create and review documents in Cinyuverse.");
+    assert_eq!(
+        package.summary,
+        "Create and review documents in Cinyuverse."
+    );
     assert_eq!(package.readme_path, "README.md");
     assert_eq!(package.content_index.items.len(), 1);
     assert_eq!(package.config, serde_json::json!({"preview": true}));

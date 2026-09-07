@@ -902,8 +902,11 @@ async fn download_marketplace_archive(url: &str) -> Result<std::path::PathBuf, A
         .await
         .map_err(|error| AppError::Internal(error.to_string()))?;
     let suffix = plugins::marketplace_archive_suffix(url);
-    let path =
-        std::env::temp_dir().join(format!("cinyuverse-market-{}.{}", uuid::Uuid::new_v4(), suffix));
+    let path = std::env::temp_dir().join(format!(
+        "cinyuverse-market-{}.{}",
+        uuid::Uuid::new_v4(),
+        suffix
+    ));
     std::fs::write(&path, bytes).map_err(|error| AppError::Internal(error.to_string()))?;
     Ok(path)
 }
@@ -1833,7 +1836,8 @@ async fn preview_native_import(
     Ok(PluginImportPreviewDto {
         plugin: preview.ok_or_else(|| {
             AppError::BadRequest(
-                "plugin source must contain a Cinyuverse, Codex, or Claude Code manifest".to_owned(),
+                "plugin source must contain a Cinyuverse, Codex, or Claude Code manifest"
+                    .to_owned(),
             )
         })?,
         conflict,
@@ -3743,7 +3747,11 @@ mod tests {
         });
         assert!(is_host_family_binary_mcp(&spec));
         assert_eq!(
-            plugins::projected_mcp_server_id("cinyuverse.multi-agent", "cinyuverse-delegation-mcp", &spec),
+            plugins::projected_mcp_server_id(
+                "cinyuverse.multi-agent",
+                "cinyuverse-delegation-mcp",
+                &spec
+            ),
             plugins::DELEGATION_MCP_NAME
         );
         assert!(!is_host_family_binary_mcp(&serde_json::json!({
@@ -3808,7 +3816,12 @@ mod tests {
 
         let extracted = extract_plugin_archive(&archive_path).unwrap();
 
-        assert!(extracted.root.join(".cinyuverse-plugin/plugin.json").is_file());
+        assert!(
+            extracted
+                .root
+                .join(".cinyuverse-plugin/plugin.json")
+                .is_file()
+        );
         assert!(extracted.root.join("skills/demo/SKILL.md").is_file());
     }
 

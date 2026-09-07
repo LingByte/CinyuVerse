@@ -1373,7 +1373,11 @@ async fn kimi_managed_model_is_normalized_to_the_native_schema() {
             toml::Value::String("high".to_string()),
         ]
     );
-    assert!(config["models"]["cinyuverse"].get("default_effort").is_none());
+    assert!(
+        config["models"]["cinyuverse"]
+            .get("default_effort")
+            .is_none()
+    );
 
     provider
         .save(

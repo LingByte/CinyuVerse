@@ -166,11 +166,19 @@ async fn refresh_developer_links_replaces_changed_source() {
         .import(package, ConflictDecision::Reject)
         .await
         .unwrap();
-    let before = control.plugin("dev.cinyuverse.linked").await.unwrap().unwrap();
+    let before = control
+        .plugin("dev.cinyuverse.linked")
+        .await
+        .unwrap()
+        .unwrap();
     write_linked_package(root.path(), "changed");
     let changed = control.refresh_developer_links().await.unwrap();
     assert_eq!(changed, vec!["dev.cinyuverse.linked".to_string()]);
-    let after = control.plugin("dev.cinyuverse.linked").await.unwrap().unwrap();
+    let after = control
+        .plugin("dev.cinyuverse.linked")
+        .await
+        .unwrap()
+        .unwrap();
     assert_ne!(after.package_digest, before.package_digest);
     let unchanged = control.refresh_developer_links().await.unwrap();
     assert!(unchanged.is_empty());
@@ -258,7 +266,11 @@ async fn uninstall_removes_membership_but_retains_runtime_artifacts() {
     let registry = Arc::new(InMemoryPluginRegistry::default());
     let control_plane = PluginControlPlane::new(registry);
     let root = tempfile::tempdir().unwrap();
-    let package = package("dev.cinyuverse.remove", PluginSourceKind::Snapshot, root.path());
+    let package = package(
+        "dev.cinyuverse.remove",
+        PluginSourceKind::Snapshot,
+        root.path(),
+    );
 
     control_plane
         .import(package, ConflictDecision::Reject)
@@ -294,9 +306,17 @@ async fn same_runtime_id_can_lock_multiple_versions_without_displacing_plugins()
     let registry = Arc::new(InMemoryPluginRegistry::default());
     let control_plane = PluginControlPlane::new(registry);
     let root = tempfile::tempdir().unwrap();
-    let mut first = package("dev.cinyuverse.first", PluginSourceKind::Snapshot, root.path());
+    let mut first = package(
+        "dev.cinyuverse.first",
+        PluginSourceKind::Snapshot,
+        root.path(),
+    );
     first.runtimes.push(runtime("shared-cli", "1.0.0"));
-    let mut second = package("dev.cinyuverse.second", PluginSourceKind::Snapshot, root.path());
+    let mut second = package(
+        "dev.cinyuverse.second",
+        PluginSourceKind::Snapshot,
+        root.path(),
+    );
     second.runtimes.push(runtime("shared-cli", "1.0.0"));
     let mut incoming = package(
         "dev.cinyuverse.incoming",
@@ -349,8 +369,14 @@ async fn same_runtime_id_can_lock_multiple_versions_without_displacing_plugins()
     assert_eq!(inventory.len(), 2);
     assert_eq!(inventory[0].version, "1.0.0");
     assert_eq!(inventory[1].version, "2.0.0");
-    assert_eq!(inventory[0].referenced_plugins, vec!["dev.cinyuverse.first"]);
-    assert_eq!(inventory[1].referenced_plugins, vec!["dev.cinyuverse.incoming"]);
+    assert_eq!(
+        inventory[0].referenced_plugins,
+        vec!["dev.cinyuverse.first"]
+    );
+    assert_eq!(
+        inventory[1].referenced_plugins,
+        vec!["dev.cinyuverse.incoming"]
+    );
 }
 
 #[tokio::test]
@@ -358,7 +384,11 @@ async fn enabled_portable_action_resolves_from_the_unified_catalog() {
     let registry = Arc::new(InMemoryPluginRegistry::default());
     let control_plane = PluginControlPlane::new(registry);
     let root = tempfile::tempdir().unwrap();
-    let mut plugin = package("dev.cinyuverse.actions", PluginSourceKind::Snapshot, root.path());
+    let mut plugin = package(
+        "dev.cinyuverse.actions",
+        PluginSourceKind::Snapshot,
+        root.path(),
+    );
     plugin.invocations.push(plugins::InvocationDefinition {
         id: "review".to_owned(),
         label: "Review".to_owned(),
@@ -459,7 +489,11 @@ async fn file_opener_resolution_is_deterministic_and_disappears_when_disabled() 
     let registry = Arc::new(InMemoryPluginRegistry::default());
     let control_plane = PluginControlPlane::new(registry);
     let root = tempfile::tempdir().unwrap();
-    let mut plugin = package("dev.cinyuverse.preview", PluginSourceKind::Snapshot, root.path());
+    let mut plugin = package(
+        "dev.cinyuverse.preview",
+        PluginSourceKind::Snapshot,
+        root.path(),
+    );
     plugin.skills.clear();
     plugin.app.file_openers.push(FileOpenerContribution {
         id: "office".to_owned(),
@@ -565,7 +599,11 @@ async fn disable_withdraws_contributions_before_the_generation_is_gone() {
     let registry = Arc::new(InMemoryPluginRegistry::default());
     let control_plane = PluginControlPlane::new(registry);
     let root = tempfile::tempdir().unwrap();
-    let mut plugin = package("dev.cinyuverse.preview", PluginSourceKind::Snapshot, root.path());
+    let mut plugin = package(
+        "dev.cinyuverse.preview",
+        PluginSourceKind::Snapshot,
+        root.path(),
+    );
     plugin.skills.clear();
     plugin.app.file_openers.push(FileOpenerContribution {
         id: "office".to_owned(),

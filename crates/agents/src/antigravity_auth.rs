@@ -247,7 +247,10 @@ fn write_settings(acp_dir: &Path, path: &Path, value: &serde_json::Value) -> Res
     let target = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let parent = target.parent().unwrap_or(acp_dir);
     std::fs::create_dir_all(parent).map_err(|err| err.to_string())?;
-    let temp = parent.join(format!(".settings.json.cinyuverse-{}.tmp", std::process::id()));
+    let temp = parent.join(format!(
+        ".settings.json.cinyuverse-{}.tmp",
+        std::process::id()
+    ));
     std::fs::write(&temp, format!("{body}\n")).map_err(|err| err.to_string())?;
     if let Err(err) = std::fs::rename(&temp, &target) {
         let _ = std::fs::remove_file(&temp);

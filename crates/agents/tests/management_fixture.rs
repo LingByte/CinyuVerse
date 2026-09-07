@@ -272,7 +272,10 @@ async fn http_mcp_follows_advertised_capability() {
                         "CARGO_BIN_EXE_management_fixture_acp"
                     )),
                     args: Vec::new(),
-                    env: BTreeMap::from([("CINYUVERSE_FIXTURE_MCP_HTTP".to_string(), mode.to_string())]),
+                    env: BTreeMap::from([(
+                        "CINYUVERSE_FIXTURE_MCP_HTTP".to_string(),
+                        mode.to_string(),
+                    )]),
                     runtime_version: "fixture".to_string(),
                     acp_version: "fixture".to_string(),
                 },

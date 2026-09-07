@@ -91,8 +91,9 @@ impl PluginWorkerRuntimeProvider {
         std::fs::create_dir_all(&self.root).map_err(|error| {
             PluginError::runtime_install_failed("cinyuverse-plugin-worker-node", error.to_string())
         })?;
-        prepare_macos_managed_runtime_storage(&self.data_root, &self.root)
-            .map_err(|error| PluginError::runtime_install_failed("cinyuverse-plugin-worker-node", error))
+        prepare_macos_managed_runtime_storage(&self.data_root, &self.root).map_err(|error| {
+            PluginError::runtime_install_failed("cinyuverse-plugin-worker-node", error)
+        })
     }
 
     pub async fn resolve_for_package(

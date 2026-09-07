@@ -1,7 +1,6 @@
 use std::ffi::OsStr;
 
-pub const XWAYLAND_REQUIRED_MESSAGE: &str =
-    "CEF child windows require X11/XWayland; install xwayland and launch Cinyuverse with DISPLAY set";
+pub const XWAYLAND_REQUIRED_MESSAGE: &str = "CEF child windows require X11/XWayland; install xwayland and launch Cinyuverse with DISPLAY set";
 
 /// Selects the GTK backend required by native, windowed CEF on Linux.
 ///

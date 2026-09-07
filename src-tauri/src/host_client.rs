@@ -802,7 +802,9 @@ mod tests {
     #[test]
     fn pairing_input_accepts_invitation_payloads() {
         assert_eq!(
-            pairing_token_from_input(r#"cinyuverse-pairing:{"pairing_token":"K7M2NPQX","host_id":"h"}"#),
+            pairing_token_from_input(
+                r#"cinyuverse-pairing:{"pairing_token":"K7M2NPQX","host_id":"h"}"#
+            ),
             "K7M2NPQX"
         );
         assert_eq!(pairing_token_from_input(" K7M2NPQX "), "K7M2NPQX");

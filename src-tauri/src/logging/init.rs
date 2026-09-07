@@ -46,7 +46,10 @@ fn env_level_override() -> Option<String> {
 }
 
 pub fn is_valid_target(target: &str) -> bool {
-    if target.is_empty() || target == "cinyuverse::logging" || target.starts_with("cinyuverse::logging::") {
+    if target.is_empty()
+        || target == "cinyuverse::logging"
+        || target.starts_with("cinyuverse::logging::")
+    {
         return false;
     }
     target

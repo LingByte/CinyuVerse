@@ -147,9 +147,9 @@ where
         "list" | "install" => tokens.next().expect("peeked"),
         "agents" => {
             tokens.next();
-            tokens
-                .next()
-                .ok_or_else(|| ParseError("usage: cinyuverse-server agents list|install".to_string()))?
+            tokens.next().ok_or_else(|| {
+                ParseError("usage: cinyuverse-server agents list|install".to_string())
+            })?
         }
         _ => return Ok(None),
     };

@@ -221,18 +221,17 @@ pub async fn dispatch_model_catalog(
             let store = provider_store_path();
             let home = require_home()?;
             let env = env_for(pool, &args.agent_id).await?;
-            let (api_url, api_key) =
-                model_providers::resolve_probe_target(
-                    &store,
-                    &home,
-                    &env,
-                    &args.agent_id,
-                    args.provider_id.as_deref(),
-                    args.api_url.as_deref(),
-                    args.api_key.as_deref(),
-                )
-                .await
-                .map_err(bad)?;
+            let (api_url, api_key) = model_providers::resolve_probe_target(
+                &store,
+                &home,
+                &env,
+                &args.agent_id,
+                args.provider_id.as_deref(),
+                args.api_url.as_deref(),
+                args.api_key.as_deref(),
+            )
+            .await
+            .map_err(bad)?;
             serialize(
                 model_catalogs::provider(args.agent_id, &api_url, &api_key)
                     .await
@@ -416,16 +415,10 @@ pub async fn dispatch_model_provider_probe(
 ) -> Result<Value, ApplicationError> {
     let started = std::time::Instant::now();
     let catalog = dispatch_model_catalog(pool, "agent_model_provider_catalog", args).await;
-    let latency_ms = started
-        .elapsed()
-        .as_millis()
-        .min(u128::from(u32::MAX)) as u32;
+    let latency_ms = started.elapsed().as_millis().min(u128::from(u32::MAX)) as u32;
     let probe = match catalog {
         Ok(value) => {
-            let ok = value
-                .get("error")
-                .and_then(|e| e.as_null())
-                .is_some()
+            let ok = value.get("error").and_then(|e| e.as_null()).is_some()
                 && value
                     .get("models")
                     .and_then(|m| m.as_array())

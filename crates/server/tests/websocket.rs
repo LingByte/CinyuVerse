@@ -64,7 +64,8 @@ async fn connect(
     let encoded = URL_SAFE_NO_PAD.encode(token);
     request.headers_mut().insert(
         "sec-websocket-protocol",
-        HeaderValue::from_str(&format!("cinyuverse.v1, cinyuverse.token.{encoded}")).expect("protocol"),
+        HeaderValue::from_str(&format!("cinyuverse.v1, cinyuverse.token.{encoded}"))
+            .expect("protocol"),
     );
     let (socket, response) = connect_async(request).await.expect("websocket connect");
     assert_eq!(

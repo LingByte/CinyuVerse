@@ -297,9 +297,7 @@ impl ServerApplicationDomains {
             DomainCommand::AgentCancelPrompt => self.agent_cancel_prompt(args).await,
             DomainCommand::AgentDisconnect => self.agent_disconnect(args).await,
             DomainCommand::AgentRespondPermission => self.agent_respond_permission(args).await,
-            DomainCommand::AgentSetAutoApproveMode => {
-                self.agent_set_auto_approve_mode(args).await
-            }
+            DomainCommand::AgentSetAutoApproveMode => self.agent_set_auto_approve_mode(args).await,
             DomainCommand::AgentRuntimeSnapshot => {
                 serialize(self.conversations.agent_runtime.snapshot().await)
             }
@@ -845,10 +843,7 @@ impl ServerApplicationDomains {
         Ok(Value::Null)
     }
 
-    async fn agent_set_auto_approve_mode(
-        &self,
-        args: Value,
-    ) -> Result<Value, ApplicationError> {
+    async fn agent_set_auto_approve_mode(&self, args: Value) -> Result<Value, ApplicationError> {
         let args: AgentSetAutoApproveModeArgs = parse(args)?;
         self.conversations
             .agent_runtime

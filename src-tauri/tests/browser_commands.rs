@@ -42,8 +42,9 @@ fn command_adapter_returns_a_stable_error_code_when_cef_rejects_creation() {
 
 #[test]
 fn unavailable_cef_runtime_reports_the_initialization_error() {
-    let runtime =
-        browser::unavailable_runtime(cinyuverse::linux_display::XWAYLAND_REQUIRED_MESSAGE.to_string());
+    let runtime = browser::unavailable_runtime(
+        cinyuverse::linux_display::XWAYLAND_REQUIRED_MESSAGE.to_string(),
+    );
 
     let error = browser::create_tab(
         &runtime,

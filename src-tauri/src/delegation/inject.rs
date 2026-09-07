@@ -254,7 +254,10 @@ mod tests {
             panic!("expected injection");
         };
         let names: Vec<_> = servers.iter().map(|server| server.name.as_str()).collect();
-        assert_eq!(names, ["cinyuverse-delegation-mcp", "cinyuverse-session-mcp"]);
+        assert_eq!(
+            names,
+            ["cinyuverse-delegation-mcp", "cinyuverse-session-mcp"]
+        );
         assert!(
             servers[0]
                 .args

@@ -265,7 +265,10 @@ fn websocket_url(base_url: &str) -> String {
 
 fn token_protocol(token: &str) -> String {
     use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-    format!("cinyuverse.token.{}", URL_SAFE_NO_PAD.encode(token.as_bytes()))
+    format!(
+        "cinyuverse.token.{}",
+        URL_SAFE_NO_PAD.encode(token.as_bytes())
+    )
 }
 
 async fn connect_remote_socket(

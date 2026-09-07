@@ -49,10 +49,22 @@ pub fn install_tray_icon(app: &AppHandle) -> tauri::Result<()> {
         tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     };
 
-    let show_item = MenuItem::with_id(app, TRAY_MENU_ID_SHOW, "显示 Cinyuverse", true, None::<&str>)?;
+    let show_item = MenuItem::with_id(
+        app,
+        TRAY_MENU_ID_SHOW,
+        "显示 Cinyuverse",
+        true,
+        None::<&str>,
+    )?;
     let hide_item = MenuItem::with_id(app, TRAY_MENU_ID_HIDE, "隐藏窗口", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let quit_item = MenuItem::with_id(app, TRAY_MENU_ID_QUIT, "退出 Cinyuverse", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(
+        app,
+        TRAY_MENU_ID_QUIT,
+        "退出 Cinyuverse",
+        true,
+        None::<&str>,
+    )?;
     let menu = MenuBuilder::new(app)
         .items(&[&show_item, &hide_item, &separator, &quit_item])
         .build()?;

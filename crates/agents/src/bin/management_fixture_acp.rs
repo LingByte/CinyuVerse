@@ -31,7 +31,8 @@ async fn main() -> std::io::Result<()> {
     let auth_mode =
         std::env::var("CINYUVERSE_FIXTURE_AUTH_STATUS").unwrap_or_else(|_| "unsupported".into());
     let session_discovery = std::env::var_os("CINYUVERSE_FIXTURE_SESSION_DISCOVERY").is_some();
-    let additional_directories_mode = std::env::var("CINYUVERSE_FIXTURE_ADDITIONAL_DIRECTORIES").ok();
+    let additional_directories_mode =
+        std::env::var("CINYUVERSE_FIXTURE_ADDITIONAL_DIRECTORIES").ok();
     let mcp_http_mode = std::env::var("CINYUVERSE_FIXTURE_MCP_HTTP").ok();
 
     while let Some(line) = lines.next_line().await? {
@@ -110,7 +111,9 @@ async fn main() -> std::io::Result<()> {
                 "id": id,
                 "result": {"authenticated": auth_mode == "true"}
             }),
-            "session/new" if std::env::var_os("CINYUVERSE_FIXTURE_SESSION_AUTH_REQUIRED").is_some() => {
+            "session/new"
+                if std::env::var_os("CINYUVERSE_FIXTURE_SESSION_AUTH_REQUIRED").is_some() =>
+            {
                 json!({
                     "jsonrpc": "2.0",
                     "id": id,

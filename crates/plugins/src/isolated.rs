@@ -959,7 +959,9 @@ pub(crate) fn spawn_windows_appcontainer(
 
     let mut env_block = Vec::<u16>::new();
     for (key, value) in std::env::vars() {
-        if key.eq_ignore_ascii_case("NO_COLOR") || key.eq_ignore_ascii_case("CINYUVERSE_PACKAGE_CLASS") {
+        if key.eq_ignore_ascii_case("NO_COLOR")
+            || key.eq_ignore_ascii_case("CINYUVERSE_PACKAGE_CLASS")
+        {
             continue;
         }
         env_block.extend(format!("{key}={value}").encode_utf16());

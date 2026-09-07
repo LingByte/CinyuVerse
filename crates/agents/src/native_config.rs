@@ -944,7 +944,10 @@ fn finalize_kimi_shape(
     }
 
     for (field, path) in [
-        ("kimi_base_url", &["providers", "cinyuverse", "base_url"][..]),
+        (
+            "kimi_base_url",
+            &["providers", "cinyuverse", "base_url"][..],
+        ),
         ("kimi_api_key", &["providers", "cinyuverse", "api_key"][..]),
     ] {
         if value_at_path(document, path)
@@ -970,7 +973,8 @@ fn finalize_kimi_shape(
         .filter(|value| !value.is_empty())
         .map(str::to_string);
     let Some(model) = model else {
-        if value_at_path(document, &["default_model"]).and_then(Value::as_str) == Some("cinyuverse") {
+        if value_at_path(document, &["default_model"]).and_then(Value::as_str) == Some("cinyuverse")
+        {
             remove_value_at_path(document, &["default_model"]);
         }
         return Ok(());
@@ -1003,7 +1007,8 @@ fn finalize_kimi_shape(
     )?;
 
     normalize_kimi_string_array(document, &["models", "cinyuverse", "capabilities"])?;
-    let efforts = normalize_kimi_string_array(document, &["models", "cinyuverse", "support_efforts"])?;
+    let efforts =
+        normalize_kimi_string_array(document, &["models", "cinyuverse", "support_efforts"])?;
     let default_effort = value_at_path(document, &["models", "cinyuverse", "default_effort"])
         .and_then(Value::as_str)
         .map(str::trim)

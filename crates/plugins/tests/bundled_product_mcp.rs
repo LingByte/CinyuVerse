@@ -54,7 +54,11 @@ async fn replaced_collaboration_builtin_is_retired_into_multi_agent() {
             .unwrap()
             .is_none()
     );
-    let successor = control.plugin("cinyuverse.multi-agent").await.unwrap().unwrap();
+    let successor = control
+        .plugin("cinyuverse.multi-agent")
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(successor.activation, plugins::PluginActivation::Enabled);
     assert_eq!(successor.config["depthLimit"], 3);
 }

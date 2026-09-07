@@ -11,8 +11,7 @@ use uuid::Uuid;
 use crate::{error::AppError, state::AppState};
 
 const REDLINE_DEPENDENCY: &str = "tauri-plugin-redline = \"=0.1.0\"";
-const COMPANION_DEPENDENCY: &str =
-    "tauri-plugin-cinyuverse-inspector = { path = \"../.cinyuverse/tauri-plugin-cinyuverse-inspector\" }";
+const COMPANION_DEPENDENCY: &str = "tauri-plugin-cinyuverse-inspector = { path = \"../.cinyuverse/tauri-plugin-cinyuverse-inspector\" }";
 const BUILDER_MARKER: &str = "tauri_plugin_cinyuverse_inspector::init()";
 
 const COMPANION_CARGO_TOML: &str = r#"[package]

@@ -124,7 +124,12 @@ mod tests {
         let real = debug.join("cinyuverse-mcp");
         fs::write(&real, b"real-mcp").unwrap();
 
-        let found = search_from(&macos.join("cinyuverse"), "cinyuverse-mcp", "cinyuverse-mcp").unwrap();
+        let found = search_from(
+            &macos.join("cinyuverse"),
+            "cinyuverse-mcp",
+            "cinyuverse-mcp",
+        )
+        .unwrap();
         assert_eq!(found, real);
     }
 

@@ -415,7 +415,10 @@ pub fn default_socket_path(temp_dir: &std::path::Path) -> PathBuf {
 
 #[cfg(windows)]
 pub fn default_socket_path(_temp_dir: &std::path::Path) -> PathBuf {
-    PathBuf::from(format!(r"\\.\pipe\cinyuverse-delegation-{}", std::process::id()))
+    PathBuf::from(format!(
+        r"\\.\pipe\cinyuverse-delegation-{}",
+        std::process::id()
+    ))
 }
 
 fn to_wire_report(report: DelegationTaskReport) -> WireDelegationTaskReport {

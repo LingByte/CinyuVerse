@@ -1990,8 +1990,9 @@ async fn terminal_path_probe(command: &str, app_path: &[PathBuf]) -> TerminalPat
             ..TerminalPathProbe::default()
         };
     }
-    let script =
-        format!("printf 'CINYUVERSE_PATH=%s\\n' \"$PATH\"; command -v {command} 2>/dev/null || true");
+    let script = format!(
+        "printf 'CINYUVERSE_PATH=%s\\n' \"$PATH\"; command -v {command} 2>/dev/null || true"
+    );
     let mut process =
         utils::process::new_hidden_tokio_command(&shell, ["-lic", script.as_str()].into_iter());
     process.kill_on_drop(true);

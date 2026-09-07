@@ -342,7 +342,9 @@ async fn ensure_membership(pool: &SqlitePool, agent_id: &AgentId) -> anyhow::Res
         .entries
         .iter()
         .find(|entry| &entry.agent_id == agent_id)
-        .ok_or_else(|| anyhow::anyhow!("unknown Agent `{agent_id}`; run `cinyuverse-server list`"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("unknown Agent `{agent_id}`; run `cinyuverse-server list`")
+        })?;
     let position = sqlx::query_scalar::<_, i64>(
         "SELECT COALESCE(MAX(position), -1) + 1 FROM agent_membership",
     )

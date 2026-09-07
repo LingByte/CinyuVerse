@@ -4446,7 +4446,9 @@ mod tests {
         assert!(text.contains("/opt/cinyuverse-mcp"));
         assert!(text.contains("delegation"));
         assert!(text.contains("theme = \"dark\""));
-        assert!(remove_grok_server_at(&path, "cinyuverse-delegation-mcp").expect("remove companion"));
+        assert!(
+            remove_grok_server_at(&path, "cinyuverse-delegation-mcp").expect("remove companion")
+        );
         assert!(read_grok_servers_at(&path).expect("rescan Grok").is_empty());
     }
 

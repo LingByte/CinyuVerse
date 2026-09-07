@@ -636,7 +636,10 @@ mod tests {
         let home = Path::new("/users/tester");
 
         assert_eq!(
-            expand_workflow_source_home("~/.cinyuverse/workflows/demo.cinyuverse-workflow.json", home),
+            expand_workflow_source_home(
+                "~/.cinyuverse/workflows/demo.cinyuverse-workflow.json",
+                home
+            ),
             home.join(".cinyuverse/workflows/demo.cinyuverse-workflow.json")
         );
         assert_eq!(

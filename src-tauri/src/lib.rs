@@ -171,7 +171,8 @@ fn cef_subprocess_path_from(resource_dir: Option<&std::path::Path>) -> Option<Pa
     let directory = executable.parent()?;
     #[cfg(target_os = "macos")]
     {
-        let bundled = directory.join("../Frameworks/cinyuverse Helper.app/Contents/MacOS/cinyuverse Helper");
+        let bundled =
+            directory.join("../Frameworks/cinyuverse Helper.app/Contents/MacOS/cinyuverse Helper");
         if bundled.is_file() {
             return Some(bundled);
         }

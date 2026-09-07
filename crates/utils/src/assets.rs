@@ -271,7 +271,8 @@ fn embedded_builtin_directories() -> Vec<String> {
         if let Some(directory) = path.split('/').next()
             && !directory.is_empty()
             && directory != "index"
-            && BuiltinPluginAssets::get(&format!("{directory}/.cinyuverse-plugin/plugin.json")).is_some()
+            && BuiltinPluginAssets::get(&format!("{directory}/.cinyuverse-plugin/plugin.json"))
+                .is_some()
         {
             directories.insert(directory.to_owned());
         }

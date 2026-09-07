@@ -20,7 +20,10 @@ fn pending_flows() -> &'static Mutex<HashMap<String, PendingAccountFlow>> {
 }
 
 pub fn account_flow_result_path(agent_id: &AgentId) -> PathBuf {
-    std::env::temp_dir().join(format!("cinyuverse-account-flow-{}.exit", agent_id.as_str()))
+    std::env::temp_dir().join(format!(
+        "cinyuverse-account-flow-{}.exit",
+        agent_id.as_str()
+    ))
 }
 
 pub fn wrap_account_flow_command(command: &str, result_path: &Path) -> String {
