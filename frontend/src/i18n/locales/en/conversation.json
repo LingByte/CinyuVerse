@@ -1,0 +1,415 @@
+{
+  "codexGoal": {
+    "label": "Goal",
+    "statusLabel": "Status",
+    "currentLabel": "Current goal",
+    "status": {
+      "running": "Running",
+      "paused": "Paused",
+      "completed": "Completed"
+    }
+  },
+  "find": {
+    "placeholder": "Find in conversation",
+    "matches": "{{current}} of {{total}}",
+    "none": "No matches",
+    "previous": "Previous match",
+    "next": "Next match",
+    "close": "Close find"
+  },
+  "draftConflict": {
+    "title": "Draft conflict",
+    "keepServer": "Keep server",
+    "keepLocal": "Keep mine"
+  },
+  "children": {
+    "title": "Child conversations ({{count}})",
+    "active": "{{count}} active",
+    "waiting": "{{count}} waiting",
+    "budget": "Calls {{callsUsed}}/{{maxCalls}} · active {{active}}/{{maxActive}}",
+    "untitled": "Untitled conversation",
+    "queued": "{{count}} queued",
+    "open": "Open child conversation",
+    "status": {
+      "todo": "Ready",
+      "inprogress": "In progress",
+      "inreview": "In review",
+      "done": "Done",
+      "archived": "Archived"
+    }
+  },
+  "artifact": {
+    "openPreview": "Open preview",
+    "openPreviewAria": "Open {{name}} preview",
+    "closePreviewAria": "Close {{name}} preview",
+    "previewTitle": "{{name}} preview",
+    "revision": "revision {{revision}}",
+    "invalidPreviewLease": "The Artifact Provider returned an invalid preview lease"
+  },
+  "loadingCard": {
+    "thinking": "AI is thinking...",
+    "copy": "Copy"
+  },
+  "thinking": {
+    "label": "Thinking",
+    "expand": "Show thinking",
+    "collapse": "Hide thinking"
+  },
+  "displayEntry": {
+    "userDeniedTool": "User denied {{tool}}",
+    "stoppingHook": "Stopping Hook..."
+  },
+  "fileContentView": {
+    "addLinesToChat": "Add lines {{range}} to chat"
+  },
+  "retryEditor": {
+    "placeholder": "Edit and resend...",
+    "retryHere": "Retry from here",
+    "send": "Send"
+  },
+  "pendingApproval": {
+    "submitting": "Submitting",
+    "approve": "Approve",
+    "submittingEllipsis": "Submitting…",
+    "approveRequest": "Approve request",
+    "deny": "Deny",
+    "provideDenyReason": "Provide a denial reason",
+    "denyReasonPlaceholder": "Tell the Agent why this request was denied... Type # to insert a tag or search files.",
+    "approveThisRequest": "Approve this request?"
+  },
+  "userMessage": {
+    "viewFullMessage": "View full message",
+    "collapseMessage": "Collapse message",
+    "rollbackToHere": "Roll back to here"
+  },
+  "nextActionCard": {
+    "viewDiffs": "View diffs",
+    "filesChanged": "{{count}} files changed",
+    "copyWorktreePath": "Copy worktree path",
+    "copied": "Copied!",
+    "viewChangesInEditor": "View changes in {{editor}}",
+    "gitActions": "Git actions",
+    "runSetup": "Run setup",
+    "summaryAndActions": "Summary and actions"
+  },
+  "turnFileChanges": {
+    "filesChanged": "{{count}} files changed",
+    "undo": "Undo",
+    "undoConfirmTitle": "Undo this turn's file changes?",
+    "undoConfirmMessage": "Workspace files will be restored to the checkpoint recorded before this message. The conversation history is kept.",
+    "undoConfirm": "Restore files",
+    "undoFailed": "No checkpoint is available for this turn."
+  },
+  "turnErrorCard": {
+    "reloadSession": "Reload session",
+    "rebindSession": "Rebind session",
+    "cancelledTitle": "Cancelled",
+    "resourceNotFoundTitle": "Agent session expired",
+    "resourceNotFoundDetail": "This session no longer exists on the agent side. Visible history remains, but the agent’s hidden context is gone. Confirm a rebind to continue.",
+    "sessionResumeUnsupportedTitle": "Session resume unsupported",
+    "sessionResumeUnsupportedDetail": "This agent cannot restore the previous session. Confirm a rebind to cold-start. Hidden agent context will not be preserved.",
+    "sessionLoadFailedTitle": "Could not load agent session",
+    "idleTimeoutTitle": "Agent not responding",
+    "idleTimeoutDetail": "The agent returned nothing for a long time, so this turn was ended automatically. Common causes: the network/agent can't reach the model, or the agent needs to re-authenticate.",
+    "connectionClosedTitle": "Connection closed",
+    "connectionClosedDetail": "The agent connection was closed before this turn completed.",
+    "authRequiredTitle": "Re-authentication required",
+    "authRequiredDetail": "The agent requires re-authentication before continuing.",
+    "rejectedTitle": "Request rejected",
+    "rejectedDetail": "The agent rejected this request. Sending it again will fail the same way.",
+    "serviceErrorTitle": "Service error",
+    "rateLimitedTitle": "Rate limited",
+    "defaultTitle": "Conversation error",
+    "detailWithCode": "{{message}} ({{code}})",
+    "planUsageAside": "Plan window is at {{percent}}% and resets {{reset}}.",
+    "planUsagePercent": "Plan window is at {{percent}}%.",
+    "planUsageResetOnly": "Plan window resets {{reset}}.",
+    "planUsageResetSoon": "soon",
+    "planUsageReset_minutes": "in {{count}} min",
+    "planUsageReset_hours": "in {{count}} h",
+    "planUsageReset_days": "in {{count}} d"
+  },
+  "generatedImageCard": {
+    "generating": "Generating image…",
+    "title": "Generated image",
+    "downloadTooltip": "Download image",
+    "download": "Download",
+    "previewLabel": "Preview generated image",
+    "revisedPrompt": "Revised prompt"
+  },
+  "delegationCard": {
+    "delegatedTo": "Delegated to {{agent}}",
+    "subAgentDelegation": "Sub-agent delegation",
+    "task": "Task",
+    "result": "Result",
+    "openChildSession": "View session",
+    "durationMs": "{{count}} ms",
+    "durationSeconds": "{{count}}s",
+    "durationMinutes": "{{count}} min",
+    "running": "Running",
+    "cancel": "Cancel delegation",
+    "canceling": "Canceling…",
+    "cancelFailed": "Could not cancel: {{error}}",
+    "completed": "Completed",
+    "failed": "Failed",
+    "canceled": "Canceled"
+  },
+  "childViewer": {
+    "title": "Delegated session",
+    "close": "Close",
+    "loading": "Loading child session…",
+    "empty": "This child session has no messages yet"
+  },
+  "commandTool": {
+    "commandLabel": "Command",
+    "outputLabel": "Output"
+  },
+  "askQuestion": {
+    "title": "Question",
+    "questionLabel": "Question",
+    "optionsLabel": "Options",
+    "answerLabel": "Answer",
+    "declined": "Dismissed"
+  },
+  "permissionRequestCard": {
+    "title": "Permission Request",
+    "types": {
+      "file": "File",
+      "terminal": "Terminal",
+      "web": "Web",
+      "tool": "Tool"
+    },
+    "reject": "Reject",
+    "allow": "Allow",
+    "allowOnce": "Allow once",
+    "allowSession": "Allow for this session",
+    "allowAlways": "Always allow all",
+    "allowActions": "Permission approval options",
+    "expandAllow": "Show approval options",
+    "options": "Options",
+    "responded": "Responded",
+    "newFile": "New file",
+    "modified": "Modified",
+    "before": "Before",
+    "content": "Content",
+    "after": "After",
+    "viewDetails": "View details"
+  },
+  "messageTurnView": {
+    "streamingOutput": "AI is responding...",
+    "streamingThinking": "AI is thinking...",
+    "streamingStatus": "AI is working",
+    "copied": "Copied",
+    "copyMessage": "Copy message",
+    "edit": "Edit and resend",
+    "editInput": "Edit user message",
+    "sendEdited": "Send",
+    "resendHint": "Resend: optionally restore files first, then resend",
+    "resend": "Resend",
+    "interruptedTitle": "Interrupted by restart",
+    "interruptedDescription": "This turn was interrupted by an app restart while generating and did not complete.",
+    "collapsedMessages": "Collapsed {{count}} messages",
+    "toolCall": "Tool call",
+    "generatingAgents": "Generating {{count}} agents",
+    "toolSummary": {
+      "commands_one": "Ran {{count}} command",
+      "commands_other": "Ran {{count}} commands",
+      "reads_one": "Read {{count}} file",
+      "reads_other": "Read {{count}} files",
+      "edits_one": "Changed {{count}} file",
+      "edits_other": "Changed {{count}} files",
+      "searches_one": "Completed {{count}} search",
+      "searches_other": "Completed {{count}} searches",
+      "webFetches_one": "Fetched {{count}} web page",
+      "webFetches_other": "Fetched {{count}} web pages",
+      "agents_one": "Started {{count}} agent",
+      "agents_other": "Started {{count}} agents",
+      "other_one": "{{count}} other tool call",
+      "other_other": "{{count}} other tool calls",
+      "separator": ", ",
+      "failed": "Tool call failed"
+    },
+    "fileReadRange": "Lines {{start}}–{{end}}",
+    "fileReadFrom": "From line {{start}}",
+    "searchResults": "Search results"
+  },
+  "statusDock": {
+    "dismiss": "Dismiss notice",
+    "dismissLocalError": "Dismiss local error",
+    "localErrorTitle": "Action failed",
+    "errorBadge": "Error",
+    "warningBadge": "Warning",
+    "infoBadge": "Notice",
+    "showDetails": "Show details",
+    "showDetailsFor": "Show details: {{title}}",
+    "newerEventTitle": "This conversation includes a record from a newer version",
+    "newerEventDescription": "This version cannot display one record yet. The rest of the conversation is unaffected. Update Cinyuverse to view it.",
+    "unreadableEventTitle": "Some conversation history cannot be displayed",
+    "unreadableEventDescription": "Cinyuverse cannot read one historical record. The rest of the conversation is unaffected.",
+    "updateAgent": "Update",
+    "updating": "Updating",
+    "updateStarted": "Update started",
+    "updateFailed": "Update failed"
+  },
+  "liveFeedback": {
+    "placeholder": "Steer this turn",
+    "send": "Send",
+    "pending": "Waiting",
+    "delivered": "Read"
+  },
+  "feedbackCheck": {
+    "label": "Live feedback",
+    "count": "{{count}} notes",
+    "checkItems": "Check Items",
+    "result": "Result"
+  },
+  "preview": {
+    "switchToFileView": "Switch to file view",
+    "switchToDiffView": "Switch to diff view",
+    "pasteImageError": "Failed to paste image into the markdown file"
+  },
+  "fileTool": {
+    "openPreview": "Open preview",
+    "copied": "Copied",
+    "copyPath": "Copy path",
+    "path": "Path",
+    "tool": "Tool"
+  },
+  "toolArtifact": {
+    "view": "View",
+    "edit": "Edit",
+    "write": "Write",
+    "delete": "Delete",
+    "rename": "Rename",
+    "search": "Search",
+    "fetch": "Fetch",
+    "denied": "Denied",
+    "timedOut": "Timed out",
+    "exitCode": "exit {{code}}",
+    "matches_one": "{{count}} match",
+    "matches_other": "{{count}} matches",
+    "openInPreview": "Open in preview",
+    "loadingDiff": "Loading diff…",
+    "noHeadDiff": "No differences against HEAD"
+  },
+  "viewedImages": {
+    "summary_one": "Viewed {{count}} image",
+    "summary_other": "Viewed {{count}} images",
+    "preview": "Preview image: {{path}}",
+    "image": "Image {{count}}"
+  },
+  "goalTool": {
+    "title": "Goal",
+    "objectiveLabel": "Goal",
+    "statusLabel": "Status",
+    "resultLabel": "Result"
+  },
+  "messageNav": {
+    "railLabel": "Message navigation",
+    "jumpToMessage": "Jump to message {{ordinal}}"
+  },
+  "planCard": {
+    "label": "Plan",
+    "completedCount": "{{completed}} of {{total}} completed",
+    "waitingConfirmation": "Waiting for confirmation",
+    "expand": "Expand plan",
+    "collapse": "Collapse plan",
+    "status": {
+      "completed": "Completed",
+      "in_progress": "In progress",
+      "pending": "Pending"
+    }
+  },
+  "searchTool": {
+    "openLink": "Open link",
+    "copied": "Copied",
+    "copyUrl": "Copy URL",
+    "copyQuery": "Copy query",
+    "query": "Query",
+    "tool": "Tool"
+  },
+  "genericTool": {
+    "process": "Process",
+    "reason": "Reason",
+    "status": "Status",
+    "action": "Action",
+    "startedAt": "Started at",
+    "subagent": "Subagent",
+    "todo": "Todo",
+    "description": "Description",
+    "result": "Result",
+    "arguments": "Arguments",
+    "content": "Content"
+  },
+  "subagentCard": {
+    "prompt": "Prompt",
+    "result": "Result",
+    "running": "Running",
+    "background": "Running in background",
+    "runningInBackground": "Running in background",
+    "completed": "Completed",
+    "failed": "Failed",
+    "tools": "{{count}} tool calls",
+    "turns": "{{count}} turns",
+    "durationMs": "{{count}} ms",
+    "durationSeconds": "{{count}}s",
+    "durationMinutes": "{{count}} min",
+    "context": "{{pct}}% context",
+    "tokens": "{{count}} tokens"
+  },
+  "turnStats": {
+    "copyReply": "Copy reply",
+    "jumpBack": "Back to previous user message",
+    "statusLabel": "Status",
+    "generating": "Generating",
+    "modelLabel": "Model",
+    "elapsedLabel": "Elapsed",
+    "completedLabel": "Completed",
+    "stopReasonLabel": "Finished"
+  },
+  "generatedImages": {
+    "statusFailed": "Failed",
+    "statusGenerating": "Generating",
+    "statusCompleted": "Completed",
+    "label": "Image",
+    "status": "Status",
+    "previewImage": "Preview generated image",
+    "prompt": "Prompt",
+    "revisedPrompt": "Revised prompt",
+    "error": "Error",
+    "rawResult": "Raw result"
+  },
+  "bundle": {
+    "fillConversationId": "Please enter a conversation ID",
+    "exported": "Conversation bundle exported",
+    "exportFailed": "Failed to export conversation bundle",
+    "fillWorkspaceId": "Please enter a workspace ID",
+    "imported": "Conversation bundle imported",
+    "importFailed": "Failed to import conversation bundle",
+    "title": "Conversation Bundle Import/Export",
+    "description": "Export a Cinyuverse event-sourced conversation, or restore one from a bundle into a renderable timeline.",
+    "exportGroupTitle": "Export bundle",
+    "importGroupTitle": "Import bundle",
+    "conversationIdPlaceholder": "Conversation ID",
+    "destinationPathPlaceholder": "Optional export path",
+    "exportButton": "Export bundle",
+    "workspaceIdPlaceholder": "Target workspace ID for import",
+    "importButton": "Import",
+    "jsonLabel": "Conversation bundle JSON",
+    "textareaPlaceholder": "The exported conversation bundle JSON appears here; you can also paste bundle JSON to import."
+  },
+  "questionRequestCard": {
+    "title": "Agent question",
+    "expand": "Expand agent question",
+    "collapse": "Collapse agent question",
+    "recommended": "Recommended",
+    "customAnswer": "Type an answer",
+    "customPlaceholder": "Enter your answer",
+    "previous": "Previous",
+    "next": "Next",
+    "submit": "Submit answer",
+    "decline": "Decline",
+    "answered": "Answered",
+    "justNow": "Now"
+  }
+}

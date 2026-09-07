@@ -1,0 +1,415 @@
+{
+  "codexGoal": {
+    "label": "目标",
+    "statusLabel": "状态",
+    "currentLabel": "当前目标",
+    "status": {
+      "running": "运行中",
+      "paused": "已暂停",
+      "completed": "已完成"
+    }
+  },
+  "find": {
+    "placeholder": "在会话中查找",
+    "matches": "{{current}} / {{total}}",
+    "none": "无匹配",
+    "previous": "上一处",
+    "next": "下一处",
+    "close": "关闭查找"
+  },
+  "draftConflict": {
+    "title": "草稿冲突",
+    "keepServer": "保留服务器",
+    "keepLocal": "保留本机"
+  },
+  "children": {
+    "title": "子会话（{{count}}）",
+    "active": "{{count}} 个进行中",
+    "waiting": "{{count}} 个等待处理",
+    "budget": "调用 {{callsUsed}}/{{maxCalls}} · 活跃 {{active}}/{{maxActive}}",
+    "untitled": "未命名会话",
+    "queued": "{{count}} 条排队输入",
+    "open": "打开子会话",
+    "status": {
+      "todo": "就绪",
+      "inprogress": "进行中",
+      "inreview": "复核中",
+      "done": "已完成",
+      "archived": "已归档"
+    }
+  },
+  "artifact": {
+    "openPreview": "打开预览",
+    "openPreviewAria": "打开 {{name}} 预览",
+    "closePreviewAria": "关闭 {{name}} 预览",
+    "previewTitle": "{{name}} 预览",
+    "revision": "修订 {{revision}}",
+    "invalidPreviewLease": "Artifact Provider 返回了无效的预览租约"
+  },
+  "loadingCard": {
+    "thinking": "AI 正在思考...",
+    "copy": "复制"
+  },
+  "thinking": {
+    "label": "思考",
+    "expand": "展开思考",
+    "collapse": "收起思考"
+  },
+  "displayEntry": {
+    "userDeniedTool": "用户拒绝了 {{tool}}",
+    "stoppingHook": "正在停止Hook..."
+  },
+  "fileContentView": {
+    "addLinesToChat": "第 {{range}} 行加入对话"
+  },
+  "retryEditor": {
+    "placeholder": "编辑后重新发送...",
+    "retryHere": "回到此处重试",
+    "send": "发送"
+  },
+  "pendingApproval": {
+    "submitting": "提交中",
+    "approve": "批准",
+    "submittingEllipsis": "提交中…",
+    "approveRequest": "批准请求",
+    "deny": "拒绝",
+    "provideDenyReason": "提供拒绝原因",
+    "denyReasonPlaceholder": "告诉 Agent 此请求被拒绝的原因... 输入 # 插入标签或搜索文件。",
+    "approveThisRequest": "是否批准此请求？"
+  },
+  "userMessage": {
+    "viewFullMessage": "查看完整消息",
+    "collapseMessage": "收起消息",
+    "rollbackToHere": "回滚到此处"
+  },
+  "nextActionCard": {
+    "viewDiffs": "查看差异",
+    "filesChanged": "{{count}} 个文件已更改",
+    "copyWorktreePath": "复制工作树路径",
+    "copied": "已复制！",
+    "viewChangesInEditor": "在 {{editor}} 中查看更改",
+    "gitActions": "Git 操作",
+    "runSetup": "运行设置",
+    "summaryAndActions": "摘要和操作"
+  },
+  "turnFileChanges": {
+    "filesChanged": "{{count}} 个文件已更改",
+    "undo": "撤销",
+    "undoConfirmTitle": "撤销本轮的文件更改？",
+    "undoConfirmMessage": "工作区文件将恢复到本条消息之前记录的检查点，对话记录保持不变。",
+    "undoConfirm": "恢复文件",
+    "undoFailed": "本轮没有可用的检查点。"
+  },
+  "turnErrorCard": {
+    "reloadSession": "重新加载会话",
+    "rebindSession": "重新绑定会话",
+    "cancelledTitle": "已取消",
+    "resourceNotFoundTitle": "代理会话已过期",
+    "resourceNotFoundDetail": "该会话在代理侧已不存在。可见历史仍在，但 Agent 隐藏上下文已丢失。确认重新绑定后才能继续。",
+    "sessionResumeUnsupportedTitle": "无法恢复原会话",
+    "sessionResumeUnsupportedDetail": "该代理无法恢复原会话。确认重新绑定后将冷启动，不会保留 Agent 侧上下文。",
+    "sessionLoadFailedTitle": "无法加载代理会话",
+    "idleTimeoutTitle": "代理无响应",
+    "idleTimeoutDetail": "代理长时间未返回任何内容，已自动结束本回合。常见原因：网络/代理无法连接模型，或代理需要重新登录认证。",
+    "connectionClosedTitle": "连接已断开",
+    "connectionClosedDetail": "代理连接在本回合完成前断开。",
+    "authRequiredTitle": "需要重新认证",
+    "authRequiredDetail": "代理要求重新认证后才能继续。",
+    "rejectedTitle": "请求被拒绝",
+    "rejectedDetail": "代理拒绝了这次请求，原样重发不会成功。",
+    "serviceErrorTitle": "服务故障",
+    "rateLimitedTitle": "已触发限流",
+    "defaultTitle": "会话出错",
+    "detailWithCode": "{{message}}（{{code}}）",
+    "planUsageAside": "额度窗口已用 {{percent}}%，将在 {{reset}} 重置。",
+    "planUsagePercent": "额度窗口已用 {{percent}}%。",
+    "planUsageResetOnly": "额度窗口将在 {{reset}} 重置。",
+    "planUsageResetSoon": "很快",
+    "planUsageReset_minutes": "{{count}} 分钟后",
+    "planUsageReset_hours": "{{count}} 小时后",
+    "planUsageReset_days": "{{count}} 天后"
+  },
+  "generatedImageCard": {
+    "generating": "正在生成图片…",
+    "title": "生成的图片",
+    "downloadTooltip": "下载图片",
+    "download": "下载",
+    "previewLabel": "预览生成图片",
+    "revisedPrompt": "修订提示词"
+  },
+  "delegationCard": {
+    "delegatedTo": "委派给 {{agent}}",
+    "subAgentDelegation": "子代理委派",
+    "task": "任务",
+    "result": "结果",
+    "openChildSession": "查看会话",
+    "durationMs": "耗时 {{count}} 毫秒",
+    "durationSeconds": "耗时 {{count}} 秒",
+    "durationMinutes": "耗时 {{count}} 分钟",
+    "running": "运行中",
+    "cancel": "取消委派",
+    "canceling": "正在取消…",
+    "cancelFailed": "无法取消：{{error}}",
+    "completed": "已完成",
+    "failed": "失败",
+    "canceled": "已取消"
+  },
+  "childViewer": {
+    "title": "委派会话",
+    "close": "关闭",
+    "loading": "正在加载子会话…",
+    "empty": "子会话还没有消息"
+  },
+  "commandTool": {
+    "commandLabel": "命令",
+    "outputLabel": "输出"
+  },
+  "askQuestion": {
+    "title": "问题",
+    "questionLabel": "问题",
+    "optionsLabel": "选项",
+    "answerLabel": "回答",
+    "declined": "已跳过"
+  },
+  "permissionRequestCard": {
+    "title": "权限申请",
+    "types": {
+      "file": "文件",
+      "terminal": "终端",
+      "web": "网页",
+      "tool": "工具"
+    },
+    "reject": "拒绝",
+    "allow": "允许",
+    "allowOnce": "允许一次",
+    "allowSession": "本次会话中允许",
+    "allowAlways": "总是允许全部",
+    "allowActions": "权限允许选项",
+    "expandAllow": "展开允许选项",
+    "options": "选项",
+    "responded": "已响应",
+    "newFile": "新文件",
+    "modified": "修改",
+    "before": "变更前",
+    "content": "内容",
+    "after": "变更后",
+    "viewDetails": "查看详情"
+  },
+  "messageTurnView": {
+    "streamingOutput": "AI 正在输出...",
+    "streamingThinking": "AI 正在思考中...",
+    "streamingStatus": "AI 正在处理",
+    "copied": "已复制",
+    "copyMessage": "复制消息",
+    "edit": "编辑并重发",
+    "editInput": "编辑用户消息",
+    "sendEdited": "发送",
+    "resendHint": "重发：可选择先恢复文件再重新发送",
+    "resend": "重发",
+    "interruptedTitle": "因重启中断",
+    "interruptedDescription": "此回合在生成过程中因应用重启而中断，未能完成。",
+    "collapsedMessages": "已折叠 {{count}} 条消息",
+    "toolCall": "工具调用",
+    "generatingAgents": "正在生成 {{count}} 个智能体",
+    "toolSummary": {
+      "commands_one": "运行 {{count}} 个命令",
+      "commands_other": "运行 {{count}} 个命令",
+      "reads_one": "已读 {{count}} 个文件",
+      "reads_other": "已读 {{count}} 个文件",
+      "edits_one": "已改 {{count}} 个文件",
+      "edits_other": "已改 {{count}} 个文件",
+      "searches_one": "完成 {{count}} 次搜索",
+      "searches_other": "完成 {{count}} 次搜索",
+      "webFetches_one": "获取 {{count}} 个网页",
+      "webFetches_other": "获取 {{count}} 个网页",
+      "agents_one": "启动 {{count}} 个智能体",
+      "agents_other": "启动 {{count}} 个智能体",
+      "other_one": "{{count}} 次其他工具调用",
+      "other_other": "{{count}} 次其他工具调用",
+      "separator": "、",
+      "failed": "工具调用失败"
+    },
+    "fileReadRange": "第 {{start}}–{{end}} 行",
+    "fileReadFrom": "从第 {{start}} 行开始",
+    "searchResults": "搜索结果"
+  },
+  "statusDock": {
+    "dismiss": "关闭提示",
+    "dismissLocalError": "关闭本地错误提示",
+    "localErrorTitle": "操作失败",
+    "errorBadge": "Error",
+    "warningBadge": "Warning",
+    "infoBadge": "Notice",
+    "showDetails": "查看详细信息",
+    "showDetailsFor": "查看详细信息：{{title}}",
+    "newerEventTitle": "此会话包含较新版本的记录",
+    "newerEventDescription": "当前版本暂时无法显示其中一条记录，其余会话内容不受影响。更新 Cinyuverse 后可再次查看。",
+    "unreadableEventTitle": "部分会话记录无法显示",
+    "unreadableEventDescription": "Cinyuverse 无法读取其中一条历史记录，其余会话内容不受影响。",
+    "updateAgent": "更新",
+    "updating": "正在更新",
+    "updateStarted": "已开始更新",
+    "updateFailed": "更新失败"
+  },
+  "liveFeedback": {
+    "placeholder": "给这一回合纠偏",
+    "send": "发送",
+    "pending": "等待读取",
+    "delivered": "已读取"
+  },
+  "feedbackCheck": {
+    "label": "实时反馈",
+    "count": "{{count}} 条备注",
+    "checkItems": "检查项",
+    "result": "结果"
+  },
+  "preview": {
+    "switchToFileView": "切换文件视图",
+    "switchToDiffView": "切换差异视图",
+    "pasteImageError": "无法粘贴图片到 Markdown 文件"
+  },
+  "fileTool": {
+    "openPreview": "打开预览",
+    "copied": "已复制",
+    "copyPath": "复制路径",
+    "path": "路径",
+    "tool": "工具"
+  },
+  "toolArtifact": {
+    "view": "查看",
+    "edit": "修改",
+    "write": "写入",
+    "delete": "删除",
+    "rename": "重命名",
+    "search": "搜索",
+    "fetch": "网页",
+    "denied": "已拒绝",
+    "timedOut": "超时",
+    "exitCode": "exit {{code}}",
+    "matches_one": "{{count}} 处匹配",
+    "matches_other": "{{count}} 处匹配",
+    "openInPreview": "在预览中打开",
+    "loadingDiff": "正在加载差异…",
+    "noHeadDiff": "与 HEAD 没有差异"
+  },
+  "viewedImages": {
+    "summary_one": "已查看 {{count}} 张图像",
+    "summary_other": "已查看 {{count}} 张图像",
+    "preview": "预览图像：{{path}}",
+    "image": "图像 {{count}}"
+  },
+  "goalTool": {
+    "title": "目标",
+    "objectiveLabel": "目标",
+    "statusLabel": "状态",
+    "resultLabel": "结果"
+  },
+  "messageNav": {
+    "railLabel": "消息导航",
+    "jumpToMessage": "跳转到第 {{ordinal}} 条消息"
+  },
+  "planCard": {
+    "label": "计划",
+    "completedCount": "{{completed}} / {{total}} 已完成",
+    "waitingConfirmation": "等待确认",
+    "expand": "展开计划",
+    "collapse": "收起计划",
+    "status": {
+      "completed": "已完成",
+      "in_progress": "进行中",
+      "pending": "待开始"
+    }
+  },
+  "searchTool": {
+    "openLink": "打开链接",
+    "copied": "已复制",
+    "copyUrl": "复制 URL",
+    "copyQuery": "复制查询",
+    "query": "查询",
+    "tool": "工具"
+  },
+  "genericTool": {
+    "process": "进程",
+    "reason": "原因",
+    "status": "状态",
+    "action": "操作",
+    "startedAt": "开始时间",
+    "subagent": "子代理",
+    "todo": "待办",
+    "description": "描述",
+    "result": "结果",
+    "arguments": "参数",
+    "content": "内容"
+  },
+  "subagentCard": {
+    "prompt": "提示词",
+    "result": "结果",
+    "running": "运行中",
+    "background": "后台运行中",
+    "runningInBackground": "后台运行中",
+    "completed": "已完成",
+    "failed": "失败",
+    "tools": "{{count}} 次工具调用",
+    "turns": "{{count}} 轮",
+    "durationMs": "耗时 {{count}} 毫秒",
+    "durationSeconds": "耗时 {{count}} 秒",
+    "durationMinutes": "耗时 {{count}} 分钟",
+    "context": "上下文 {{pct}}%",
+    "tokens": "{{count}} tokens"
+  },
+  "turnStats": {
+    "copyReply": "复制回复",
+    "jumpBack": "回到上一条用户消息",
+    "statusLabel": "状态",
+    "generating": "生成中",
+    "modelLabel": "模型",
+    "elapsedLabel": "耗时",
+    "completedLabel": "完成",
+    "stopReasonLabel": "结束"
+  },
+  "generatedImages": {
+    "statusFailed": "失败",
+    "statusGenerating": "生成中",
+    "statusCompleted": "完成",
+    "label": "图片",
+    "status": "状态",
+    "previewImage": "预览生成图片",
+    "prompt": "提示词",
+    "revisedPrompt": "修订提示词",
+    "error": "错误",
+    "rawResult": "原始结果"
+  },
+  "bundle": {
+    "fillConversationId": "请填写会话 ID",
+    "exported": "会话包已导出",
+    "exportFailed": "会话包导出失败",
+    "fillWorkspaceId": "请填写工作区 ID",
+    "imported": "会话包已导入",
+    "importFailed": "会话包导入失败",
+    "title": "会话包导入导出",
+    "description": "导出 Cinyuverse 事件源会话，或从会话包恢复为可渲染时间线。",
+    "exportGroupTitle": "导出会话包",
+    "importGroupTitle": "导入会话包",
+    "conversationIdPlaceholder": "会话 ID",
+    "destinationPathPlaceholder": "可选导出路径",
+    "exportButton": "导出会话包",
+    "workspaceIdPlaceholder": "导入目标工作区 ID",
+    "importButton": "导入",
+    "jsonLabel": "会话包 JSON",
+    "textareaPlaceholder": "导出的会话包 JSON 会显示在这里，也可以粘贴会话包 JSON 后导入。"
+  },
+  "questionRequestCard": {
+    "title": "智能体提问",
+    "expand": "展开智能体提问",
+    "collapse": "收起智能体提问",
+    "recommended": "推荐",
+    "customAnswer": "输入回答",
+    "customPlaceholder": "请输入回答内容",
+    "previous": "上一个",
+    "next": "下一个",
+    "submit": "提交回答",
+    "decline": "拒绝回答",
+    "answered": "已回答",
+    "justNow": "刚刚"
+  }
+}

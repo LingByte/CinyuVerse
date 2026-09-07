@@ -1,0 +1,536 @@
+/* ============================================
+ * AI Conversation — Markdown Renderer
+ * Base markdown styles, code blocks (fenced &
+ * single-line), Shiki token rendering,
+ * lists, headings, tables, links, blockquotes
+ * ============================================ */
+
+/* =========================================
+ * Markdown Renderer
+ * ========================================= */
+
+.conv-markdown {
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--conv-text-primary);
+}
+
+.conv-streaming-markdown {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--conv-text-primary);
+}
+
+.conv-markdown > *,
+.conv-markdown p,
+.conv-markdown li,
+.conv-markdown [role='paragraph'] {
+  line-height: 1.7;
+}
+
+.conv-markdown > * {
+  margin: 0;
+}
+
+.conv-markdown > * + * {
+  margin-top: 8px;
+}
+
+.conv-markdown pre {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.conv-markdown code {
+  font-family: var(
+    --font-mono,
+    'IBM Plex Mono',
+    'Cascadia Code',
+    'Fira Code',
+    monospace
+  );
+  font-size: 0.9em;
+}
+
+.conv-md-image-frame {
+  display: block;
+  max-width: min(100%, 520px);
+  padding: 0;
+  border: 1px solid var(--conv-border-subtle);
+  border-radius: var(--radius);
+  background: var(--conv-surface-card);
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.conv-md-image-frame:hover {
+  border-color: var(--conv-border-strong);
+}
+
+.conv-md-image {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  background: var(--conv-surface-control);
+}
+
+.conv-md-image-placeholder {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border: 1px solid var(--conv-border-subtle);
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--conv-surface-control);
+  color: var(--conv-text-tertiary);
+  font-size: 12px;
+}
+
+/* Inline code */
+.conv-markdown :not(pre) > code {
+  background: var(--conv-surface-control);
+  border: 1px solid var(--conv-border-subtle);
+  color: var(--conv-text-primary);
+  padding: 0.05em 5px;
+  border-radius: var(--radius);
+  font-size: 0.88em;
+}
+
+/* ── Code Block (fenced, multi-line) ── */
+
+.conv-md-codeblock {
+  border: 1px solid var(--conv-border-subtle);
+  border-radius: var(--radius);
+  background: var(--conv-surface-card);
+  overflow: hidden;
+  margin: 6px 0;
+}
+
+.conv-md-codeblock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  padding: 3px 6px 3px 10px;
+  background: var(--conv-surface-control);
+  border-bottom: 1px solid var(--conv-border-subtle);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--conv-text-tertiary);
+}
+
+.conv-md-codeblock-language {
+  font-weight: 600;
+  color: var(--conv-text-secondary);
+}
+
+.conv-md-codeblock-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 0;
+  color: var(--conv-text-secondary);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.conv-md-codeblock-copy:hover {
+  border-color: var(--conv-border-subtle);
+  background: var(--conv-surface-control-hover);
+}
+
+.conv-md-codeblock-copy.is-copied {
+  border-color: var(--conv-tool-success);
+  color: var(--conv-tool-success);
+}
+
+.conv-md-codeblock pre {
+  margin: 0;
+  padding: 10px 12px 12px;
+  white-space: pre;
+  overflow-x: auto;
+  font-family: var(
+    --font-mono,
+    'IBM Plex Mono',
+    'Cascadia Code',
+    'Fira Code',
+    monospace
+  );
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.conv-md-codeblock code {
+  color: var(--conv-code-text);
+  display: block;
+}
+
+.conv-md-codeblock-line {
+  display: block;
+  min-height: 1.55em;
+}
+
+.conv-md-token {
+  color: var(--shiki-token-light, var(--conv-code-text));
+}
+
+.dark .conv-md-token {
+  color: var(
+    --shiki-token-dark,
+    var(--shiki-token-light, var(--conv-code-text))
+  );
+}
+
+/* ── Single-line code block ── */
+
+.conv-md-codeblock-single {
+  margin: 6px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--conv-border-subtle);
+  border-radius: var(--radius);
+  background: var(--conv-surface-card);
+  white-space: pre;
+  overflow-x: auto;
+  font-family: var(
+    --font-mono,
+    'IBM Plex Mono',
+    'Cascadia Code',
+    'Fira Code',
+    monospace
+  );
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.conv-md-codeblock-single code {
+  color: var(--conv-code-text);
+  display: block;
+  font-family: inherit;
+}
+
+/* Math */
+
+.conv-markdown .katex {
+  font-size: 1em;
+}
+
+.conv-markdown .katex-display {
+  margin: 8px 0;
+  padding: 2px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* Mermaid diagrams */
+
+.conv-md-mermaid {
+  margin: 6px 0;
+  max-width: 100%;
+  border: 1px solid var(--conv-border-subtle);
+  border-radius: var(--radius);
+  background: var(--conv-surface-card);
+  overflow-x: auto;
+}
+
+.conv-md-mermaid-status {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 8px 12px;
+  color: var(--conv-text-tertiary);
+  font-size: 12px;
+  background: var(--conv-surface-control);
+}
+
+.conv-md-mermaid-svg {
+  display: block;
+  padding: 12px;
+  background: var(--conv-surface-card);
+}
+
+.conv-md-mermaid-svg svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.conv-md-mermaid-error {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px 12px;
+  color: var(--conv-text-secondary);
+  background: var(--conv-surface-control);
+}
+
+.conv-md-mermaid-error-title {
+  color: var(--conv-tool-error);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.conv-md-mermaid-error-detail {
+  color: var(--conv-text-tertiary);
+  font-size: 12px;
+}
+
+.conv-md-mermaid-source {
+  margin: 2px 0 0;
+  max-height: 180px;
+  padding: 8px 10px;
+  border: 1px solid var(--conv-border-subtle);
+  border-radius: var(--radius);
+  overflow: auto;
+  color: var(--conv-code-text);
+  background: var(--conv-code-bg);
+  font-family: var(
+    --font-mono,
+    'IBM Plex Mono',
+    'Cascadia Code',
+    'Fira Code',
+    monospace
+  );
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ── Lists ── */
+
+.conv-markdown ul,
+.conv-markdown ol {
+  margin: 10px 0;
+  max-width: 100%;
+  list-style-position: outside;
+}
+
+.conv-markdown ul {
+  padding-left: 2.2px;
+  list-style-type: disc;
+}
+
+.conv-markdown ol {
+  padding-left: 8px;
+  list-style-type: decimal;
+}
+
+.conv-markdown .astryx-list-item {
+  padding-left: 4px !important;
+  padding-right: 4px !important;
+}
+
+.conv-markdown .astryx-list-item > span:first-child {
+  width: 8px !important;
+}
+
+.conv-markdown
+  [data-list-style='decimal']
+  > .astryx-list-item
+  > span:first-child {
+  width: auto !important;
+  min-width: 1.5em !important;
+  white-space: nowrap;
+}
+
+.conv-markdown li {
+  margin-bottom: 4px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.conv-markdown hr {
+  margin-top: 12px;
+  margin-bottom: 20px;
+}
+
+.conv-markdown hr + * {
+  margin-top: 16px;
+}
+
+.conv-markdown li p {
+  margin: 0;
+}
+
+/* ── Headings ── */
+
+.conv-markdown :where(h1, h2, h3, h4, h5, h6) {
+  font-size: 1em;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--conv-text-primary);
+}
+
+/* ── Bold / Italic ── */
+
+.conv-markdown :where(strong) {
+  font-weight: 600;
+}
+
+.conv-markdown :where(em) {
+  color: var(--conv-text-secondary);
+}
+
+/* ── Blockquote ── */
+
+.conv-markdown :where(blockquote) {
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--conv-border-subtle);
+  background: var(--conv-surface-control);
+  border-radius: var(--radius);
+  color: var(--conv-text-secondary);
+}
+
+/* ── Tables ── */
+
+.conv-markdown table {
+  border-collapse: separate;
+  border-spacing: 0;
+  display: table;
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+  margin: 0;
+  border: 1px solid var(--conv-border-subtle);
+  border-radius: var(--radius);
+  background: var(--conv-surface-card);
+}
+
+.conv-markdown .astryx-markdown-table {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.conv-markdown th,
+.conv-markdown td {
+  border-bottom: 1px solid var(--conv-border-subtle);
+  border-right: 1px solid var(--conv-border-subtle);
+  padding: 8px 12px;
+  text-align: left;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.conv-markdown th:last-child,
+.conv-markdown td:last-child {
+  border-right: none;
+}
+
+.conv-markdown tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.conv-markdown th {
+  font-weight: 600;
+  background: var(--conv-surface-control);
+}
+
+.conv-markdown thead tr:first-child th:first-child {
+  border-start-start-radius: calc(var(--radius) - 1px);
+}
+
+.conv-markdown thead tr:first-child th:last-child {
+  border-start-end-radius: calc(var(--radius) - 1px);
+}
+
+/* ── Links ── */
+
+.conv-markdown a {
+  color: var(--conv-tool-icon);
+  text-underline-offset: 2px;
+  text-decoration: underline;
+}
+
+.conv-markdown a:hover {
+  color: var(--conv-text-primary);
+}
+
+.conv-markdown .conv-resource-link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25em;
+  max-width: 100%;
+  color: var(--conv-tool-icon);
+  font-weight: 500;
+  line-height: inherit;
+  text-decoration: none;
+  vertical-align: baseline;
+}
+
+.conv-markdown .conv-resource-link:hover {
+  color: var(--conv-tool-icon);
+  text-decoration: underline;
+}
+
+.conv-resource-link-icon {
+  width: 1em;
+  height: 1em;
+  flex: none;
+  align-self: center;
+  color: currentColor;
+}
+
+.conv-resource-link-favicon {
+  border-radius: var(--radius);
+  object-fit: contain;
+}
+
+.conv-resource-link-file-icon,
+.conv-resource-link-file-icon > .file-icon {
+  width: 1em !important;
+  height: 1em !important;
+  overflow: visible !important;
+}
+
+.conv-resource-link-file-icon svg {
+  width: 100%;
+  height: 100%;
+  color: currentColor;
+}
+
+.conv-resource-link-file-icon svg [fill]:not([fill='none']) {
+  fill: currentColor !important;
+}
+
+.conv-resource-link-file-icon svg [stroke]:not([stroke='none']) {
+  stroke: currentColor !important;
+}
+
+.conv-resource-link-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ── Paragraph spacing ── */
+
+.conv-markdown p {
+  margin-bottom: 0;
+}
+
+/* Code block background — uses CSS variables for theme adaptation */
+.conv-md-codeblock,
+.conv-md-codeblock-single {
+  background: var(--conv-code-bg);
+}
+
+.conv-md-codeblock-header {
+  background: var(--conv-surface-control);
+  border-bottom-color: var(--conv-border-subtle);
+}

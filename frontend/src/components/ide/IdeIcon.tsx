@@ -1,0 +1,104 @@
+import { Code2, FolderOpen } from 'lucide-react';
+import type { TFunction } from 'i18next';
+import { useTranslation } from 'react-i18next';
+import { EditorType, ThemeMode } from 'shared/types';
+import { useTheme } from '@/components/ThemeProvider';
+
+type IdeIconProps = {
+  editorType?: EditorType | null;
+  className?: string;
+};
+
+function getResolvedTheme(theme: ThemeMode): 'light' | 'dark' {
+  if (theme === ThemeMode.SYSTEM) {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'light';
+  }
+  return theme === ThemeMode.DARK ? 'dark' : 'light';
+}
+
+export function getIdeName(
+  editorType: EditorType | undefined | null,
+  t?: TFunction<['panels', 'common']>
+): string {
+  if (!editorType) return 'IDE';
+  switch (editorType) {
+    case EditorType.VS_CODE:
+      return 'VS Code';
+    case EditorType.VS_CODE_INSIDERS:
+      return 'VS Code Insiders';
+    case EditorType.CURSOR:
+      return 'Cursor';
+    case EditorType.WINDSURF:
+      return 'Windsurf';
+    case EditorType.INTELLI_J:
+      return 'IntelliJ IDEA';
+    case EditorType.ZED:
+      return 'Zed';
+    case EditorType.XCODE:
+      return 'Xcode';
+    case EditorType.CUSTOM:
+      return 'IDE';
+    case EditorType.GOOGLE_ANTIGRAVITY:
+      return 'Antigravity';
+    case EditorType.FILE_MANAGER:
+      return t ? t('ideIcon.fileManager') : 'File Manager';
+    default:
+      // Guaranteed return keeps this total even if EditorType gains a variant
+      // (the previous switch relied on exhaustiveness and tripped TS2366).
+      return 'IDE';
+  }
+}
+
+export function IdeIcon({ editorType, className = 'h-4 w-4' }: IdeIconProps) {
+  const { t } = useTranslation(['panels', 'common']);
+  const { theme } = useTheme();
+  const resolvedTheme = getResolvedTheme(theme);
+  const isDark = resolvedTheme === 'dark';
+
+  const ideName = getIdeName(editorType, t);
+  let ideIconPath = '';
+
+  if (editorType === EditorType.FILE_MANAGER) {
+    return <FolderOpen className={className} />;
+  }
+
+  if (!editorType || editorType === EditorType.CUSTOM) {
+    // Generic fallback for other IDEs or no IDE configured
+    return <Code2 className={className} />;
+  }
+
+  switch (editorType) {
+    case EditorType.VS_CODE:
+      ideIconPath = isDark ? '/ide/vscode-dark.svg' : '/ide/vscode-light.svg';
+      break;
+    case EditorType.VS_CODE_INSIDERS:
+      ideIconPath = '/ide/vscode-insiders.svg';
+      break;
+    case EditorType.CURSOR:
+      ideIconPath = isDark ? '/ide/cursor-dark.svg' : '/ide/cursor-light.svg';
+      break;
+    case EditorType.WINDSURF:
+      ideIconPath = isDark
+        ? '/ide/windsurf-dark.svg'
+        : '/ide/windsurf-light.svg';
+      break;
+    case EditorType.INTELLI_J:
+      ideIconPath = '/ide/intellij.svg';
+      break;
+    case EditorType.ZED:
+      ideIconPath = isDark ? '/ide/zed-dark.svg' : '/ide/zed-light.svg';
+      break;
+    case EditorType.XCODE:
+      ideIconPath = '/ide/xcode.svg';
+      break;
+    case EditorType.GOOGLE_ANTIGRAVITY:
+      ideIconPath = isDark
+        ? '/ide/antigravity-dark.svg'
+        : '/ide/antigravity-light.svg';
+      break;
+  }
+
+  return <img src={ideIconPath} alt={ideName} className={className} />;
+}

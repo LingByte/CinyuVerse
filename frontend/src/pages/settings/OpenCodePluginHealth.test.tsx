@@ -1,0 +1,111 @@
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { agentManagementApi } from '@/features/agent-management';
+
+import { OpenCodePluginHealth } from './OpenCodePluginHealth';
+
+describe('OpenCodePluginHealth', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('shows missing plugins and installs the selected declaration', async () => {
+    const missing = {
+      config_path: '/home/me/.config/opencode/opencode.json',
+      cache_dir: '/home/me/.cache/opencode',
+      has_project_config_hint: false,
+      plugins: [
+        {
+          name: 'opencode-foo',
+          declared_spec: 'opencode-foo@latest',
+          installed_version: null,
+          status: 'missing' as const,
+        },
+      ],
+    };
+    const installed = {
+      ...missing,
+      plugins: [
+        {
+          ...missing.plugins[0],
+          declared_spec: 'opencode-foo@1.2.3',
+          installed_version: '1.2.3',
+          status: 'installed' as const,
+        },
+      ],
+    };
+    vi.spyOn(agentManagementApi, 'openCodePlugins').mockResolvedValue(missing);
+    const install = vi
+      .spyOn(agentManagementApi, 'installOpenCodePlugins')
+      .mockResolvedValue(installed);
+    const onChanged = vi.fn();
+    const user = userEvent.setup();
+
+    render(<OpenCodePluginHealth onChanged={onChanged} />);
+
+    expect(await screen.findByText('opencode-foo')).toBeInTheDocument();
+    expect(screen.getByText(/缺失/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '安装 opencode-foo' }));
+
+    await waitFor(() => expect(install).toHaveBeenCalledWith(['opencode-foo']));
+    expect(await screen.findByText(/已安装 · 1\.2\.3/)).toBeInTheDocument();
+    expect(onChanged).toHaveBeenCalledOnce();
+  });
+
+  it('shows the config path and cache directory as copyable rows', async () => {
+    vi.spyOn(agentManagementApi, 'openCodePlugins').mockResolvedValue({
+      config_path: '/home/me/.config/opencode/opencode.json',
+      cache_dir: '/home/me/.cache/opencode',
+      has_project_config_hint: false,
+      plugins: [],
+    });
+
+    render(<OpenCodePluginHealth />);
+
+    expect(
+      await screen.findByText('/home/me/.config/opencode/opencode.json')
+    ).toBeInTheDocument();
+    expect(screen.getByText('/home/me/.cache/opencode')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '复制配置路径' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '复制缓存目录' })
+    ).toBeInTheDocument();
+  });
+
+  it('adds a plugin spec to opencode.json', async () => {
+    vi.spyOn(agentManagementApi, 'openCodePlugins').mockResolvedValue({
+      config_path: '/home/me/.config/opencode/opencode.json',
+      cache_dir: '/home/me/.cache/opencode',
+      has_project_config_hint: false,
+      plugins: [],
+    });
+    const add = vi
+      .spyOn(agentManagementApi, 'addOpenCodePlugin')
+      .mockResolvedValue({
+        config_path: '/home/me/.config/opencode/opencode.json',
+        cache_dir: '/home/me/.cache/opencode',
+        has_project_config_hint: false,
+        plugins: [
+          {
+            name: 'opencode-wakatime',
+            declared_spec: 'opencode-wakatime@1.0.0',
+            installed_version: '1.0.0',
+            status: 'installed' as const,
+          },
+        ],
+      });
+    const user = userEvent.setup();
+    render(<OpenCodePluginHealth />);
+    await user.type(
+      await screen.findByPlaceholderText(/npm 包/),
+      'opencode-wakatime@1.0.0'
+    );
+    await user.click(screen.getByRole('button', { name: '添加插件' }));
+    await waitFor(() =>
+      expect(add).toHaveBeenCalledWith('opencode-wakatime@1.0.0')
+    );
+    expect(await screen.findByText('opencode-wakatime')).toBeInTheDocument();
+  });
+});

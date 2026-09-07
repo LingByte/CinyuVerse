@@ -1,0 +1,25 @@
+import type { AgentId, AgentPreflightView } from 'shared/types';
+
+function storageKey(agentId: AgentId): string {
+  return `cinyuverse:agent-preflight:${agentId}`;
+}
+
+export function readPreflightSnapshot(
+  agentId: AgentId
+): AgentPreflightView | null {
+  try {
+    const raw = localStorage.getItem(storageKey(agentId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as AgentPreflightView;
+    if (parsed.agent_id !== agentId || !Array.isArray(parsed.items)) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function writePreflightSnapshot(view: AgentPreflightView): void {
+  localStorage.setItem(storageKey(view.agent_id), JSON.stringify(view));
+}

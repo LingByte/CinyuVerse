@@ -1,0 +1,9 @@
+/* =============================================================================
+   Diff Style Overrides — Index
+   Split into logical sections for maintainability.
+   ============================================================================= */
+
+@import './diff-overrides/diff-layout.css';
+@import './diff-overrides/diff-widgets.css';
+@import './diff-overrides/diff-syntax-light.css';
+@import './diff-overrides/diff-syntax-dark.css';

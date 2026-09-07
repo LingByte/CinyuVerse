@@ -1,0 +1,27 @@
+{
+  "agentStatus": {
+    "defaultAgentAria": "Default Agent: {{agent}}, {{status}}",
+    "enabledAgentsAria": "Enabled Agent status",
+    "defaultBadge": "Default"
+  },
+  "automationFailureTitle": "Automation run failed",
+  "backgroundTasksTitle": "{{count}} background task(s) running",
+  "updateAvailableTitle": "An update is available",
+  "attentionInbox": {
+    "title": "Needs your attention",
+    "empty": "Nothing needs your attention right now",
+    "blockingCount": "{{count}} blocking an agent",
+    "kindPermission": "Awaiting permission",
+    "kindQuestion": "Awaiting your answer",
+    "kindNotice": "Session notice",
+    "kindCompleted": "Turn completed",
+    "kindFailed": "Turn failed",
+    "kindInterrupted": "Turn interrupted",
+    "kindInReview": "Awaiting review",
+    "unnamedSession": "Untitled session",
+    "justNow": "just now",
+    "minutesAgo": "{{count}} min ago",
+    "hoursAgo": "{{count}} h ago",
+    "daysAgo": "{{count}} d ago"
+  }
+}

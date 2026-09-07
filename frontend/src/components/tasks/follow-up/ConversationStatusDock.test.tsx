@@ -1,0 +1,574 @@
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AGENT_BINDING_LOAD_FAILURE_NOTICE_ROW_ID } from '@/features/conversation/sessionNoticeNeedsRebind';
+import { ConversationStatusDock } from './ConversationStatusDock';
+
+describe('ConversationStatusDock', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('groups current errors and notices directly above the composer actions', async () => {
+    const onReload = vi.fn().mockResolvedValue(undefined);
+    const onResend = vi.fn();
+
+    render(
+      <ConversationStatusDock
+        notices={[
+          {
+            id: 'error-turn-1',
+            kind: 'turn-error',
+            error: {
+              message: 'agent connection closed',
+              code: 'connection_closed',
+              raw: null,
+              kind: 'connection_closed',
+            },
+            onReload,
+          },
+          {
+            id: 'interrupted-turn-2',
+            kind: 'interrupted-turn',
+            onResend,
+          },
+          {
+            id: 'notice-3',
+            kind: 'session-notice',
+            notice: {
+              title: '代理不支持会话恢复',
+              message: '已自动新建会话继续。',
+              severity: 'info',
+            },
+          },
+        ]}
+      />
+    );
+
+    const dock = screen.getByTestId('conversation-status-dock');
+    expect(dock).toHaveTextContent('连接已断开');
+    expect(dock).toHaveTextContent('因重启中断');
+    expect(dock).toHaveTextContent('代理不支持会话恢复');
+    expect(
+      Array.from(dock.querySelectorAll('.astryx-badge')).map(
+        (badge) => badge.textContent
+      )
+    ).toEqual(['Error', 'Warning', 'Notice']);
+    expect(dock.querySelector('.composer-status-icon')).toBeNull();
+
+    const interruptedHeader = screen
+      .getByText('因重启中断')
+      .closest('.composer-status-header');
+    expect(interruptedHeader).not.toBeNull();
+    expect(
+      within(interruptedHeader as HTMLElement).getByRole('button', {
+        name: '重发',
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(interruptedHeader as HTMLElement).getByRole('button', {
+        name: '关闭提示 interrupted-turn-2',
+      })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '重发' }));
+    const reloadButton = screen.getByRole('button', {
+      name: /重新加载会话/,
+    });
+    fireEvent.click(reloadButton);
+    expect(onResend).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(reloadButton).not.toBeDisabled());
+    expect(onReload).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps warning details collapsed until the user asks to inspect them', () => {
+    render(
+      <ConversationStatusDock
+        notices={[
+          {
+            id: 'notice-load-failed',
+            kind: 'session-notice',
+            notice: {
+              title: '加载代理会话失败',
+              message: 'session/load failed: no rollout found',
+              severity: 'warning',
+            },
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByText('加载代理会话失败')).toBeInTheDocument();
+    expect(
+      screen.queryByText('session/load failed: no rollout found')
+    ).not.toBeInTheDocument();
+
+    const detailsButton = screen.getByRole('button', {
+      name: '查看详细信息：加载代理会话失败',
+    });
+    expect(detailsButton).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(detailsButton);
+
+    expect(detailsButton).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      screen.getByText('session/load failed: no rollout found')
+    ).toBeInTheDocument();
+  });
+
+  it('keeps local, turn, and interruption details behind disclosure controls', () => {
+    render(
+      <ConversationStatusDock
+        localError="prompt enhancement failed: request timed out"
+        notices={[
+          {
+            id: 'error-turn-1',
+            kind: 'turn-error',
+            error: {
+              message: 'agent connection closed unexpectedly',
+              code: 'connection_closed',
+              raw: null,
+              kind: 'connection_closed',
+            },
+          },
+          {
+            id: 'interrupted-turn-2',
+            kind: 'interrupted-turn',
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByText('操作失败')).toBeInTheDocument();
+    expect(screen.getByText('连接已断开')).toBeInTheDocument();
+    expect(screen.getByText('因重启中断')).toBeInTheDocument();
+    expect(
+      screen.queryByText('prompt enhancement failed: request timed out')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('agent connection closed unexpectedly')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('此回合在生成过程中因应用重启而中断，未能完成。')
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '查看详细信息：操作失败' })
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: '查看详细信息：连接已断开' })
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: '查看详细信息：因重启中断' })
+    );
+
+    expect(
+      screen.getByText('prompt enhancement failed: request timed out')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('agent connection closed unexpectedly')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('此回合在生成过程中因应用重启而中断，未能完成。')
+    ).toBeInTheDocument();
+  });
+
+  it('keeps a dismissed session notice hidden while allowing newer notices', () => {
+    const { rerender, unmount } = render(
+      <ConversationStatusDock
+        dismissalScope="session-1"
+        notices={[
+          {
+            id: 'notice-1',
+            kind: 'session-notice',
+            notice: {
+              title: '部分会话记录无法显示',
+              message: '其余会话内容不受影响。',
+              severity: 'warning',
+            },
+          },
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭提示' }));
+    expect(screen.queryByText('部分会话记录无法显示')).not.toBeInTheDocument();
+
+    rerender(
+      <ConversationStatusDock
+        dismissalScope="session-1"
+        notices={[
+          {
+            id: 'notice-1',
+            kind: 'session-notice',
+            notice: {
+              title: '部分会话记录无法显示',
+              message: '其余会话内容不受影响。',
+              severity: 'warning',
+            },
+          },
+        ]}
+      />
+    );
+    expect(screen.queryByText('部分会话记录无法显示')).not.toBeInTheDocument();
+
+    rerender(
+      <ConversationStatusDock
+        dismissalScope="session-1"
+        notices={[
+          {
+            id: 'notice-1',
+            kind: 'session-notice',
+            notice: {
+              title: '回退后产生的新提示',
+              message: '即使复用了事件序号也应显示。',
+              severity: 'warning',
+            },
+          },
+        ]}
+      />
+    );
+    expect(screen.getByText('回退后产生的新提示')).toBeInTheDocument();
+
+    rerender(
+      <ConversationStatusDock
+        dismissalScope="session-1"
+        notices={[
+          {
+            id: 'notice-2',
+            kind: 'session-notice',
+            notice: {
+              title: '另一条会话提示',
+              message: null,
+              severity: 'info',
+            },
+          },
+        ]}
+      />
+    );
+    expect(screen.getByText('另一条会话提示')).toBeInTheDocument();
+
+    unmount();
+    const reopened = render(
+      <ConversationStatusDock
+        dismissalScope="session-1"
+        notices={[
+          {
+            id: 'notice-1',
+            kind: 'session-notice',
+            notice: {
+              title: '部分会话记录无法显示',
+              message: '其余会话内容不受影响。',
+              severity: 'warning',
+            },
+          },
+        ]}
+      />
+    );
+    expect(screen.queryByText('部分会话记录无法显示')).not.toBeInTheDocument();
+
+    reopened.unmount();
+    const reusedSequence = render(
+      <ConversationStatusDock
+        dismissalScope="session-1"
+        notices={[
+          {
+            id: 'notice-1',
+            kind: 'session-notice',
+            notice: {
+              title: '回退后产生的新提示',
+              message: '即使复用了事件序号也应显示。',
+              severity: 'warning',
+            },
+          },
+        ]}
+      />
+    );
+    expect(screen.getByText('回退后产生的新提示')).toBeInTheDocument();
+
+    reusedSequence.unmount();
+    render(
+      <ConversationStatusDock
+        dismissalScope="session-2"
+        notices={[
+          {
+            id: 'notice-1',
+            kind: 'session-notice',
+            notice: {
+              title: '部分会话记录无法显示',
+              message: '其余会话内容不受影响。',
+              severity: 'warning',
+            },
+          },
+        ]}
+      />
+    );
+    expect(screen.getByText('部分会话记录无法显示')).toBeInTheDocument();
+  });
+
+  it('allows turn failures, interruptions, and local send errors to be dismissed', () => {
+    const onDismissLocalError = vi.fn();
+    render(
+      <ConversationStatusDock
+        dismissalScope="session-1"
+        localError="send failed"
+        onDismissLocalError={onDismissLocalError}
+        notices={[
+          {
+            id: 'error-turn-1',
+            kind: 'turn-error',
+            error: {
+              message: 'agent connection closed',
+              code: 'connection_closed',
+              raw: null,
+              kind: 'connection_closed',
+            },
+          },
+          {
+            id: 'interrupted-turn-2',
+            kind: 'interrupted-turn',
+          },
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭本地错误提示' }));
+    expect(onDismissLocalError).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '关闭提示 error-turn-1' })
+    );
+    expect(screen.queryByText('连接已断开')).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '关闭提示 interrupted-turn-2' })
+    );
+    expect(screen.queryByText('因重启中断')).not.toBeInTheDocument();
+  });
+
+  it('does not offer session reload on warning, notice, or interruption cards', () => {
+    const onReload = vi.fn();
+    const onRebind = vi.fn();
+    const onResend = vi.fn();
+
+    render(
+      <ConversationStatusDock
+        dismissalScope="session-1"
+        notices={[
+          {
+            id: 'error-turn-1',
+            kind: 'turn-error',
+            error: {
+              message: 'agent connection closed',
+              code: 'connection_closed',
+              raw: null,
+              kind: 'connection_closed',
+            },
+            onReload,
+          },
+          {
+            id: 'interrupted-turn-2',
+            kind: 'interrupted-turn',
+            onResend,
+          },
+          {
+            id: 'notice-warning',
+            kind: 'session-notice',
+            onRebind,
+            notice: {
+              title: '部分会话记录无法显示',
+              message: '其余会话内容不受影响。',
+              severity: 'warning',
+            },
+          },
+          {
+            id: 'notice-info',
+            kind: 'session-notice',
+            onRebind,
+            notice: {
+              title: 'Grok 4.6 is here!',
+              message: 'See what is new.',
+              severity: 'info',
+              announcement_id: 'grok-4-6',
+            },
+          },
+        ]}
+      />
+    );
+
+    expect(
+      screen.getByRole('button', { name: /重新加载会话/ })
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole('button', { name: /重新加载会话/ })
+    ).toHaveLength(1);
+    expect(
+      screen.queryByRole('button', { name: '重新绑定会话' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('anchors stacked status cards to the panel bottom outside the composer', () => {
+    render(
+      <ConversationStatusDock
+        placement="panel"
+        notices={[
+          {
+            id: 'notice-1',
+            kind: 'session-notice',
+            notice: {
+              title: '部分会话记录无法显示',
+              message: '其余会话内容不受影响。',
+              severity: 'warning',
+            },
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByTestId('conversation-status-dock')).toHaveAttribute(
+      'data-placement',
+      'panel'
+    );
+    expect(screen.getByTestId('conversation-status-dock')).toHaveClass(
+      'conversation-status-dock--panel'
+    );
+  });
+
+  it('keeps a dismissed card hidden after it is re-emitted with a new row id', () => {
+    const notice = {
+      kind: 'session-notice' as const,
+      notice: {
+        title: '部分会话记录无法显示',
+        message: '其余会话内容不受影响。',
+        severity: 'warning' as const,
+      },
+    };
+
+    const { rerender } = render(
+      <ConversationStatusDock
+        dismissalScope="session-1"
+        notices={[{ ...notice, id: 'notice:12' }]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭提示' }));
+    expect(screen.queryByText('部分会话记录无法显示')).not.toBeInTheDocument();
+
+    rerender(
+      <ConversationStatusDock
+        dismissalScope="session-1"
+        notices={[{ ...notice, id: 'notice:44' }]}
+      />
+    );
+    expect(screen.queryByText('部分会话记录无法显示')).not.toBeInTheDocument();
+  });
+
+  it('does not offer session rebind for notices that do not block the session', () => {
+    const onRebind = vi.fn();
+    render(
+      <ConversationStatusDock
+        dismissalScope="session-1"
+        notices={[
+          {
+            id: 'announcement:grok-4-6',
+            kind: 'session-notice',
+            onRebind,
+            notice: {
+              title: 'Grok 4.6 is here!',
+              message: 'See what is new.',
+              severity: 'info',
+              announcement_id: 'grok-4-6',
+            },
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByText('Grok 4.6 is here!')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '重新绑定会话' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('offers session rebind when the Agent session cannot continue', () => {
+    const onRebind = vi.fn();
+    render(
+      <ConversationStatusDock
+        dismissalScope="session-1"
+        notices={[
+          {
+            id: AGENT_BINDING_LOAD_FAILURE_NOTICE_ROW_ID,
+            kind: 'session-notice',
+            onRebind,
+            notice: {
+              title: '代理会话已过期',
+              message: '确认重新绑定后才能继续。',
+              severity: 'warning',
+            },
+          },
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '重新绑定会话' }));
+    expect(onRebind).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a product announcement only in the first conversation that receives it', () => {
+    const notice = {
+      id: 'announcement:grok-4-6',
+      kind: 'session-notice' as const,
+      notice: {
+        title: 'Grok 4.6 is here!',
+        message: 'See what is new.',
+        severity: 'info',
+        announcement_id: 'grok-4-6',
+      },
+    };
+
+    const first = render(
+      <ConversationStatusDock dismissalScope="session-1" notices={[notice]} />
+    );
+    expect(screen.getByText('Grok 4.6 is here!')).toBeInTheDocument();
+    first.unmount();
+
+    render(
+      <ConversationStatusDock dismissalScope="session-2" notices={[notice]} />
+    );
+    expect(screen.queryByText('Grok 4.6 is here!')).not.toBeInTheDocument();
+  });
+
+  it('stacks extra child-session summary with composer status cards', () => {
+    render(
+      <ConversationStatusDock
+        notices={[
+          {
+            id: 'notice-1',
+            kind: 'session-notice',
+            notice: {
+              title: '部分会话记录无法显示',
+              message: '其余会话内容不受影响。',
+              severity: 'warning',
+            },
+          },
+        ]}
+        extra={
+          <div className="composer-status-row" data-testid="children-extra">
+            子会话（1）
+          </div>
+        }
+      />
+    );
+
+    const dock = screen.getByTestId('conversation-status-dock');
+    expect(within(dock).getByTestId('children-extra')).toHaveTextContent(
+      '子会话（1）'
+    );
+    expect(within(dock).getByText('部分会话记录无法显示')).toBeInTheDocument();
+  });
+});

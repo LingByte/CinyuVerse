@@ -1,0 +1,678 @@
+import type {
+  ApprovalStatus,
+  ApprovalResponse,
+  DirectoryListResponse,
+  DirectoryEntry,
+  ExecutionProcess,
+  ExecutionProcessRepoState,
+  ImageResponse,
+  SearchMode,
+  SearchResult,
+  Scratch,
+  ScratchType,
+  ScratchUpdateOutcome,
+  CreateScratch,
+  UpdateScratch,
+  CreateTag,
+  Tag,
+  TagSearchParams,
+  UpdateTag,
+} from 'shared/types';
+
+import { backendCall } from './base';
+import { backendListen } from '@/lib/backendTransport';
+
+export type LogLevel =
+  | 'all'
+  | 'off'
+  | 'error'
+  | 'warn'
+  | 'info'
+  | 'debug'
+  | 'trace';
+
+export type TargetDirective = {
+  target: string;
+  level: LogLevel;
+};
+
+export type LogSettings = {
+  level: LogLevel;
+  targets: TargetDirective[];
+};
+
+export type LogSettingsView = LogSettings & {
+  env_locked: boolean;
+};
+
+export type LogRecord = {
+  seq: number;
+  timestamp_ms: number;
+  level: string;
+  target: string;
+  message: string;
+  fields?: Record<string, string>;
+};
+
+const LOG_APPENDED_EVENT = 'logs://appended';
+const LOG_SETTINGS_CHANGED_EVENT = 'log-settings://changed';
+
+export async function fileToBase64(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 0x8000;
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+
+  return btoa(binary);
+}
+
+async function imageUploadPayload(file: File) {
+  return {
+    file_name: file.name,
+    data_base64: await fileToBase64(file),
+  };
+}
+
+// Execution Process APIs
+export const executionProcessesApi = {
+  getDetails: async (processId: string): Promise<ExecutionProcess> => {
+    return backendCall<ExecutionProcess>('get_execution_process', {
+      id: processId,
+    });
+  },
+
+  getRepoStates: async (
+    processId: string
+  ): Promise<ExecutionProcessRepoState[]> => {
+    return backendCall<ExecutionProcessRepoState[]>(
+      'get_execution_process_repo_states',
+      { id: processId }
+    );
+  },
+
+  stopExecutionProcess: async (processId: string): Promise<void> => {
+    return backendCall<void>('stop_execution_process', { id: processId });
+  },
+};
+
+// File Tree APIs
+export interface FileTreeEntry {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  children: FileTreeEntry[] | null;
+  git_status: string | null;
+}
+
+export interface DirectoryChildrenResponse {
+  files: string[];
+  directories: string[];
+  gitignored_files: string[];
+  gitignored_directories: string[];
+  truncated: boolean;
+}
+
+export interface ReadFileResponse {
+  content: string;
+  truncated: boolean;
+}
+
+export interface BinaryAssetResponse {
+  data_base64: string;
+  mime_type: string;
+}
+
+export interface WritePastedImageAssetResponse {
+  absolute_path: string;
+  file_name: string;
+  markdown_path: string;
+}
+
+export interface TextSearchMatch {
+  line: number;
+  column: number;
+  end_column: number;
+  preview: string;
+}
+
+export interface TextSearchFileResult {
+  path: string;
+  match_count: number;
+  matches: TextSearchMatch[];
+}
+
+export interface TextSearchResponse {
+  files: TextSearchFileResult[];
+  file_count: number;
+  total_matches: number;
+  truncated: boolean;
+}
+
+export interface TextSearchOptions {
+  query: string;
+  is_regex?: boolean;
+  case_sensitive?: boolean;
+  whole_word?: boolean;
+  include_pattern?: string;
+  exclude_pattern?: string;
+}
+
+export const fileTreeApi = {
+  getTree: async (
+    rootPath: string,
+    depth?: number
+  ): Promise<FileTreeEntry[]> => {
+    return backendCall<FileTreeEntry[]>('get_file_tree', {
+      rootPath,
+      depth: depth ?? null,
+    });
+  },
+
+  readFile: async (path: string): Promise<string> => {
+    return backendCall<string>('read_file_content', { path });
+  },
+
+  saveFile: async (path: string, content: string): Promise<void> => {
+    return backendCall<void>('save_file_content', { path, content });
+  },
+
+  writePastedImageAsset: async (
+    directory: string,
+    base64Content: string,
+    extension: string
+  ): Promise<WritePastedImageAssetResponse> => {
+    return backendCall<WritePastedImageAssetResponse>(
+      'write_pasted_image_asset',
+      { directory, base64Content, extension }
+    );
+  },
+
+  deleteFile: async (path: string): Promise<void> => {
+    return backendCall<void>('delete_file', { path });
+  },
+
+  getFileAtHead: async (filePath: string): Promise<string> => {
+    return backendCall<string>('get_file_at_head', { filePath });
+  },
+
+  getClaudeSettingsPath: async (): Promise<string> => {
+    return backendCall<string>('get_claude_settings_path');
+  },
+
+  listDirectoryChildren: async (
+    rootPath: string,
+    relativePath: string
+  ): Promise<DirectoryChildrenResponse> => {
+    return backendCall<DirectoryChildrenResponse>('list_directory_children', {
+      rootPath,
+      relativePath,
+    });
+  },
+
+  readFileWithTruncation: async (
+    path: string,
+    maxBytes?: number
+  ): Promise<ReadFileResponse> => {
+    return backendCall<ReadFileResponse>('read_file_with_truncation', {
+      path,
+      maxBytes: maxBytes ?? null,
+    });
+  },
+
+  readBinaryAsset: async (path: string): Promise<BinaryAssetResponse> => {
+    return backendCall<BinaryAssetResponse>('read_binary_asset', {
+      path,
+    });
+  },
+
+  trashItem: async (path: string): Promise<void> => {
+    return backendCall<void>('trash_item', { path });
+  },
+
+  copyItem: async (path: string): Promise<string> => {
+    return backendCall<string>('copy_item', { path });
+  },
+
+  moveItem: async (path: string, newPath: string): Promise<string> => {
+    return backendCall<string>('move_item', { path, newPath });
+  },
+
+  createDirectory: async (path: string): Promise<void> => {
+    return backendCall<void>('create_directory', { path });
+  },
+
+  searchText: async (
+    rootPath: string,
+    options: TextSearchOptions
+  ): Promise<TextSearchResponse> => {
+    return backendCall<TextSearchResponse>('search_workspace_text', {
+      rootPath,
+      options,
+    });
+  },
+};
+
+export const desktopApi = {
+  revealInFileManager: async (path: string): Promise<void> => {
+    return backendCall<void>('reveal_in_file_manager', { path });
+  },
+  isMainWindowFocused: async (): Promise<boolean> => {
+    return backendCall<boolean>('is_main_window_focused');
+  },
+  exitApp: async (): Promise<void> => {
+    return backendCall<void>('exit_app');
+  },
+  getLogSettings: async (): Promise<LogSettingsView> => {
+    return backendCall<LogSettingsView>('get_log_settings');
+  },
+  setLogSettings: async (settings: LogSettings): Promise<LogSettings> => {
+    return backendCall<LogSettings>('set_log_settings', { settings });
+  },
+  getRecentLogs: async (limit?: number): Promise<LogRecord[]> => {
+    return backendCall<LogRecord[]>('get_recent_logs', {
+      limit: limit ?? 2000,
+    });
+  },
+  getLogsDir: async (): Promise<string> => {
+    return backendCall<string>('get_logs_dir');
+  },
+  subscribeLogAppended: async (
+    handler: (record: LogRecord) => void
+  ): Promise<() => void> => {
+    return backendListen<LogRecord>(LOG_APPENDED_EVENT, handler);
+  },
+  subscribeLogSettingsChanged: async (
+    handler: (settings: LogSettings) => void
+  ): Promise<() => void> => {
+    return backendListen<LogSettings>(LOG_SETTINGS_CHANGED_EVENT, handler);
+  },
+};
+
+// File System APIs
+export const fileSystemApi = {
+  list: async (path?: string): Promise<DirectoryListResponse> => {
+    return backendCall<DirectoryListResponse>('list_directory', {
+      path: path ?? null,
+    });
+  },
+
+  listGitRepos: async (path?: string): Promise<DirectoryEntry[]> => {
+    return backendCall<DirectoryEntry[]>('list_git_repos', {
+      path: path ?? null,
+    });
+  },
+};
+
+// Task Tags APIs (all tags are global)
+export const tagsApi = {
+  list: async (params?: TagSearchParams): Promise<Tag[]> => {
+    return backendCall<Tag[]>('get_tags', {
+      search: params?.search ?? null,
+    });
+  },
+
+  create: async (data: CreateTag): Promise<Tag> => {
+    return backendCall<Tag>('create_tag', { payload: data });
+  },
+
+  update: async (tagId: string, data: UpdateTag): Promise<Tag> => {
+    return backendCall<Tag>('update_tag', { tagId, payload: data });
+  },
+
+  delete: async (tagId: string): Promise<void> => {
+    return backendCall<void>('delete_tag', { tagId });
+  },
+};
+
+export interface Instruction {
+  id: string;
+  name: string;
+  content: string;
+  agent_types: string[];
+  source: 'local' | 'official' | string;
+  description: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface CreateInstructionPayload {
+  name: string;
+  content: string;
+  agent_types?: string[] | null;
+}
+
+export interface UpdateInstructionPayload {
+  name?: string | null;
+  content?: string | null;
+  agent_types?: string[] | null;
+}
+
+export const instructionsApi = {
+  listLocal: async (search?: string | null): Promise<Instruction[]> => {
+    return backendCall<Instruction[]>('list_instructions', {
+      search: search ?? null,
+    });
+  },
+
+  listOfficial: async (): Promise<Instruction[]> => {
+    return backendCall<Instruction[]>('list_official_instructions');
+  },
+
+  create: async (payload: CreateInstructionPayload): Promise<Instruction> => {
+    return backendCall<Instruction>('create_instruction', { payload });
+  },
+
+  update: async (
+    instructionId: string,
+    payload: UpdateInstructionPayload
+  ): Promise<Instruction> => {
+    return backendCall<Instruction>('update_instruction', {
+      instructionId,
+      payload,
+    });
+  },
+
+  delete: async (instructionId: string): Promise<void> => {
+    return backendCall<void>('delete_instruction', { instructionId });
+  },
+
+  installOfficial: async (
+    officialId: string,
+    agentTypes?: string[] | null
+  ): Promise<Instruction> => {
+    return backendCall<Instruction>('install_official_instruction', {
+      officialId,
+      agentTypes: agentTypes ?? null,
+    });
+  },
+};
+
+// Images API
+export const imagesApi = {
+  upload: async (file: File): Promise<ImageResponse> => {
+    return backendCall<ImageResponse>('upload_image', {
+      payload: await imageUploadPayload(file),
+    });
+  },
+
+  uploadForTask: async (taskId: string, file: File): Promise<ImageResponse> => {
+    return backendCall<ImageResponse>('upload_image_for_task', {
+      taskId,
+      payload: await imageUploadPayload(file),
+    });
+  },
+
+  /**
+   * Upload an image for a task attempt and immediately copy it to the container.
+   * Returns the image with a file_path that can be used in markdown.
+   */
+  uploadForAttempt: async (
+    attemptId: string,
+    file: File
+  ): Promise<ImageResponse> => {
+    return backendCall<ImageResponse>('upload_image_for_workspace', {
+      workspaceId: attemptId,
+      payload: await imageUploadPayload(file),
+    });
+  },
+
+  delete: async (imageId: string): Promise<void> => {
+    return backendCall<void>('delete_image', { imageId });
+  },
+
+  getTaskImages: async (taskId: string): Promise<ImageResponse[]> => {
+    return backendCall<ImageResponse[]>('get_task_images', { taskId });
+  },
+};
+
+// Approval API
+export const approvalsApi = {
+  respond: async (
+    approvalId: string,
+    payload: ApprovalResponse
+  ): Promise<ApprovalStatus> => {
+    return backendCall<ApprovalStatus>('respond_to_approval', {
+      approvalId,
+      response: payload,
+    });
+  },
+};
+
+// Scratch API
+export const scratchApi = {
+  create: async (
+    scratchType: ScratchType,
+    id: string,
+    data: CreateScratch
+  ): Promise<Scratch> => {
+    return backendCall<Scratch>('create_scratch', {
+      scratchType,
+      id,
+      payload: data,
+    });
+  },
+
+  get: async (scratchType: ScratchType, id: string): Promise<Scratch> => {
+    return backendCall<Scratch>('get_scratch', {
+      scratchType,
+      id,
+    });
+  },
+
+  update: async (
+    scratchType: ScratchType,
+    id: string,
+    data: UpdateScratch
+  ): Promise<ScratchUpdateOutcome> => {
+    return backendCall<ScratchUpdateOutcome>('update_scratch', {
+      scratchType,
+      id,
+      payload: data,
+    });
+  },
+
+  delete: async (scratchType: ScratchType, id: string): Promise<void> => {
+    await backendCall<void>('delete_scratch', {
+      scratchType,
+      id,
+    });
+  },
+};
+
+// Search API (multi-repo file search)
+// Note: In Tauri, search_project_files handles project-level search.
+// For multi-repo search, we invoke search per repo and merge results.
+export const searchApi = {
+  searchFiles: async (
+    repoIds: string[],
+    query: string,
+    mode?: SearchMode
+  ): Promise<SearchResult[]> => {
+    // Search each repo in parallel and merge results
+    const results = await Promise.all(
+      repoIds.map((repoId) =>
+        backendCall<SearchResult[]>('search_repo', {
+          repoId,
+          q: query,
+          mode: mode ?? null,
+        })
+      )
+    );
+    return results.flat();
+  },
+};
+
+// --- Skills ---
+
+export interface AgentLocalSkill {
+  name: string;
+  description: string | null;
+  path: string;
+  invocation: string;
+}
+
+export type AgentSkillScope = 'global' | 'project';
+
+export interface AgentSkillItem {
+  id: string;
+  scope: AgentSkillScope;
+  path: string;
+  description: string | null;
+  read_only: boolean;
+}
+
+export interface AgentSkillLocation {
+  scope: AgentSkillScope;
+  path: string;
+  exists: boolean;
+  read_only: boolean;
+}
+
+export interface AgentSkillsListResult {
+  supported: boolean;
+  global_supported: boolean;
+  project_supported: boolean;
+  locations: AgentSkillLocation[];
+  skills: AgentSkillItem[];
+}
+
+export interface AgentSkillContent {
+  skill: AgentSkillItem;
+  content: string;
+}
+
+export const skillsApi = {
+  // Per-agent skills CRUD (global / project scope), backed by each agent's
+  // own skill directories; writes are scoped to a writable directory.
+  list: (
+    agentType: string,
+    workspacePath?: string | null
+  ): Promise<AgentSkillsListResult> =>
+    backendCall<AgentSkillsListResult>('list_agent_skills', {
+      agentType,
+      workspacePath: workspacePath ?? null,
+    }),
+  read: (params: {
+    agentType: string;
+    scope: AgentSkillScope;
+    skillId: string;
+    workspacePath?: string | null;
+  }): Promise<AgentSkillContent> =>
+    backendCall<AgentSkillContent>('read_agent_skill', {
+      agentType: params.agentType,
+      scope: params.scope,
+      skillId: params.skillId,
+      workspacePath: params.workspacePath ?? null,
+    }),
+  save: (params: {
+    agentType: string;
+    scope: AgentSkillScope;
+    skillId: string;
+    content: string;
+    workspacePath?: string | null;
+  }): Promise<AgentSkillItem> =>
+    backendCall<AgentSkillItem>('save_agent_skill', {
+      agentType: params.agentType,
+      scope: params.scope,
+      skillId: params.skillId,
+      content: params.content,
+      workspacePath: params.workspacePath ?? null,
+    }),
+  delete: (params: {
+    agentType: string;
+    scope: AgentSkillScope;
+    skillId: string;
+    workspacePath?: string | null;
+  }): Promise<void> =>
+    backendCall<void>('delete_agent_skill', {
+      agentType: params.agentType,
+      scope: params.scope,
+      skillId: params.skillId,
+      workspacePath: params.workspacePath ?? null,
+    }),
+};
+
+// --- Local skills view + skills.sh marketplace + global hosting ---
+
+/** A skill scanned across agent dirs + ~/.agents/skills + ~/.cinyuverse/skills. */
+export interface LocalSkill {
+  id: string;
+  name: string;
+  description: string | null;
+  /** Prefix group (text before the first '-'). */
+  group: string;
+  /** Recorded in the global store (~/.cinyuverse/skills). */
+  global: boolean;
+  /** Agent keys (snake_case) whose dirs carry this skill. */
+  apps: string[];
+  path: string;
+}
+
+export interface SkillMarketItem {
+  id: string;
+  skill_id: string;
+  name: string;
+  installs: number | null;
+  source: string;
+}
+
+export interface LocalSkillContent {
+  id: string;
+  path: string;
+  content: string;
+}
+
+export interface SkillMarketDetail {
+  description: string | null;
+}
+
+export const skillsMarketApi = {
+  scanLocal: (): Promise<LocalSkill[]> =>
+    backendCall<LocalSkill[]>('scan_local_skills'),
+  readLocal: (skillId: string): Promise<LocalSkillContent> =>
+    backendCall<LocalSkillContent>('read_local_skill', { skillId }),
+  search: (query?: string | null): Promise<SkillMarketItem[]> =>
+    backendCall<SkillMarketItem[]>('search_skill_market', {
+      query: query ?? null,
+    }),
+  detail: (params: {
+    source: string;
+    skillId: string;
+  }): Promise<SkillMarketDetail> =>
+    backendCall<SkillMarketDetail>('get_market_skill_detail', {
+      source: params.source,
+      skillId: params.skillId,
+    }),
+  install: (params: {
+    source: string;
+    skillId: string;
+    global: boolean;
+    apps: string[];
+    link: boolean;
+  }): Promise<LocalSkill[]> =>
+    backendCall<LocalSkill[]>('install_market_skill', {
+      source: params.source,
+      skillId: params.skillId,
+      global: params.global,
+      apps: params.apps,
+      link: params.link,
+    }),
+  setHosting: (params: {
+    skillId: string;
+    global: boolean;
+    apps: string[];
+    link: boolean;
+  }): Promise<LocalSkill[]> =>
+    backendCall<LocalSkill[]>('set_skill_hosting', {
+      skillId: params.skillId,
+      global: params.global,
+      apps: params.apps,
+      link: params.link,
+    }),
+  uninstall: (skillId: string): Promise<LocalSkill[]> =>
+    backendCall<LocalSkill[]>('uninstall_skill', { skillId }),
+};

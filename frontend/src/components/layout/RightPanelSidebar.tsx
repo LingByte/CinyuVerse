@@ -1,0 +1,185 @@
+import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  Terminal,
+  List,
+  GitCompareArrows,
+  Loader2,
+  StickyNote,
+  Globe,
+  ScanSearch,
+} from 'lucide-react';
+import { usePanelActionsContext } from '@/contexts/PanelActionsContext';
+import { useWorktree } from '@/contexts/WorktreeContext';
+import { useKanbanSessionContext } from '@/contexts/KanbanSessionContext';
+import { ExecutionProcessesProvider } from '@/contexts/ExecutionProcessesContext';
+import { ViewProcessesDialog } from '@/components/dialogs/tasks/ViewProcessesDialog';
+import { useTaskAttemptWithSession } from '@/hooks/useTaskAttempt';
+import { useDevServer } from '@/hooks/useDevServer';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { PANEL_IDS } from '@/stores/useLayoutStore';
+import { useTauriInspector } from '@/hooks/useTauriInspector';
+import { useBackendTransport } from '@/lib/transport';
+
+function RightPanelSidebarContent({
+  workspaceId,
+  sessionId,
+}: {
+  workspaceId?: string;
+  sessionId?: string;
+}) {
+  const { t } = useTranslation(['panels', 'common']);
+  const transport = useBackendTransport();
+  const showEmbeddedBrowser = transport.environment !== 'web';
+  const { openNewTerminal, openDiffPreview, openNotes, openOrFocusPanel } =
+    usePanelActionsContext();
+  const { runningDevServers, devServerProcesses } = useDevServer(workspaceId);
+  const {
+    activate: activateTauriInspector,
+    isActivating: isTauriInspectorActivating,
+    status: tauriInspectorStatus,
+  } = useTauriInspector(workspaceId);
+
+  const handleOpenPreview = useCallback(() => {
+    openOrFocusPanel(PANEL_IDS.WEB_PREVIEW, 'Web Preview');
+  }, [openOrFocusPanel]);
+
+  const hasRunningDevServer = runningDevServers.length > 0;
+  const hasFailedDevServer = devServerProcesses.some(
+    (process) =>
+      process.status === 'failed' ||
+      (process.status === 'completed' &&
+        process.exit_code !== null &&
+        process.exit_code !== 0n)
+  );
+  const networkButtonClass = hasRunningDevServer
+    ? 'bg-[hsl(var(--primary)/0.1)] text-primary hover:bg-[hsl(var(--primary)/0.14)] hover:text-primary'
+    : hasFailedDevServer
+      ? 'text-destructive hover:text-destructive hover:bg-destructive/10 bg-destructive/10'
+      : 'text-muted-foreground hover:text-foreground hover:bg-accent';
+  const networkTooltipLabel = hasRunningDevServer
+    ? t('rightPanelSidebar.devServerRunningTooltip')
+    : hasFailedDevServer
+      ? t('rightPanelSidebar.devServerFailedTooltip')
+      : t('rightPanelSidebar.openNetworkPreview');
+
+  const buttons = [
+    {
+      icon: Terminal,
+      label: t('rightPanelSidebar.openTerminal'),
+      onClick: openNewTerminal,
+    },
+    {
+      icon: List,
+      label: t('rightPanelSidebar.processes'),
+      onClick: () =>
+        ViewProcessesDialog.show({
+          workspaceId,
+          sessionId,
+          initialProcessId: null,
+        }),
+    },
+    {
+      icon: GitCompareArrows,
+      label: t('rightPanelSidebar.gitDiff'),
+      onClick: openDiffPreview,
+    },
+    {
+      icon: StickyNote,
+      label: t('rightPanelSidebar.notes'),
+      onClick: openNotes,
+    },
+  ];
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <div className="workspace-divider-left relative flex w-9 shrink-0 flex-col items-center gap-0.5 bg-secondary/30 pt-2">
+        {buttons.map((button) => {
+          const Icon = button.icon;
+          return (
+            <Tooltip key={button.label}>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={button.onClick}
+                  className="workspace-side-rail-button flex h-7 w-7 items-center justify-center"
+                  aria-label={button.label}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="left">{button.label}</TooltipContent>
+            </Tooltip>
+          );
+        })}
+
+        <div className="my-1 h-px w-5 bg-border" />
+
+        {showEmbeddedBrowser && workspaceId && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={handleOpenPreview}
+                className={`workspace-side-rail-button flex h-7 w-7 items-center justify-center ${networkButtonClass}`}
+                aria-label={networkTooltipLabel}
+              >
+                <Globe className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left">{networkTooltipLabel}</TooltipContent>
+          </Tooltip>
+        )}
+
+        {workspaceId && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => void activateTauriInspector()}
+                disabled={isTauriInspectorActivating}
+                className="workspace-side-rail-button flex h-7 w-7 items-center justify-center disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label={t('rightPanelSidebar.tauriInspectorTooltip')}
+              >
+                {isTauriInspectorActivating ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ScanSearch className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              {tauriInspectorStatus?.installed
+                ? t('rightPanelSidebar.tauriInspectorTooltip')
+                : t('rightPanelSidebar.tauriInspectorSetupTooltip')}
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+    </TooltipProvider>
+  );
+}
+
+export function RightPanelSidebar() {
+  const { activeWorktreeId } = useWorktree();
+  const { visibleRightSession } = useKanbanSessionContext();
+  const effectiveWorkspaceId =
+    visibleRightSession?.workspaceId ?? activeWorktreeId ?? undefined;
+  const explicitSessionId = visibleRightSession?.sessionId;
+  const { data: attempt } = useTaskAttemptWithSession(effectiveWorkspaceId);
+  const effectiveSessionId = explicitSessionId ?? attempt?.session?.id;
+
+  return (
+    <ExecutionProcessesProvider
+      attemptId={effectiveWorkspaceId}
+      sessionId={effectiveSessionId}
+    >
+      <RightPanelSidebarContent
+        workspaceId={effectiveWorkspaceId}
+        sessionId={effectiveSessionId}
+      />
+    </ExecutionProcessesProvider>
+  );
+}

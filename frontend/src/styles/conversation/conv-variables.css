@@ -1,0 +1,53 @@
+/* ============================================
+ * AI Conversation CSS Variables
+ * Compatibility aliases over the Tahoe app-design token layer.
+ * ============================================ */
+
+:root,
+.legacy-design {
+  --conv-user-bg: #f3f3f4;
+  --conv-user-text: #000;
+  --conv-user-code-bg: rgb(0 0 0 / 0.06);
+  --conv-user-code-border: rgb(0 0 0 / 0.1);
+  --conv-user-bubble-radius: var(--radius);
+
+  --conv-thinking-border: hsl(var(--primary, 0 0% 9.02%) / 0.42);
+  --conv-thinking-bg: var(--surface-control);
+
+  --conv-tool-success: hsl(var(--success));
+  --conv-tool-error: hsl(var(--destructive));
+  --conv-tool-pending: hsl(var(--warning));
+
+  --conv-border-subtle: var(--border-content);
+  --conv-border-strong: var(--border-strong);
+  --conv-surface-card: var(--surface-content);
+  --conv-surface-control: var(--surface-control);
+  --conv-surface-control-hover: var(--surface-control-hover);
+  --conv-text-primary: var(--text-strong);
+  --conv-text-secondary: var(--text-muted);
+  --conv-text-tertiary: var(--text-faint);
+  --conv-tool-icon: hsl(var(--primary, 0 0% 9.02%));
+
+  --conv-shimmer-from: hsl(var(--primary, 0 0% 9.02%) / 0.14);
+  --conv-shimmer-via: hsl(var(--primary, 0 0% 9.02%) / 0.38);
+  --conv-shimmer-to: hsl(var(--primary, 0 0% 9.02%) / 0.14);
+
+  --conv-code-bg: var(--surface-control);
+  --conv-code-text: var(--text-strong);
+  --conv-terminal-bg: hsl(var(--console-background));
+  --conv-terminal-text: hsl(var(--console-foreground));
+}
+
+.dark,
+.legacy-design.dark,
+.dark .legacy-design {
+  --conv-user-bg: #242424;
+  --conv-user-text: #fff;
+  --conv-user-code-bg: rgb(255 255 255 / 0.12);
+  --conv-user-code-border: rgb(255 255 255 / 0.18);
+  --conv-thinking-border: hsl(var(--primary, 0 0% 9.02%) / 0.44);
+  --conv-tool-icon: hsl(var(--primary, 0 0% 9.02%));
+  --conv-shimmer-from: hsl(var(--primary, 0 0% 9.02%) / 0.12);
+  --conv-shimmer-via: hsl(var(--primary, 0 0% 9.02%) / 0.32);
+  --conv-shimmer-to: hsl(var(--primary, 0 0% 9.02%) / 0.12);
+}

@@ -1,0 +1,20 @@
+/*
+ * file-tree-syntax.css
+ *
+ * Shiki token colors for the file preview code viewer.
+ */
+
+.file-preview-line-text {
+  color: var(--conv-code-text, var(--text-strong));
+}
+
+.file-preview-token {
+  color: var(--shiki-token-light, var(--conv-code-text, var(--text-strong)));
+}
+
+.dark .file-preview-token {
+  color: var(
+    --shiki-token-dark,
+    var(--shiki-token-light, var(--conv-code-text, var(--text-strong)))
+  );
+}

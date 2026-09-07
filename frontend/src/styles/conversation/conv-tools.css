@@ -1,0 +1,1249 @@
+/* ============================================
+ * AI Conversation — Tool Call, Terminal & Thinking
+ * Tool call card, status dots, expanded details,
+ * terminal output, and thinking block styles
+ * ============================================ */
+
+/* =========================================
+ * Plan Card
+ * Content-layer ledger for conversation plans.
+ * ========================================= */
+
+.conv-plan-card {
+  display: flex;
+  max-width: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--conv-border-subtle);
+  border-radius: var(--radius);
+  background: var(--conv-surface-card);
+}
+
+.conv-plan-card.is-collapsed {
+  width: max-content;
+}
+
+.conv-plan-card.is-expanded {
+  width: 100%;
+}
+
+.conv-plan-header {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--conv-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.conv-plan-header:hover {
+  background: var(--conv-surface-control);
+}
+
+.conv-plan-header:focus-visible {
+  outline: 2px solid hsl(var(--primary) / 0.45);
+  outline-offset: -2px;
+}
+
+.conv-plan-icon,
+.conv-plan-chevron {
+  color: var(--conv-text-secondary);
+}
+
+.conv-plan-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.conv-plan-chevron {
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.conv-plan-card.is-expanded .conv-plan-chevron {
+  transform: rotate(90deg);
+}
+
+.conv-plan-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 2px 12px 12px;
+}
+
+.conv-plan-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.conv-plan-progress-track {
+  display: flex;
+  overflow: hidden;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--conv-text-tertiary) 22%, transparent);
+}
+
+.conv-plan-progress-seg {
+  min-width: 6px;
+  height: 100%;
+}
+
+.conv-plan-progress-seg.is-done {
+  background: var(--conv-tool-success);
+}
+
+.conv-plan-progress-seg.is-active {
+  background: var(--conv-tool-pending);
+}
+
+.conv-plan-progress-seg.is-todo {
+  background: transparent;
+}
+
+.conv-plan-progress-seg.is-live {
+  animation: conv-breathing 1.5s ease-in-out infinite;
+}
+
+.conv-plan-progress-label {
+  color: var(--conv-text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+.conv-plan-steps,
+.conv-plan-children {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.conv-plan-steps {
+  gap: 12px;
+}
+
+.conv-plan-step {
+  display: grid;
+  grid-template-columns: 1.5rem 1rem minmax(0, 1fr);
+  align-items: start;
+  column-gap: 8px;
+}
+
+.conv-plan-index {
+  color: var(--conv-text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25rem;
+}
+
+.conv-plan-status {
+  display: flex;
+  height: 1.25rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.conv-plan-status.is-completed {
+  color: var(--conv-tool-success);
+}
+
+.conv-plan-status.is-in_progress {
+  color: var(--conv-tool-pending);
+}
+
+.conv-plan-status.is-pending {
+  color: var(--conv-text-tertiary);
+}
+
+.conv-plan-step-title {
+  min-width: 0;
+  color: var(--conv-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.conv-plan-step.is-completed .conv-plan-step-title {
+  color: var(--conv-text-secondary);
+}
+
+.conv-plan-children {
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.conv-plan-child {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--conv-text-secondary);
+  font-size: 12px;
+  line-height: 1.2rem;
+}
+
+.conv-plan-child-mark {
+  margin-top: 5px;
+  color: var(--conv-text-tertiary);
+}
+
+.conv-plan-fallback {
+  min-width: 0;
+  color: var(--conv-text-primary);
+  font-size: 13px;
+}
+
+.conv-plan-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: hsl(var(--warning) / 0.16);
+  color: hsl(var(--warning-foreground));
+  font-size: 12px;
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conv-plan-chevron {
+    transition: none;
+  }
+
+  .conv-plan-progress-seg.is-live {
+    animation: none;
+  }
+}
+
+/* =========================================
+ * Tool Call Card
+ * ========================================= */
+
+/* Tool calls are deliberately de-emphasized: no border, no own surface — they
+   sit flat on the message-stream background in muted body-size text, so the
+   assistant prose stays the visual focus. */
+.conv-tool-card {
+  border: none !important;
+  border-radius: var(--radius) !important;
+  background: transparent !important;
+  transition: background 0.15s;
+  font-size: 13px;
+}
+
+.conv-tool-card:hover {
+  background: var(--conv-surface-control) !important;
+}
+
+/* Status is carried by the small status dot only — the card surface stays
+   neutral (matches the pre-ACP style; avoids a wall of green/amber/red cards). */
+.conv-tool-card-success,
+.conv-tool-card-error,
+.conv-tool-card-pending {
+  border: none !important;
+  background: transparent !important;
+}
+
+.conv-tool-card-success:hover,
+.conv-tool-card-error:hover,
+.conv-tool-card-pending:hover {
+  background: var(--conv-surface-control) !important;
+}
+
+/* Tool card label — body-size muted gray, weakened next to assistant prose. */
+.conv-tool-label {
+  color: var(--conv-text-secondary);
+  font-weight: 400;
+  font-size: 13px;
+}
+
+/* Tool card detail text */
+.conv-tool-detail {
+  color: var(--conv-text-tertiary);
+  font-size: 13px;
+}
+
+/* Tool card icon color */
+.conv-tool-icon {
+  color: var(--conv-tool-icon);
+}
+
+/* Tool status dots */
+.conv-tool-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.conv-tool-dot-success {
+  background: var(--conv-tool-success);
+}
+
+.conv-tool-dot-error {
+  background: var(--conv-tool-error);
+}
+
+.conv-tool-dot-pending {
+  background: var(--conv-tool-pending);
+  animation: conv-breathing 1.5s ease-in-out infinite;
+}
+
+@keyframes conv-breathing {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Tool expanded details panel — the work product, not a log. */
+.conv-tool-details {
+  border: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: transparent;
+  max-height: 400px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+.conv-tool-artifact-host,
+.cinyuverse-tool-call-result-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 6px;
+}
+
+.conv-tool-artifact-actions,
+.conv-tool-artifact-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.conv-tool-artifact {
+  overflow: hidden;
+  border: 1px solid var(--conv-border-subtle);
+  border-radius: var(--radius);
+  background: var(--conv-surface-card);
+}
+
+.conv-tool-artifact-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+}
+
+.conv-tool-artifact-header.is-toggle {
+  cursor: pointer;
+}
+
+.conv-tool-artifact-header.is-toggle:hover {
+  background: var(--conv-surface-control);
+}
+
+.conv-tool-artifact-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: var(--radius);
+  background: var(--conv-surface-control);
+  color: var(--conv-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.conv-tool-artifact-title {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--conv-text-primary);
+  font-family: var(--font-mono, 'IBM Plex Mono', 'Cascadia Code', monospace);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.conv-tool-artifact-title {
+  cursor: pointer;
+}
+
+button.conv-tool-artifact-title:hover {
+  color: var(--conv-tool-icon);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.conv-tool-artifact-meta {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--conv-text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+.conv-tool-artifact-add {
+  color: var(--conv-tool-success);
+  font-family: var(--font-mono, 'IBM Plex Mono', 'Cascadia Code', monospace);
+}
+
+.conv-tool-artifact-del {
+  color: var(--conv-tool-error);
+  font-family: var(--font-mono, 'IBM Plex Mono', 'Cascadia Code', monospace);
+}
+
+.conv-tool-artifact-body {
+  max-height: 20rem;
+  overflow: auto;
+  border-top: 1px solid var(--conv-border-subtle);
+}
+
+.conv-tool-code {
+  display: grid;
+  min-width: max-content;
+  padding: 6px 0;
+  font-family: var(--font-mono, 'IBM Plex Mono', 'Cascadia Code', monospace);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.conv-tool-code-line {
+  display: grid;
+  grid-template-columns: 3.25rem minmax(0, 1fr);
+  column-gap: 10px;
+  padding: 0 10px 0 0;
+}
+
+.conv-tool-code-num {
+  color: var(--conv-text-tertiary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  user-select: none;
+}
+
+.conv-tool-code-text {
+  color: var(--conv-text-primary);
+  white-space: pre;
+}
+
+.conv-tool-facts {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.conv-tool-fact {
+  display: grid;
+  grid-template-columns: minmax(4.5rem, max-content) minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.conv-tool-fact dt {
+  color: var(--conv-text-tertiary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.conv-tool-fact dd {
+  margin: 0;
+  color: var(--conv-text-primary);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.conv-tool-prose {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--conv-text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.conv-tool-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 10px 0;
+  list-style: none;
+}
+
+.conv-tool-choice {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--conv-surface-control);
+  color: var(--conv-text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.conv-tool-choice.is-selected {
+  background: hsl(var(--primary) / 0.14);
+  color: var(--conv-text-primary);
+}
+
+.conv-tool-hits,
+.conv-tool-todos {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+}
+
+.conv-tool-hit-button {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.conv-tool-hit-button:hover .conv-tool-hit-loc {
+  color: var(--conv-tool-icon);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.conv-tool-hit-icon {
+  flex: 0 0 auto;
+  color: var(--conv-text-tertiary);
+  transform: translateY(2px);
+}
+
+.conv-tool-hits li,
+.conv-tool-todo {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 10px;
+}
+
+.conv-tool-hit-loc {
+  flex: 0 1 auto;
+  overflow: hidden;
+  color: var(--conv-text-secondary);
+  font-family: var(--font-mono, 'IBM Plex Mono', 'Cascadia Code', monospace);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conv-tool-hit-text {
+  min-width: 0;
+  color: var(--conv-text-primary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.conv-tool-todo-mark {
+  flex: 0 0 0.85rem;
+  color: var(--conv-text-tertiary);
+  font-size: 11px;
+}
+
+.conv-tool-todo.is-completed .conv-tool-todo-mark {
+  color: var(--conv-tool-success);
+}
+
+.conv-tool-todo.is-in_progress .conv-tool-todo-mark {
+  color: var(--conv-tool-pending);
+}
+
+.conv-tool-todo.is-completed .conv-tool-todo-text {
+  color: var(--conv-text-secondary);
+}
+
+.conv-tool-todo-text {
+  min-width: 0;
+  color: var(--conv-text-primary);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.conv-tool-terminal-exit.is-ok {
+  color: var(--conv-tool-success);
+}
+
+.conv-tool-terminal-exit.is-error {
+  color: var(--conv-tool-error);
+}
+
+.conv-tool-terminal-output {
+  padding: 8px 10px;
+  background: var(--conv-terminal-bg);
+  color: var(--conv-terminal-text);
+  font-family: var(
+    --font-mono,
+    'Cascadia Code',
+    'Fira Code',
+    'IBM Plex Mono',
+    monospace
+  );
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+.conv-tool-diff-fallback {
+  margin: 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  color: var(--conv-text-secondary);
+  font-family: var(--font-mono, 'IBM Plex Mono', 'Cascadia Code', monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.conv-tool-artifact .conv-generated-image-preview {
+  display: flex;
+  width: 100%;
+  padding: 8px 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conv-tool-artifact-header.is-toggle {
+    transition: none;
+  }
+}
+
+.astryx-chat-tool-calls [role='button'] {
+  border-radius: var(--radius) !important;
+}
+
+.astryx-chat-tool-calls [role='button']:hover,
+.astryx-chat-tool-calls [role='button']:focus-visible {
+  background: var(--conv-surface-control) !important;
+}
+
+.astryx-chat-tool-calls [role='button'][aria-expanded='true'] + div {
+  padding-inline: 0 !important;
+  width: 100%;
+}
+
+.cinyuverse-tool-call-result-detail,
+.conv-tool-artifact-host,
+.conv-tool-artifact {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.astryx-chat-tool-calls
+  [role='button']:has(.cinyuverse-tool-call-target)
+  > span:nth-child(2) {
+  flex-shrink: 0 !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+.astryx-chat-tool-calls [role='button'] > span:has(.cinyuverse-tool-call-target) {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  overflow: hidden;
+}
+
+.cinyuverse-tool-call-target {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.cinyuverse-tool-call-file-icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.cinyuverse-tool-call-target-label {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.cinyuverse-tool-call-target-label.is-overflow {
+  text-overflow: ellipsis;
+  mask-image: linear-gradient(
+    to right,
+    #000 0%,
+    #000 calc(100% - 1.25rem),
+    transparent 100%
+  );
+}
+
+button.cinyuverse-tool-call-target-label {
+  cursor: pointer;
+}
+
+button.cinyuverse-tool-call-target-label:hover {
+  color: var(--conv-tool-icon);
+}
+
+.cinyuverse-tool-call-target-suffix {
+  flex-shrink: 0;
+  color: var(--conv-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.conv-tool-dir-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--conv-border-subtle);
+  border-radius: var(--radius);
+  background: var(--conv-surface-card);
+}
+
+.conv-tool-dir-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  color: var(--conv-text-primary);
+  font-size: 12px;
+  line-height: 1.35;
+  cursor: default;
+  user-select: text;
+}
+
+.conv-tool-dir-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cinyuverse-tool-file-link {
+  min-width: 0;
+  max-width: min(34rem, 48vw);
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  color: hsl(var(--primary));
+  background: transparent;
+  font: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.cinyuverse-tool-file-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.conv-generated-image-preview {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 120px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.conv-generated-image-preview img {
+  display: block;
+}
+
+.conv-generated-image-placeholder {
+  display: flex;
+  min-height: 120px;
+  align-items: center;
+  justify-content: center;
+  color: var(--conv-text-tertiary);
+}
+
+/* =========================================
+ * Terminal Output (dark terminal style)
+ * ========================================= */
+
+.conv-terminal-output {
+  background: var(--conv-terminal-bg);
+  color: var(--conv-terminal-text);
+  border: 1px solid var(--conv-border-subtle);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  font-family: var(
+    --font-mono,
+    'Cascadia Code',
+    'Fira Code',
+    'IBM Plex Mono',
+    monospace
+  );
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+.conv-compact-output {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 7px 10px;
+  color: var(--conv-text-tertiary);
+  background: var(--conv-surface-control);
+  border-top: 1px dashed var(--conv-border-subtle);
+  font-family: var(
+    --font-mono,
+    'Cascadia Code',
+    'Fira Code',
+    'IBM Plex Mono',
+    monospace
+  );
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.conv-output-details > .conv-compact-output {
+  cursor: pointer;
+  display: block;
+  list-style: none;
+}
+
+.conv-output-details > .conv-compact-output::-webkit-details-marker {
+  display: none;
+}
+
+.conv-output-details[open] > .conv-compact-output {
+  border-bottom: 1px dashed var(--conv-border-subtle);
+}
+
+.conv-assistant-command-output {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.conv-assistant-command-output-header {
+  display: flex;
+  align-items: center;
+}
+
+.conv-assistant-command-output-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--conv-border-subtle);
+  border-radius: 999px;
+  background: var(--conv-surface-control);
+  color: var(--conv-text-secondary);
+  padding: 3px 9px;
+  font-family: var(
+    --font-mono,
+    'Cascadia Code',
+    'Fira Code',
+    'IBM Plex Mono',
+    monospace
+  );
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.conv-assistant-command-output-toggle:hover {
+  border-color: var(--conv-border-strong);
+  background: var(--conv-surface-control-hover);
+}
+
+.conv-assistant-command-output-prefix {
+  border: 1px dashed var(--conv-border-subtle);
+  border-radius: var(--radius);
+  background: var(--conv-surface-control);
+  color: var(--conv-text-tertiary);
+  padding: 8px 10px;
+  font-family: var(
+    --font-mono,
+    'Cascadia Code',
+    'Fira Code',
+    'IBM Plex Mono',
+    monospace
+  );
+  font-size: 11px;
+}
+
+.conv-assistant-command-output-body {
+  min-width: 0;
+}
+
+/* =========================================
+ * Thinking Block
+ * ========================================= */
+
+.conv-thinking {
+  padding: 2px 0;
+}
+
+.conv-thinking-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--conv-text-tertiary);
+  user-select: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-align: left;
+}
+
+.conv-thinking-header:hover {
+  color: var(--conv-text-secondary, var(--text-muted));
+}
+
+.conv-thinking-chevron {
+  transition: transform 0.16s ease-out;
+}
+
+.conv-thinking-chevron.is-expanded {
+  transform: rotate(180deg);
+}
+
+.conv-thinking-icon {
+  color: var(--conv-text-tertiary);
+  opacity: 0.7;
+}
+
+.conv-thinking-streaming .conv-thinking-icon {
+  color: var(--conv-tool-icon);
+  opacity: 0.9;
+}
+
+.conv-thinking-content {
+  margin-top: 6px;
+  color: var(--conv-text-secondary, var(--text-muted));
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.conv-thinking-group {
+  opacity: 0.82;
+}
+
+.conv-thinking-group-content {
+  border-top: 1px dashed var(--conv-border-subtle);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.permission-request-preview-wrap {
+  position: relative;
+}
+
+.permission-request-preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.35;
+  mask-image: linear-gradient(to bottom, #000 58%, transparent);
+}
+
+.permission-request-preview-wrap:hover .permission-request-preview,
+.permission-request-preview-wrap:focus-within .permission-request-preview {
+  display: block;
+  -webkit-line-clamp: unset;
+  max-height: 16rem;
+  overflow: auto;
+  mask-image: none;
+}
+
+.permission-request-allow-group > button:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.conv-thinking-count {
+  margin-left: auto;
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(127, 127, 127, 0.12);
+  color: var(--conv-text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* =========================================
+ * Conversation Message Nav
+ * ========================================= */
+
+/* The ruler floats over the right gutter. Its anchor spans the full thread
+   height while the ticks stay vertically centered in the visible viewport. */
+.conv-message-nav-anchor {
+  position: absolute;
+  top: 0;
+  right: 4px;
+  bottom: 0;
+  display: none;
+  pointer-events: none;
+}
+
+.conv-message-nav-rail {
+  position: sticky;
+  top: 50%;
+  width: 22.4px;
+  max-height: calc(100vh - 96px);
+  transform: translateY(-50%);
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+@media (min-width: 1120px) {
+  .conv-message-nav-anchor {
+    display: block;
+  }
+
+  /* 19.6px Hover key + 5.88px gap (70% of the previous 8.4px). */
+  .conv-thread-content {
+    padding-right: 25.48px;
+  }
+}
+
+/* One short rule per user message. The list itself is intentionally invisible:
+   there is no rail, border, fill, or shadow around the ticks. */
+.conv-message-nav-list {
+  display: flex;
+  max-height: inherit;
+  flex-direction: column;
+  align-items: flex-end;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 4px 0;
+  scrollbar-width: none;
+}
+
+.conv-message-nav-list::-webkit-scrollbar {
+  display: none;
+}
+
+.conv-message-nav-tick {
+  position: relative;
+  width: 22.4px;
+  height: 16px;
+  flex: 0 0 auto;
+  padding: 0;
+  appearance: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.conv-message-nav-tick::after {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 8.4px;
+  height: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--conv-text-tertiary) 66%, transparent);
+  content: '';
+  transform: translateY(-50%);
+  transition:
+    width 160ms ease-out,
+    height 160ms ease-out,
+    background-color 160ms ease-out;
+}
+
+.conv-message-nav-tick:hover::after,
+.conv-message-nav-tick:focus-visible::after {
+  width: 19.6px;
+  height: 3px;
+  background: var(--conv-text-primary);
+}
+
+.conv-message-nav-tick:focus-visible {
+  outline: none;
+}
+
+.conv-message-nav-tick.is-active::after {
+  background: var(--conv-text-primary);
+}
+
+/* The preview is portalled so it can open leftward without being clipped by a
+   long, scrollable tick list. Keep it opaque and quiet: no border or shadow. */
+.tahoe-popover.conv-message-nav-preview {
+  display: -webkit-box;
+  width: max-content;
+  max-width: min(240px, calc(100vw - 64px));
+  overflow: hidden;
+  padding: 8px 10px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--surface-card-strong);
+  box-shadow: none;
+  color: var(--conv-text-primary);
+  font-size: 12px;
+  line-height: 17px;
+  text-wrap: pretty;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conv-message-nav-tick::after {
+    transition: none;
+  }
+
+  .conv-message-nav-preview {
+    animation: none;
+  }
+}
+
+/* =========================================
+ * Turn Stats
+ * ========================================= */
+
+.conv-turn-stats {
+  color: var(--conv-text-tertiary);
+  font-size: 11px;
+}
+
+.conv-turn-stats-row {
+  display: flex;
+  min-height: 22px;
+  align-items: center;
+  gap: 8px;
+}
+
+.conv-turn-stats-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.conv-turn-stat-button {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--conv-text-tertiary);
+}
+
+.conv-turn-stat-button:hover {
+  border-color: var(--conv-border-subtle);
+  background: var(--conv-surface-control);
+  color: var(--conv-text-primary);
+}
+
+.conv-turn-stats-items {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.conv-turn-stat-item {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+button.conv-turn-stat-elapsed {
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+button.conv-turn-stat-elapsed:hover .conv-turn-stat-value {
+  color: var(--conv-text-primary);
+}
+
+.host-delegation-card {
+  container-type: inline-size;
+  container-name: host-delegation;
+}
+
+@container host-delegation (max-width: 32rem) {
+  .host-delegation-wide-only {
+    display: none !important;
+  }
+}
+
+.conv-turn-stat-label {
+  color: var(--conv-text-tertiary);
+}
+
+.conv-turn-stat-value {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--conv-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,0 +1,738 @@
+/*
+ * Cinyuverse workbench Dockview theme.
+ *
+ * Strategy: keep Dockview's structural contract, but map every visible surface
+ * back to the shared workspace design tokens.
+ */
+
+.dockview-theme-light.dockview-theme-ayu,
+.dockview-theme-ayu.dockview-theme-light,
+.dockview-theme-ayu {
+  --dv-theme-bg: var(--surface-card-strong);
+  --dv-theme-surface: color-mix(
+    in srgb,
+    var(--surface-topbar) 84%,
+    var(--surface-card) 16%
+  );
+  --dv-theme-surface-muted: color-mix(
+    in srgb,
+    var(--surface-sidebar) 80%,
+    var(--surface-card) 20%
+  );
+  --dv-theme-border: var(--border-subtle);
+  --dv-theme-text: var(--text-strong);
+  --dv-theme-muted: var(--text-muted);
+  --dv-theme-subtle: var(--text-subtle);
+  --dv-theme-hover: var(--surface-control-hover);
+  --dv-tab-state-background: color-mix(
+    in srgb,
+    var(--text-strong) 9%,
+    transparent
+  );
+  --dv-theme-active: var(--surface-active);
+
+  --dv-paneview-active-outline-color: hsl(var(--primary) / 0.62);
+  --dv-tabs-and-actions-container-font-size: 12px;
+  --dv-tabs-and-actions-container-height: 36px;
+  --dv-drag-over-background-color: var(--dv-theme-active);
+  --dv-drag-over-border-color: hsl(var(--primary) / 0.64);
+  --dv-tabs-container-scrollbar-color: color-mix(
+    in srgb,
+    var(--text-subtle) 42%,
+    transparent
+  );
+  --dv-icon-hover-background-color: var(--dv-theme-hover);
+  --dv-floating-box-shadow: var(--shadow-popover);
+  --dv-overlay-z-index: 999;
+  --dv-tab-font-size: inherit;
+  --dv-border-radius: var(--radius);
+  --dv-tab-margin: 0;
+  --dv-sash-color: color-mix(in srgb, var(--border-subtle) 86%, transparent);
+  --dv-active-sash-color: hsl(var(--primary) / 0.58);
+  --dv-active-sash-transition-duration: 0.1s;
+  --dv-active-sash-transition-delay: 0.5s;
+  --dv-scrollbar-background-color: color-mix(
+    in srgb,
+    var(--text-subtle) 20%,
+    transparent
+  );
+
+  --dv-activegroup-visiblepanel-tab-background-color: var(--dv-theme-bg);
+  --dv-activegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-inactivegroup-visiblepanel-tab-background-color: transparent;
+  --dv-inactivegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-tab-divider-color: var(--dv-theme-border);
+  --dv-activegroup-visiblepanel-tab-color: var(--dv-theme-text);
+  --dv-activegroup-hiddenpanel-tab-color: var(--dv-theme-muted);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--dv-theme-muted);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--dv-theme-subtle);
+  --dv-background-color: var(--dv-theme-surface);
+  --dv-paneview-header-border-color: var(--dv-theme-border);
+  --dv-tabs-and-actions-container-background-color: var(--dv-theme-surface);
+  --dv-group-view-background-color: var(--dv-theme-bg);
+  --dv-separator-border: var(--dv-theme-border);
+}
+
+.workspace-shell {
+  --workspace-divider-color: hsl(var(--border) / 0.88);
+  --workspace-divider-subtle: hsl(var(--border) / 0.74);
+  --workspace-divider-hover: hsl(var(--primary) / 0.52);
+}
+
+.workspace-divider-bottom {
+  border-bottom: 1px solid var(--workspace-divider-color);
+}
+
+.workspace-divider-top {
+  border-top: 1px solid var(--workspace-divider-color);
+}
+
+.workspace-divider-left {
+  border-left: 1px solid var(--workspace-divider-color);
+}
+
+.workspace-divider-right {
+  border-right: 1px solid var(--workspace-divider-color);
+}
+
+.workspace-resize-handle {
+  position: relative;
+  overflow: visible;
+  background-color: var(--workspace-divider-color);
+  transition: background-color 0.15s ease;
+}
+
+.workspace-resize-handle::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 21px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background-color: var(--workspace-divider-subtle);
+  box-shadow: 0 0 0 1px hsl(var(--background) / 0.88);
+  transition:
+    background-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.workspace-resize-handle:hover {
+  background-color: var(--workspace-divider-hover);
+}
+
+.workspace-resize-handle:hover::before {
+  transform: translate(-50%, -50%) scaleX(1.35);
+  background-color: var(--workspace-divider-hover);
+}
+
+/*
+ * Hard override: force light backgrounds on ALL dockview structural elements.
+ * The [class*="dockview-theme"] selector matches any element with a theme class,
+ * ensuring we catch the root regardless of which theme classes are present.
+ */
+[class*='dockview-theme-ayu'] .dv-tabs-and-actions-container {
+  background-color: var(--dv-theme-surface) !important;
+}
+
+[class*='dockview-theme-ayu'] .dv-content-container {
+  background-color: var(--dv-theme-bg) !important;
+}
+
+[class*='dockview-theme-ayu'] .dv-groupview {
+  background-color: var(--dv-theme-bg) !important;
+}
+
+[class*='dockview-theme-ayu'].dv-dockview,
+.dv-dockview[class*='dockview-theme-ayu'] {
+  background-color: var(--dv-theme-bg) !important;
+}
+
+[class*='dockview-theme-ayu'] .dv-tab.dv-active-tab {
+  color: var(--dv-theme-text) !important;
+}
+
+[class*='dockview-theme-ayu'] .dv-tab.dv-inactive-tab {
+  color: var(--dv-theme-muted) !important;
+}
+
+/* Void container (empty space in tab bar next to tabs) */
+[class*='dockview-theme-ayu'] .dv-void-container {
+  background-color: var(--dv-theme-surface) !important;
+}
+
+/* Ayu Mirage dockview theme (dark mode) */
+.dark .dockview-theme-light.dockview-theme-ayu,
+.dark .dockview-theme-ayu.dockview-theme-light,
+.dark .dockview-theme-ayu {
+  --dv-theme-bg: var(--surface-card-strong);
+  --dv-theme-surface: color-mix(
+    in srgb,
+    var(--surface-topbar) 82%,
+    var(--surface-card) 18%
+  );
+  --dv-theme-surface-muted: color-mix(
+    in srgb,
+    var(--surface-sidebar) 82%,
+    var(--surface-card) 18%
+  );
+  --dv-theme-border: var(--border-subtle);
+  --dv-theme-text: var(--text-strong);
+  --dv-theme-muted: var(--text-muted);
+  --dv-theme-subtle: var(--text-subtle);
+  --dv-tab-state-background: color-mix(
+    in srgb,
+    var(--text-strong) 12%,
+    transparent
+  );
+
+  --dv-paneview-active-outline-color: hsl(var(--primary) / 0.7);
+  --dv-icon-hover-background-color: var(--dv-theme-hover);
+  --dv-floating-box-shadow: var(--shadow-popover);
+  --dv-scrollbar-background-color: color-mix(
+    in srgb,
+    var(--text-subtle) 24%,
+    transparent
+  );
+
+  --dv-activegroup-visiblepanel-tab-background-color: var(--dv-theme-bg);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--dv-theme-surface);
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--dv-theme-surface);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--dv-theme-surface);
+  --dv-tab-divider-color: var(--dv-theme-border);
+  --dv-activegroup-visiblepanel-tab-color: var(--dv-theme-text);
+  --dv-activegroup-hiddenpanel-tab-color: var(--dv-theme-muted);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--dv-theme-muted);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--dv-theme-subtle);
+  --dv-background-color: var(--dv-theme-surface);
+  --dv-paneview-header-border-color: var(--dv-theme-border);
+  --dv-tabs-and-actions-container-background-color: var(--dv-theme-surface);
+  --dv-tabs-container-scrollbar-color: color-mix(
+    in srgb,
+    var(--text-subtle) 48%,
+    transparent
+  );
+  --dv-group-view-background-color: var(--dv-theme-bg);
+  --dv-separator-border: var(--dv-theme-border);
+  --dv-drag-over-background-color: var(--surface-active);
+  --dv-drag-over-border-color: hsl(var(--primary) / 0.72);
+  --dv-sash-color: color-mix(in srgb, var(--border-subtle) 88%, transparent);
+  --dv-active-sash-color: hsl(var(--primary) / 0.68);
+}
+
+.dark .workspace-shell {
+  --workspace-divider-color: hsl(var(--border) / 0.9);
+  --workspace-divider-subtle: hsl(var(--border) / 0.76);
+  --workspace-divider-hover: hsl(var(--primary) / 0.62);
+}
+
+.dark [class*='dockview-theme-ayu'] .dv-tabs-and-actions-container {
+  background-color: var(--dv-theme-surface) !important;
+}
+
+.dark [class*='dockview-theme-ayu'] .dv-content-container {
+  background-color: var(--dv-theme-bg) !important;
+}
+
+.dark [class*='dockview-theme-ayu'] .dv-groupview {
+  background-color: var(--dv-theme-bg) !important;
+}
+
+.dark [class*='dockview-theme-ayu'].dv-dockview,
+.dark .dv-dockview[class*='dockview-theme-ayu'] {
+  background-color: var(--dv-theme-bg) !important;
+}
+
+.dark [class*='dockview-theme-ayu'] .dv-tab.dv-active-tab {
+  background-color: transparent !important;
+  color: var(--dv-theme-text) !important;
+}
+
+.dark [class*='dockview-theme-ayu'] .dv-tab.dv-inactive-tab {
+  background-color: transparent !important;
+  color: var(--dv-theme-muted) !important;
+}
+
+.dark [class*='dockview-theme-ayu'] .dv-void-container {
+  background-color: var(--dv-theme-surface) !important;
+}
+
+/* Tab strip polish + remove header/right-divider seam */
+[class*='dockview-theme-ayu'] .dv-groupview > .dv-tabs-and-actions-container {
+  border-bottom: 1px solid var(--dv-paneview-header-border-color);
+}
+
+[class*='dockview-theme-ayu'] .dv-tabs-and-actions-container > .dv-scrollable {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+[class*='dockview-theme-ayu']
+  .dv-tabs-and-actions-container
+  > .dv-left-actions-container {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+[class*='dockview-theme-ayu'] .workspace-tab-add-button {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  margin: 4px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--dv-theme-muted);
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+[class*='dockview-theme-ayu'] .workspace-tab-add-button > svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.75;
+}
+
+[class*='dockview-theme-ayu'] .workspace-tab-add-button:hover,
+[class*='dockview-theme-ayu'] .workspace-tab-add-button[data-state='open'] {
+  background-color: var(--dv-theme-hover);
+  color: var(--dv-theme-text);
+}
+
+[class*='dockview-theme-ayu'] .workspace-tab-add-button:focus-visible {
+  outline: 2px solid var(--dv-paneview-active-outline-color);
+  outline-offset: -2px;
+}
+
+.workspace-tab-add-menu {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  animation: none !important;
+  transition: none !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+[class*='dockview-theme-ayu']
+  .dv-tabs-and-actions-container
+  .dv-void-container {
+  min-width: 0;
+}
+
+[class*='dockview-theme-ayu']
+  .dv-tabs-and-actions-container
+  .dv-right-actions-container {
+  align-items: center;
+  border-left: 0;
+  padding-inline: 0;
+}
+
+[class*='dockview-theme-ayu']
+  .dv-tabs-and-actions-container
+  .dv-right-actions-container:not(:empty) {
+  border-left: 1px solid var(--dv-tab-divider-color);
+  padding-inline: 4px;
+}
+
+/* Dockview 5.1 omits .dv-horizontal for the default horizontal direction. */
+[class*='dockview-theme-ayu'] .dv-tabs-container:not(.dv-vertical) {
+  gap: 1px;
+  padding: 4px;
+}
+
+[class*='dockview-theme-ayu'] .dv-tabs-container:not(.dv-vertical) > .dv-tab {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background-color: transparent !important;
+  border-radius: var(--radius);
+  color: var(--dv-theme-muted) !important;
+}
+
+[class*='dockview-theme-ayu'] .workspace-tab-surface {
+  gap: 4px;
+  box-sizing: border-box;
+  padding: 0 4px 0 8px;
+  border-radius: var(--radius);
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+[class*='dockview-theme-ayu'] .workspace-tab-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  stroke-width: 1.75;
+}
+
+[class*='dockview-theme-ayu'] .workspace-tab-icon > img,
+[class*='dockview-theme-ayu'] .workspace-tab-icon > .file-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+[class*='dockview-theme-ayu'] .dv-tab:focus::after,
+[class*='dockview-theme-ayu'] .dv-tab:focus-within::after {
+  border-radius: var(--radius);
+  outline: none !important;
+}
+
+[class*='dockview-theme-ayu'] .dv-tab:focus-visible::after {
+  outline: 2px solid var(--dv-paneview-active-outline-color) !important;
+  outline-offset: -2px;
+}
+
+[class*='dockview-theme-ayu'] .dv-default-tab-content {
+  margin-right: 0;
+}
+
+[class*='dockview-theme-ayu'] .dv-tab .dv-default-tab .dv-default-tab-action,
+[class*='dockview-theme-ayu']
+  .dv-tab
+  .workspace-tab-surface
+  .dv-default-tab-action {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+[class*='dockview-theme-ayu']
+  .dv-tab
+  .dv-default-tab
+  .dv-default-tab-action:hover,
+[class*='dockview-theme-ayu']
+  .dv-tab
+  .workspace-tab-surface
+  .dv-default-tab-action:hover {
+  border-radius: 999px;
+  background-color: var(
+    --dv-icon-hover-background-color,
+    var(--dv-tab-state-background)
+  );
+}
+
+[class*='dockview-theme-ayu']
+  .dv-tabs-container:not(.dv-vertical)
+  > .dv-tab::before {
+  display: none !important;
+}
+
+[class*='dockview-theme-ayu'] .dv-tab.dv-inactive-tab {
+  background-color: transparent !important;
+  color: var(--dv-theme-muted) !important;
+}
+
+[class*='dockview-theme-ayu'] .dv-tab.dv-active-tab {
+  background-color: transparent !important;
+  color: var(--dv-theme-text) !important;
+}
+
+[class*='dockview-theme-ayu']
+  .dv-tabs-container:not(.dv-vertical)
+  > .dv-tab:hover {
+  color: var(--dv-theme-text) !important;
+  background-color: transparent !important;
+}
+
+[class*='dockview-theme-ayu'] .dv-tab.dv-active-tab .workspace-tab-surface,
+[class*='dockview-theme-ayu'] .workspace-tab-surface:hover {
+  background-color: var(--dv-tab-state-background) !important;
+}
+
+[class*='dockview-theme-ayu'] .dv-default-tab-content {
+  display: block;
+  max-width: 14ch;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dark
+  [class*='dockview-theme-ayu']
+  .dv-groupview
+  > .dv-tabs-and-actions-container {
+  border-bottom: 1px solid var(--dv-theme-border);
+}
+
+.dark
+  [class*='dockview-theme-ayu']
+  .dv-tabs-and-actions-container
+  .dv-right-actions-container {
+  border-left-color: var(--dv-theme-border);
+}
+
+.dark [class*='dockview-theme-ayu'] .dv-tab.dv-inactive-tab {
+  background-color: transparent !important;
+  color: var(--dv-theme-muted) !important;
+}
+
+.dark [class*='dockview-theme-ayu'] .dv-tab.dv-active-tab {
+  background-color: transparent !important;
+  color: var(--dv-theme-text) !important;
+}
+
+.dark
+  [class*='dockview-theme-ayu']
+  .dv-tabs-container:not(.dv-vertical)
+  > .dv-tab:hover {
+  color: var(--dv-theme-text) !important;
+  background-color: transparent !important;
+}
+
+/* Hide tab header for groups marked with dv-header-hidden class (e.g. left sidebar) */
+.dv-header-hidden > .dv-tabs-and-actions-container {
+  display: none !important;
+}
+
+/* Allow tab bar to scroll horizontally when tabs overflow, instead of hiding them */
+[class*='dockview-theme-ayu'] .dv-scrollable > .dv-tabs-container {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dv-tabs-container-scrollbar-color, rgba(0, 0, 0, 0.2))
+    transparent;
+}
+[class*='dockview-theme-ayu']
+  .dv-scrollable
+  > .dv-tabs-container::-webkit-scrollbar {
+  height: 4px;
+  background: transparent;
+}
+[class*='dockview-theme-ayu']
+  .dv-scrollable
+  > .dv-tabs-container::-webkit-scrollbar-track,
+[class*='dockview-theme-ayu']
+  .dv-scrollable
+  > .dv-tabs-container::-webkit-scrollbar-track-piece {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+[class*='dockview-theme-ayu']
+  .dv-scrollable
+  > .dv-tabs-container::-webkit-scrollbar-thumb {
+  background-color: var(
+    --dv-tabs-container-scrollbar-color,
+    rgba(0, 0, 0, 0.2)
+  );
+  border-radius: 9999px;
+  border: none;
+}
+[class*='dockview-theme-ayu']
+  .dv-scrollable
+  > .dv-tabs-container:hover::-webkit-scrollbar-thumb {
+  background-color: var(
+    --dv-paneview-active-outline-color,
+    rgba(168, 190, 223, 0.6)
+  );
+}
+
+/* Keep overflow tab dropdown list text consistent with tab bar font size */
+[class*='dockview-theme-ayu'] .dv-tabs-overflow-container {
+  font-size: var(--dv-tabs-and-actions-container-font-size, 12px) !important;
+}
+
+[class*='dockview-theme-ayu'] .dv-tabs-overflow-container .dv-tab {
+  font-size: inherit !important;
+}
+
+[class*='dockview-theme-ayu']
+  .dv-split-view-container.dv-horizontal
+  > .dv-view-container
+  > .dv-view:not(:first-child)::before {
+  display: none;
+}
+
+[class*='dockview-theme-ayu']
+  .dv-split-view-container.dv-horizontal
+  > .dv-sash-container
+  > .dv-sash.dv-enabled {
+  /* Keep the base .dv-sash `position: absolute` and `z-index: 99`:
+     `position: relative` makes multiple sashes stack in normal flow (any
+     sash after the first lands below the container and disappears), and a
+     lower z-index lets high-z panel content swallow the sash. */
+  overflow: visible;
+  width: 1px;
+  margin-left: 0;
+  background-color: var(--workspace-divider-color, var(--dv-sash-color));
+  transition:
+    background-color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+/* Invisible grab zone: the visual divider is 1px, matching the retired
+   custom right-panel handle's 11px hit area so sashes stay draggable. */
+[class*='dockview-theme-ayu']
+  .dv-split-view-container.dv-horizontal
+  > .dv-sash-container
+  > .dv-sash.dv-enabled::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  width: 11px;
+}
+
+[class*='dockview-theme-ayu']
+  .dv-split-view-container.dv-horizontal
+  > .dv-sash-container
+  > .dv-sash.dv-enabled::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 21px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background-color: var(
+    --workspace-divider-subtle,
+    var(--workspace-divider-color, var(--dv-sash-color))
+  );
+  box-shadow: 0 0 0 1px hsl(var(--background) / 0.88);
+  transition:
+    background-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+[class*='dockview-theme-ayu']
+  .dv-split-view-container.dv-horizontal
+  > .dv-sash-container
+  > .dv-sash.dv-enabled:hover {
+  background-color: var(--workspace-divider-hover, var(--dv-active-sash-color));
+}
+
+[class*='dockview-theme-ayu']
+  .dv-split-view-container.dv-horizontal
+  > .dv-sash-container
+  > .dv-sash.dv-enabled:hover::after {
+  transform: translate(-50%, -50%) scaleX(1.35);
+  background-color: var(--workspace-divider-hover, var(--dv-active-sash-color));
+}
+
+[class*='dockview-theme-ayu']
+  .dv-split-view-container.dv-vertical
+  > .dv-sash-container
+  > .dv-sash.dv-enabled {
+  overflow: visible;
+  height: 1px;
+  margin-top: 0;
+  background-color: var(--workspace-divider-color, var(--dv-sash-color));
+  transition:
+    background-color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+[class*='dockview-theme-ayu']
+  .dv-split-view-container.dv-vertical
+  > .dv-sash-container
+  > .dv-sash.dv-enabled::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -5px;
+  height: 11px;
+}
+
+[class*='dockview-theme-ayu']
+  .dv-split-view-container.dv-vertical
+  > .dv-sash-container
+  > .dv-sash.dv-enabled::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 21px;
+  height: 4px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background-color: var(
+    --workspace-divider-subtle,
+    var(--workspace-divider-color, var(--dv-sash-color))
+  );
+  box-shadow: 0 0 0 1px hsl(var(--background) / 0.88);
+  transition:
+    background-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+[class*='dockview-theme-ayu']
+  .dv-split-view-container.dv-vertical
+  > .dv-sash-container
+  > .dv-sash.dv-enabled:hover {
+  background-color: var(--workspace-divider-hover, var(--dv-active-sash-color));
+}
+
+[class*='dockview-theme-ayu']
+  .dv-split-view-container.dv-vertical
+  > .dv-sash-container
+  > .dv-sash.dv-enabled:hover::after {
+  transform: translate(-50%, -50%) scaleY(1.35);
+  background-color: var(--workspace-divider-hover, var(--dv-active-sash-color));
+}
+
+[data-panel='terminal'] .terminal-list-resizer {
+  position: relative;
+  z-index: 1;
+  width: 9px;
+  flex-shrink: 0;
+  min-height: 100%;
+  margin-inline: -4px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+[data-panel='terminal'] .terminal-list-resizer::before {
+  position: absolute;
+  inset: 0 4px;
+  background: var(--border-content, hsl(var(--border)));
+  content: '';
+  transition:
+    inset 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-panel='terminal'] .terminal-list-resizer:hover::before,
+[data-panel='terminal'] .terminal-list-resizer:focus-visible::before,
+[data-panel='terminal'].is-resizing-terminal-list
+  .terminal-list-resizer::before {
+  inset-inline: 3px;
+  background: hsl(var(--primary) / 0.72);
+}
+
+[data-panel='terminal'] .terminal-list-resizer:focus-visible {
+  box-shadow: inset 0 0 0 2px hsl(var(--primary) / 0.2);
+}
+
+[data-panel='terminal'].is-resizing-terminal-list {
+  cursor: col-resize;
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-panel='terminal'] .terminal-list-resizer::before {
+    transition: none;
+  }
+}

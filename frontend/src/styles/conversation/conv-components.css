@@ -1,0 +1,379 @@
+/* ============================================
+ * AI Conversation — UI Components
+ * Shimmer loading, copy button, assistant message,
+ * aggregated timeline, code blocks, user feedback,
+ * system/error cards, file change card, performance
+ * ============================================ */
+
+/* =========================================
+ * Shimmer Loading
+ * ========================================= */
+
+@keyframes conv-shimmer {
+  0% {
+    opacity: 0.58;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.58;
+  }
+}
+
+.conv-shimmer-text {
+  color: var(--conv-shimmer-via);
+  animation: conv-shimmer 2.2s ease-in-out infinite;
+}
+
+@keyframes conv-spinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.conv-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--conv-border-subtle);
+  border-top-color: var(--conv-tool-icon);
+  border-radius: 50%;
+  animation: conv-spinner 1s linear infinite;
+}
+
+.conv-thinking-placeholder {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  color: var(--conv-text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.conv-thinking-placeholder .conv-spinner {
+  flex: 0 0 auto;
+}
+
+.conv-streaming-status-tail {
+  align-self: flex-start;
+  min-height: 20px;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--conv-text-tertiary);
+}
+
+.conv-streaming-status-tail .conv-spinner {
+  width: 12px;
+  height: 12px;
+  border-width: 1.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conv-shimmer-text,
+  .conv-spinner {
+    animation: none;
+  }
+}
+
+/* =========================================
+ * Copy Button
+ * ========================================= */
+
+.conv-copy-btn {
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.group:hover .conv-copy-btn,
+.conv-msg-hover:hover .conv-copy-btn {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* =========================================
+ * Assistant Message
+ * ========================================= */
+
+.conv-assistant-msg {
+  position: relative;
+  border-radius: var(--radius);
+  padding: 2px 0;
+}
+
+/* Vertical rhythm between an assistant turn's paragraphs, tool/terminal cards,
+   thinking blocks and streaming previews. Without this they render flush. */
+.conv-assistant-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Let every child shrink so long tool labels/commands truncate instead of
+   pushing past the right edge. */
+.conv-assistant-body > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Top-level entries line up with prose; DisplayConversationEntry adds padding
+   for legacy list contexts, so remove the duplicate inset in a message turn.
+   Product cards such as host delegation own their inset and must keep it. */
+.conv-assistant-body > .conv-entry-item > div:not(.host-delegation-card) {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Count Badge */
+.conv-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius);
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--conv-surface-control);
+  color: var(--conv-text-secondary);
+}
+
+/* =========================================
+ * User Feedback (Denied Tool) Card
+ * ========================================= */
+
+.conv-feedback-card {
+  background: var(--conv-surface-control);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+.conv-feedback-label {
+  font-size: 11px;
+  color: var(--conv-tool-error);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+/* =========================================
+ * System / Error Message Cards
+ * ========================================= */
+
+.conv-system-card {
+  background: var(--conv-surface-card);
+  border: 1px solid var(--conv-border-subtle);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.conv-system-card:hover {
+  border-color: var(--conv-border-strong);
+  background: var(--conv-surface-control-hover);
+}
+
+.conv-system-card .conv-system-text {
+  color: var(--conv-text-secondary);
+  font-size: 13px;
+}
+
+.conv-error-card {
+  background: hsl(var(--destructive) / 0.06);
+  border: 1px solid hsl(var(--destructive) / 0.32);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.conv-error-card:hover {
+  background: hsl(var(--destructive) / 0.1);
+  border-color: hsl(var(--destructive) / 0.45);
+}
+
+.conv-error-card .conv-error-text {
+  color: var(--conv-text-primary);
+  font-size: 13px;
+}
+.conv-compact-notice {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--conv-text-tertiary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.conv-compact-notice-error {
+  color: var(--conv-text-tertiary);
+}
+
+.conv-context-compact-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  color: var(--conv-text-tertiary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.conv-context-compact-status-line {
+  flex: 1 1 0%;
+  min-width: 24px;
+  height: 1px;
+  background: color-mix(in srgb, var(--conv-border-subtle) 88%, transparent);
+}
+
+.conv-context-compact-status-text {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.conv-context-compact-status-metric {
+  flex: 0 0 auto;
+  color: var(--conv-text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.conv-context-compact-status-metric::before {
+  margin-right: 12px;
+  color: var(--conv-text-tertiary);
+  content: '·';
+}
+
+.conv-context-compact-status-running .conv-context-compact-status-text {
+  color: var(--conv-text-tertiary);
+}
+
+.conv-context-compact-status-success .conv-context-compact-status-text {
+  color: var(--conv-text-secondary);
+}
+
+.conv-context-compact-status-failed .conv-context-compact-status-text {
+  color: var(--conv-tool-error);
+}
+
+.conv-plain-notice {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  color: var(--conv-text-tertiary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.conv-plain-notice .conv-markdown {
+  color: var(--conv-text-tertiary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.conv-plain-notice .conv-markdown > * + * {
+  margin-top: 4px;
+}
+
+/* =========================================
+ * File Change Card — consistent with tool card
+ * ========================================= */
+
+.conv-file-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--conv-border-subtle);
+  border-radius: var(--radius);
+  background: var(--conv-surface-card);
+  font-size: 13px;
+  transition: background 0.15s;
+}
+
+.conv-file-card:hover {
+  border-color: var(--conv-border-strong);
+  background: var(--conv-surface-control-hover);
+}
+
+.conv-file-card .conv-file-name {
+  font-family: var(--font-mono, 'IBM Plex Mono', 'Cascadia Code', monospace);
+  font-size: 12px;
+  color: var(--conv-text-primary);
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conv-file-card .conv-file-name:hover {
+  text-decoration: underline;
+  color: var(--conv-tool-icon);
+}
+
+.conv-file-card .conv-file-stat-add {
+  color: var(--conv-tool-success);
+  font-size: 12px;
+  font-family: var(--font-mono, 'IBM Plex Mono', 'Cascadia Code', monospace);
+}
+
+.conv-file-card .conv-file-stat-del {
+  color: var(--conv-tool-error);
+  font-size: 12px;
+  font-family: var(--font-mono, 'IBM Plex Mono', 'Cascadia Code', monospace);
+}
+
+.conv-file-card .conv-file-icon {
+  color: var(--conv-tool-icon);
+  flex-shrink: 0;
+}
+
+.conv-file-card .conv-file-chevron {
+  color: var(--conv-text-tertiary);
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+
+.conv-file-card .conv-file-chevron.is-expanded {
+  transform: rotate(90deg);
+}
+
+/* =========================================
+ * Performance: content-visibility
+ * ========================================= */
+
+/* NOTE: Do NOT use content-visibility: auto here.
+   react-virtuoso already handles virtualization. Adding content-visibility
+   causes height estimation mismatches (50px placeholder vs actual height),
+   leading to layout thrashing and scroll jitter. */
+.conv-entry-item {
+  /* intentionally left without content-visibility */
+}
+.resend-checkpoint-surface {
+  width: 100%;
+  padding: 18px;
+  color: hsl(var(--popover-foreground));
+}
+
+.resend-checkpoint-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: var(--radius);
+  background: hsl(var(--background) / 0.56);
+  padding: 10px 10px 10px 12px;
+}
