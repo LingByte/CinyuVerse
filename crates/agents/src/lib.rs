@@ -1,0 +1,250 @@
+//! ACP-native agent runtime primitives.
+//!
+//! This crate is the new product-owned live agent boundary. It intentionally
+//! does not depend on Cinyuverse's legacy executor, provider-runtime, `MsgStore`, or
+//! `ExecutionProcess` systems.
+
+mod account_session;
+mod antigravity_auth;
+mod auth_mode;
+pub mod auth_status;
+pub mod capability;
+pub mod cli_exposure;
+mod codex_auth;
+mod community_acp_presets;
+pub mod contribution_capability;
+pub mod conversation;
+mod cursor_ask;
+mod cursor_auth;
+pub mod delegation_inject;
+pub mod distribution;
+pub mod elicitation;
+pub mod error;
+pub mod events;
+mod ext_question;
+pub mod filesystem;
+mod grok_announcements;
+mod grok_ask;
+mod grok_mcp;
+mod grok_plan;
+mod grok_subagent;
+mod grok_usage;
+pub mod history;
+pub mod ids;
+pub mod install_planner;
+pub mod launch_gate;
+pub mod lifecycle;
+pub mod local_detection;
+pub mod management_boundary;
+pub mod management_state;
+pub mod manager;
+pub mod metadata;
+pub mod native_config;
+pub mod npm_registry;
+pub mod operations;
+pub mod parsers;
+pub mod permissions;
+pub mod plan_usage;
+pub mod profiles;
+pub mod registry_client;
+pub mod runtime;
+pub mod session;
+pub mod session_gate;
+pub mod skills;
+pub mod state;
+pub mod terminal;
+pub mod user_definition;
+pub mod user_environment;
+
+pub use account_session::{
+    AccountSessionConfirmation, account_label_from_codex_auth, account_label_from_document,
+    account_session_from_codex_http, account_session_from_http, account_still_present,
+    authentication_from_account_command, confirm_account_session, extract_codex_access_token,
+    jwt_identity, prefer_recorded_account_over_residue, resolve_account_label,
+};
+pub use antigravity_auth::{
+    AntigravitySyncReport, AntigravitySyncStatus, apply_antigravity_env_policy,
+    recorded_auth_method, resolve_gemini_home, resolve_gemini_home_from, sync_antigravity_settings,
+};
+pub use api_types::{
+    AgentAuthenticationStatus, AgentId, AgentKind, AgentLifecycleState, UserAgentDistributionKind,
+};
+pub use auth_mode::{
+    BuiltInAuthModePolicy, apply_built_in_auth_mode_policy, apply_built_in_launch_argument_policy,
+    apply_built_in_launch_policy, auth_mode_credential_env, auth_mode_kind,
+    auto_approve_mode_for_launch, built_in_auth_mode_policy, built_in_auth_mode_scrubbed_env_keys,
+    is_non_official_api_url, native_uses_custom_endpoint, official_api_url,
+    resolve_built_in_auth_mode,
+};
+pub use auth_status::{
+    AUTH_STATUS_DRAFT_REVISION, AcpAuthStatusAdapter, AcpAuthStatusAdapterError,
+    AuthenticationMethod, AuthenticationObservation, AuthenticationObservationState,
+    AuthenticationSource, ResolvedSessionAuthentication, SessionAuthenticationEvidence,
+    resolve_session_authentication_evidence,
+};
+pub use capability::AcpCapabilityNormalizer;
+pub use cli_exposure::{
+    CliExposureError, PublishedCliCommand, ShellFamily, ensure_user_cli_path,
+    publish_managed_runtime_cli, remove_managed_runtime_cli, switch_managed_runtime_cli,
+};
+pub use codex_auth::{
+    CODEX_AUTH_MODES, CodexAuthModeProjection, apply_codex_auth_mode, project_codex_auth_mode,
+};
+pub use community_acp_presets::{CommunityAcpPreset, bundled_community_acp_presets};
+pub use conversation::{
+    AcpAuthenticationObservationSnapshot, AcpCapabilitySnapshot, AgentExecutionStats,
+    AgentPromptCapabilities, ContentBlock, ConversationAgentConnectionStatus,
+    ConversationBundleChecksum, ConversationBundleManifest, ConversationBundlePayload,
+    ConversationDelegation, ConversationDelegationResult, ConversationDetail, ConversationError,
+    ConversationErrorView, ConversationEvent, ConversationEventEnvelope, ConversationEventsPage,
+    ConversationFeedbackRequest, ConversationFeedbackResponse, ConversationFileChange,
+    ConversationFileChangeSummary, ConversationFileLocation, ConversationFileRef,
+    ConversationInputBlock, ConversationInputEvent, ConversationInputPayload,
+    ConversationNoticeAction, ConversationPermissionRequest, ConversationPermissionResponse,
+    ConversationPermissionView, ConversationPlanEntry, ConversationQuestionRequest,
+    ConversationQuestionResponse, ConversationRelationKind, ConversationRelationVisibility,
+    ConversationSessionNotice, ConversationSteeringEvent, ConversationSummary,
+    ConversationTerminalPatch, ConversationTerminalView, ConversationTimeline,
+    ConversationTimelinePage, ConversationTimelineRow, ConversationToolCallPatch,
+    ConversationUsage, ConversationWorkflowRef, ImageData, MAX_TIMELINE_PREVIEW_BYTES, MessageTurn,
+    SessionLoadFailureReason, SessionRecoveryStrategy, SessionStats, SubAgentToolCall,
+    TurnBlockedReason, TurnRole, TurnUsage, cap_json_value, cap_preview_bytes,
+    cap_timeline_preview_fields, cap_timeline_row_preview_fields,
+};
+pub use cursor_auth::cursor_account_token;
+pub use delegation_inject::{
+    CompanionCapabilities, CompanionInjection, CompanionInjectionContext, CompanionInjectionList,
+    DelegationInjector, InjectedMcpServer, InjectedRemoteMcpServer, InjectedRemoteMcpTransport,
+};
+pub use distribution::current_platform;
+pub use elicitation::{AgentElicitationRequest, AgentElicitationResponse};
+pub use error::{AgentError, AgentResult};
+pub use events::{
+    AgentAvailableCommand, AgentContentBlock, AgentErrorEvent, AgentEvent, AgentEventEnvelope,
+    AgentListedSession, AgentPlan, AgentPlanEntry, AgentPreparedSessionSnapshot,
+    AgentPromptFinished, AgentSessionConfigChoice, AgentSessionConfigDependency,
+    AgentSessionConfigOption, AgentSessionConfigOverride, AgentSessionControlsSnapshot,
+    AgentSessionListPage, AgentSessionMode, AgentSteerOutcome, AgentSteerReceipt,
+    AgentTerminalOutput, AgentTerminalSnapshot, AgentToolCall, AgentToolCallUpdate, AgentUsage,
+    DelegationResultSummary, SessionControlPreferences,
+};
+pub use filesystem::{AgentFileReadRequest, AgentFileWriteRequest};
+pub use grok_mcp::{mcp_bare_tool_name, unwrap_grok_use_tool};
+pub use history::{
+    AgentHistoryError, AgentHistorySource, HistoryPathDestination, HistoryScanEntry,
+    ImportedAgentMessage, ImportedAgentMessageMetadata, ImportedAgentMessageRole,
+    ImportedAgentSession, LocalHistoryDestination, LocalHistoryImportJobSnapshot,
+    LocalHistoryImportJobStatus, LocalHistoryImportLogEntry, LocalHistoryImportPhase,
+    LocalHistoryImportProgress, LocalHistoryImportResult, LocalHistoryImportSelection,
+    LocalHistoryScanFolder, LocalHistoryScanPage, LocalHistoryScanProgress,
+    LocalHistoryScanSession, LocalHistorySessionStatus, build_local_history_scan_page,
+    configured_history_sources, default_history_sources, history_folder_name,
+    history_paths_overlap, import_history_source, load_configured_history_session,
+    match_history_destination, merge_history_sources, normalize_history_path,
+    scan_configured_history, scan_configured_history_with_progress,
+};
+pub use ids::{
+    AgentConnectionId, AgentElicitationId, AgentPermissionId, AgentPromptId, AgentSessionId,
+    AgentTerminalId,
+};
+pub use install_planner::{
+    ArtifactTrust, ArtifactVerification, InstallCandidateSource, InstallEnvironment,
+    InstallPlanner, InstallPlanningError, InstallPlanningInput, LockedInstallSource,
+    PlannedDistributionKind, PlannedInstallComponent, ResolvedInstallPlan, TofuFingerprint,
+    VersionEvidence, apply_component_versions, apply_npx_component_version,
+    registry_target_for_built_in_update, verify_artifact_bytes, verify_version_evidence,
+};
+pub use launch_gate::{
+    LaunchComponentEvidence, LaunchGate, LaunchGateError, bind_runtime_executable_env,
+    discover_path_acp_launch_lock, launch_program_available, lifecycle_ready_for_path_acp,
+    missing_launch_program_error, prefer_path_launch_program, runtime_executable_env_key,
+    sanitize_runtime_executable_env, sanitize_runtime_executable_lock_env,
+};
+pub use lifecycle::{
+    BUSY_LIFECYCLE_MESSAGE, ComponentOwnership, LifecycleAction, LifecycleBlockReason,
+    LifecycleComponent, LifecycleFacts, LifecyclePlan, LifecycleService,
+};
+pub use local_detection::{npm_package_name, version_at_least};
+pub use management_boundary::{
+    BoundaryError, Clock, InstallInvocation, InstallOutput, InstallRunner, NativeFileMetadata,
+    NativeFileMutation, NativeFileSystem, RegistryFetchResponse, RegistryFetcher, SystemClock,
+    TokioNativeFileSystem,
+};
+pub use management_state::{
+    AgentManagementSnapshot, ComponentProbeState, ExternalCandidateObservation, ManagementFacts,
+    ManagementOperationState, ProbeService, RequiredComponentProbe, VerifiedExternalRuntime,
+    installation_is_complete, reduce_management_snapshot,
+};
+pub use manager::{
+    AgentConnectionCommand, AgentConnectionLaunch, AgentConnectionManager,
+    AgentConnectionManagerEvent, ManagedAgentConnectionSnapshot,
+};
+pub use metadata::{
+    AgentCapability, agent_capabilities, claude_config_path, codex_auth_path, codex_config_path,
+    codex_home, opencode_auth_path, opencode_config_dir, opencode_config_path,
+};
+pub use native_config::{
+    ConfigApplyEffect, NativeConfigError, NativeConfigFieldSnapshot, NativeConfigFilePatch,
+    NativeConfigFileSnapshot, NativeConfigPatch, NativeConfigProvider, NativeConfigSaveError,
+    NativeConfigSaveResult, NativeConfigSnapshot,
+};
+pub use npm_registry::{
+    ExternalChangeVerdict, NpmRegistryHttpFetcher, NpmVerificationOutcome, fetch_npm_latest,
+    fetch_npm_package_requirements, npm_range_allows, runtime_acp_compatibility_warning,
+    split_npm_spec, verify_external_component_change, verify_npm_component_file,
+};
+pub use operations::{InstallOperationError, InstallOrchestrator, OrchestratorAgentSnapshot};
+pub use permissions::{
+    AgentAutoApproveMode, AgentPermissionOption, AgentPermissionOptionKind, AgentPermissionRequest,
+    AgentPermissionResponse, RemotePermissionIntent, decide_auto_permission_response,
+    decide_remote_permission_response,
+};
+pub use plan_usage::{
+    AgentPlanUsage, PlanCredits, PlanUsageResult, PlanUsageUnavailableReason, PlanUsageWindow,
+    cached_plan_usage, probe_plan_usage,
+};
+pub use profiles::{
+    AccountEvidence, AccountEvidenceKind, AuthenticationPrecedence, BuiltInProfile,
+    BuiltInProfileCatalog, NativeConfigBinding, NativeConfigField, NativeConfigFieldKind,
+    NativeConfigFormat, NativeConfigSurface, ProfileBinaryArtifact, ProfileBinaryEntry,
+    ProfileComponent, ProfileDependency, ProfileExternalCandidate, ProfileIcon,
+    ProfileInstallSource, ProfileManagementAction, ProfileManagementActionKind,
+    ProfileRegistryBinding, ProfileTopology, RegistryEntryIdentity, acp_launch_args,
+    adapter_bundles_runtime, bundled_adapter_runtime_env_keys,
+};
+pub use registry_client::{
+    OfficialRegistryHttpFetcher, REGISTRY_CONNECT_TIMEOUT, REGISTRY_ICON_FETCH_BUDGET,
+    REGISTRY_REFRESH_TIMEOUT, REGISTRY_REQUEST_TIMEOUT, RegistryAddTarget, RegistryAgentEntry,
+    RegistryBinaryTarget, RegistryCache, RegistryCacheFreshness, RegistryDistributions,
+    RegistryPackageDistribution, RegistrySnapshot, RegistrySnapshotClient, RegistryView,
+    parse_registry_distributions_json, sanitize_registry_svg,
+};
+pub use runtime::{
+    AgentRuntime, CancelAgentPromptInput, ConnectAgentInput, EnsureAgentSessionInput,
+    NoopEventSink, RespondAgentElicitationInput, RespondAgentPermissionInput,
+    ResumeAgentSessionInput, RuntimeEventSink, RuntimeSnapshot, SendAgentPromptInput,
+    SteerAgentPromptInput, runtime_event_channel,
+};
+pub use session::{AgentPromptQueue, QueueTransition};
+pub use session_gate::{
+    SessionBinding, SessionDefaultValidation, SessionGate, SessionGateError, SessionGateInput,
+    SessionLaunchAuthorization, SessionLaunchLock, resolve_session_defaults,
+    session_launch_rejection_message, validate_session_defaults,
+};
+pub use skills::{AgentSkillsStrategy, AgentSkillsSurface, skills_surface};
+pub use state::{
+    AgentConnectionSnapshot, AgentConnectionStatus, AgentPromptSnapshot, AgentPromptStatus,
+    AgentSessionSnapshot, AgentSessionStatus,
+};
+pub use terminal::{
+    AgentTerminalCreateRequest, AgentTerminalEnvVar, AgentTerminalExit, AgentTerminalLiveItem,
+    AgentTerminalOutputSnapshot, apply_configured_terminal_shell, configured_terminal_shell,
+};
+pub use user_definition::{UserAgentDefinition, UserAgentInstallTarget};
+pub use user_environment::{
+    ObservedUserComponent, PlannedPreflightUpdate, UserEnvironmentAdoptDecision,
+    UserEnvironmentLayout, decide_user_environment_adopt, existing_path_satisfies_component,
+    npm_global_install_args, npm_install_permission_denied, npm_prefix_is_writable,
+    npm_shim_candidates, observed_satisfies_profile, plan_required_components,
+    planned_preflight_updates, profile_required_versions, resolve_npm_shim, uv_distribution_name,
+};

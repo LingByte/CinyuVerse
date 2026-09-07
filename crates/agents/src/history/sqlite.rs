@@ -1,0 +1,696 @@
+use std::path::{Path, PathBuf};
+
+use api_types::AgentKind;
+use chrono::{TimeZone, Utc};
+use rusqlite::{Connection, OpenFlags};
+
+use super::{
+    AgentHistoryError, ImportedAgentMessage, ImportedAgentMessageMetadata,
+    ImportedAgentMessageRole, ImportedAgentSession,
+};
+
+pub(super) fn import_agent_database(
+    agent_type: AgentKind,
+    path: &Path,
+) -> Result<Vec<ImportedAgentSession>, AgentHistoryError> {
+    match agent_type {
+        AgentKind::Opencode => import_opencode(path),
+        AgentKind::Hermes => import_hermes(path),
+        _ => Ok(Vec::new()),
+    }
+}
+
+fn open_read_only(path: &Path) -> Result<Connection, AgentHistoryError> {
+    let connection = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(|error| parse_error(path, error))?;
+    connection
+        .busy_timeout(std::time::Duration::from_secs(3))
+        .map_err(|error| parse_error(path, error))?;
+    Ok(connection)
+}
+
+fn import_opencode(path: &Path) -> Result<Vec<ImportedAgentSession>, AgentHistoryError> {
+    let connection = open_read_only(path)?;
+    let mut session_statement = connection
+        .prepare("SELECT id, directory, title FROM session ORDER BY time_created ASC")
+        .map_err(|error| parse_error(path, error))?;
+    let sessions = session_statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, Option<String>>(2)?,
+            ))
+        })
+        .map_err(|error| parse_error(path, error))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| parse_error(path, error))?;
+    let mut imported = Vec::new();
+    for (session_id, directory, title) in sessions {
+        let mut message_statement = connection
+            .prepare(
+                "SELECT id, time_created, data FROM message \
+                 WHERE session_id = ? ORDER BY time_created ASC, id ASC",
+            )
+            .map_err(|error| parse_error(path, error))?;
+        let rows = message_statement
+            .query_map([&session_id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })
+            .map_err(|error| parse_error(path, error))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| parse_error(path, error))?;
+        let mut messages = Vec::new();
+        for (message_id, row_time, data) in rows {
+            let Ok(value) = serde_json::from_str::<serde_json::Value>(&data) else {
+                continue;
+            };
+            let role = role(value.get("role").and_then(serde_json::Value::as_str));
+            let mut part_statement = connection
+                .prepare(
+                    "SELECT data FROM part WHERE message_id = ? ORDER BY time_created ASC, id ASC",
+                )
+                .map_err(|error| parse_error(path, error))?;
+            let created_ms = value
+                .pointer("/time/created")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(row_time);
+            let created_at = Utc.timestamp_millis_opt(created_ms).single();
+            let parts = part_statement
+                .query_map([&message_id], |row| row.get::<_, String>(0))
+                .map_err(|error| parse_error(path, error))?
+                .filter_map(Result::ok)
+                .filter_map(|part| serde_json::from_str::<serde_json::Value>(&part).ok())
+                .filter_map(|part| opencode_part_message(&part, &role, created_at))
+                .collect::<Vec<_>>();
+            if parts.is_empty() {
+                continue;
+            }
+            messages.extend(parts);
+        }
+        if !messages.is_empty() {
+            imported.push(ImportedAgentSession {
+                source_agent: AgentKind::Opencode,
+                external_session_id: session_id,
+                title,
+                workspace_path: directory.map(PathBuf::from),
+                messages,
+                raw_source_path: Some(path.to_path_buf()),
+            });
+        }
+    }
+    Ok(imported)
+}
+
+fn opencode_part_message(
+    part: &serde_json::Value,
+    message_role: &ImportedAgentMessageRole,
+    created_at: Option<chrono::DateTime<Utc>>,
+) -> Option<ImportedAgentMessage> {
+    let mut metadata = ImportedAgentMessageMetadata::default();
+    let (role, content) = match part.get("type").and_then(serde_json::Value::as_str) {
+        Some("text") => (
+            message_role.clone(),
+            part.get("text")
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|text| !text.is_empty())?
+                .to_string(),
+        ),
+        Some("reasoning") => {
+            metadata.kind = Some("reasoning".to_string());
+            (
+                ImportedAgentMessageRole::Assistant,
+                part.get("text")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::trim)
+                    .filter(|text| !text.is_empty())?
+                    .to_string(),
+            )
+        }
+        Some("tool") => {
+            let tool = part
+                .get("tool")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("unknown");
+            let raw_input = part.pointer("/state/input").cloned();
+            let raw_output = part.pointer("/state/output").cloned();
+            let status = part
+                .pointer("/state/status")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string);
+            metadata.kind = Some(
+                if raw_output.is_some() || status.as_deref() == Some("completed") {
+                    "tool_result"
+                } else {
+                    "tool_call"
+                }
+                .to_string(),
+            );
+            metadata.tool_call_id = part
+                .get("callID")
+                .or_else(|| part.get("callId"))
+                .or_else(|| part.get("id"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string);
+            metadata.tool_name = Some(tool.to_string());
+            metadata.tool_status = status;
+            metadata.raw_input = raw_input.clone();
+            metadata.raw_output = raw_output.clone();
+            (
+                ImportedAgentMessageRole::Tool,
+                format!(
+                    "[tool: {tool}]{}{}",
+                    raw_input
+                        .as_ref()
+                        .and_then(json_preview)
+                        .map(|value| format!("\ninput: {value}"))
+                        .unwrap_or_default(),
+                    raw_output
+                        .as_ref()
+                        .and_then(json_preview)
+                        .map(|value| format!("\noutput: {value}"))
+                        .unwrap_or_default()
+                ),
+            )
+        }
+        Some("file") => (
+            message_role.clone(),
+            format!(
+                "@{}",
+                part.get("filename")
+                    .or_else(|| part.get("url"))
+                    .and_then(serde_json::Value::as_str)?
+            ),
+        ),
+        _ => return None,
+    };
+    Some(ImportedAgentMessage {
+        role,
+        content,
+        created_at,
+        metadata,
+    })
+}
+
+fn import_hermes(path: &Path) -> Result<Vec<ImportedAgentSession>, AgentHistoryError> {
+    let connection = open_read_only(path)?;
+    let mut statement = connection
+        .prepare(
+            "SELECT id, COALESCE(NULLIF(cwd, ''), \
+             CASE WHEN json_valid(model_config) THEN json_extract(model_config, '$.cwd') END), title \
+             FROM sessions WHERE COALESCE(archived, 0) = 0 ORDER BY started_at ASC",
+        )
+        .map_err(|error| parse_error(path, error))?;
+    let sessions = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, Option<String>>(2)?,
+            ))
+        })
+        .map_err(|error| parse_error(path, error))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| parse_error(path, error))?;
+    let mut imported = Vec::new();
+    for (session_id, cwd, title) in sessions {
+        let mut message_statement = connection
+            .prepare(
+                "SELECT role, content, reasoning_content, reasoning, timestamp, \
+                        tool_calls, tool_call_id, tool_name \
+                 FROM messages WHERE session_id = ? AND active = 1 ORDER BY id ASC",
+            )
+            .map_err(|error| parse_error(path, error))?;
+        let rows = message_statement
+            .query_map([&session_id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<f64>>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, Option<String>>(7)?,
+                ))
+            })
+            .map_err(|error| parse_error(path, error))?
+            .filter_map(Result::ok)
+            .collect::<Vec<_>>();
+        let mut messages = Vec::new();
+        for (
+            role_value,
+            content,
+            reasoning_content,
+            reasoning,
+            timestamp,
+            tool_calls,
+            tool_call_id,
+            tool_name,
+        ) in rows
+        {
+            if role_value == "system" {
+                continue;
+            }
+            let created_at = timestamp.and_then(|seconds| {
+                let whole = seconds.trunc() as i64;
+                let nanos = (seconds.fract().abs() * 1_000_000_000.0) as u32;
+                Utc.timestamp_opt(whole, nanos).single()
+            });
+            let reasoning = reasoning_content.or(reasoning).unwrap_or_default();
+            if !reasoning.trim().is_empty() {
+                messages.push(ImportedAgentMessage {
+                    role: ImportedAgentMessageRole::Assistant,
+                    content: reasoning.trim().to_string(),
+                    created_at,
+                    metadata: ImportedAgentMessageMetadata {
+                        kind: Some("reasoning".to_string()),
+                        ..Default::default()
+                    },
+                });
+            }
+            let content = decode_hermes_content(content.as_deref());
+            if !content.trim().is_empty()
+                || (role_value == "tool" && (tool_call_id.is_some() || tool_name.is_some()))
+            {
+                messages.push(ImportedAgentMessage {
+                    role: role(Some(&role_value)),
+                    content,
+                    created_at,
+                    metadata: if role_value == "tool" {
+                        ImportedAgentMessageMetadata {
+                            kind: Some("tool_result".to_string()),
+                            tool_call_id,
+                            tool_name,
+                            ..Default::default()
+                        }
+                    } else {
+                        Default::default()
+                    },
+                });
+            }
+            if role_value == "assistant" {
+                for (tool_call_id, tool_name, raw_input) in
+                    parse_hermes_tool_calls(tool_calls.as_deref())
+                {
+                    messages.push(ImportedAgentMessage {
+                        role: ImportedAgentMessageRole::Tool,
+                        content: format!("[tool: {tool_name}]"),
+                        created_at,
+                        metadata: ImportedAgentMessageMetadata {
+                            kind: Some("tool_call".to_string()),
+                            tool_call_id,
+                            tool_name: Some(tool_name),
+                            raw_input,
+                            ..Default::default()
+                        },
+                    });
+                }
+            }
+        }
+        if !messages.is_empty() {
+            imported.push(ImportedAgentSession {
+                source_agent: AgentKind::Hermes,
+                external_session_id: session_id,
+                title,
+                workspace_path: cwd.map(PathBuf::from),
+                messages,
+                raw_source_path: Some(path.to_path_buf()),
+            });
+        }
+    }
+    Ok(imported)
+}
+
+fn parse_hermes_tool_calls(
+    raw: Option<&str>,
+) -> Vec<(Option<String>, String, Option<serde_json::Value>)> {
+    let Some(calls) = raw
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok())
+        .and_then(|value| value.as_array().cloned())
+    else {
+        return Vec::new();
+    };
+    calls
+        .into_iter()
+        .map(|call| {
+            let id = call
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string);
+            let function = call.get("function");
+            let name = function
+                .and_then(|value| value.get("name"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("unknown")
+                .to_string();
+            let input = function
+                .and_then(|value| value.get("arguments"))
+                .and_then(|value| match value {
+                    serde_json::Value::String(raw) => serde_json::from_str(raw).ok(),
+                    value => Some(value.clone()),
+                });
+            (id, name, input)
+        })
+        .collect()
+}
+
+fn decode_hermes_content(content: Option<&str>) -> String {
+    let content = content.unwrap_or_default();
+    let Some(json) = content.strip_prefix("\0json:") else {
+        return content.to_string();
+    };
+    serde_json::from_str::<serde_json::Value>(json)
+        .ok()
+        .and_then(|value| value.as_array().cloned())
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|part| {
+            part.get("text")
+                .or_else(|| part.get("content"))
+                .and_then(serde_json::Value::as_str)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn role(value: Option<&str>) -> ImportedAgentMessageRole {
+    match value {
+        Some("user" | "human") => ImportedAgentMessageRole::User,
+        Some("assistant" | "agent") => ImportedAgentMessageRole::Assistant,
+        Some("system") => ImportedAgentMessageRole::System,
+        Some("tool" | "tool_result" | "tool_use") => ImportedAgentMessageRole::Tool,
+        _ => ImportedAgentMessageRole::Unknown,
+    }
+}
+
+fn json_preview(value: &serde_json::Value) -> Option<String> {
+    value
+        .as_str()
+        .map(str::to_string)
+        .or_else(|| serde_json::to_string(value).ok())
+}
+
+fn parse_error(path: &Path, error: impl std::fmt::Display) -> AgentHistoryError {
+    AgentHistoryError::Parse {
+        path: path.to_path_buf(),
+        error: error.to_string(),
+    }
+}
+
+pub(super) fn import_antigravity_conversations(
+    path: &Path,
+) -> Result<Vec<ImportedAgentSession>, AgentHistoryError> {
+    if !path.exists() {
+        return Err(AgentHistoryError::MissingSource(path.to_path_buf()));
+    }
+    if path.is_file() {
+        return import_antigravity_db(path);
+    }
+    let mut sessions = Vec::new();
+    let entries = std::fs::read_dir(path).map_err(|error| AgentHistoryError::Read {
+        path: path.to_path_buf(),
+        error: error.to_string(),
+    })?;
+    for entry in entries {
+        let entry = entry.map_err(|error| AgentHistoryError::Read {
+            path: path.to_path_buf(),
+            error: error.to_string(),
+        })?;
+        let file = entry.path();
+        if file.extension().and_then(|ext| ext.to_str()) != Some("db") {
+            continue;
+        }
+        sessions.extend(import_antigravity_db(&file)?);
+    }
+    Ok(sessions)
+}
+
+fn import_antigravity_db(path: &Path) -> Result<Vec<ImportedAgentSession>, AgentHistoryError> {
+    let connection = match open_read_only(path) {
+        Ok(connection) => connection,
+        Err(_) if path.metadata().map(|meta| meta.len() == 0).unwrap_or(false) => {
+            return Ok(Vec::new());
+        }
+        Err(error) => return Err(error),
+    };
+    let mut statement =
+        match connection.prepare("SELECT idx, step_payload FROM steps ORDER BY idx ASC") {
+            Ok(statement) => statement,
+            Err(error) if error.to_string().contains("no such table") => return Ok(Vec::new()),
+            Err(error) => return Err(parse_error(path, error)),
+        };
+    let rows = statement
+        .query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?))
+        })
+        .map_err(|error| parse_error(path, error))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| parse_error(path, error))?;
+    drop(statement);
+    let mut messages = Vec::new();
+    for (_idx, payload) in rows {
+        let Ok(step) = <AntigravityStep as prost::Message>::decode(payload.as_slice()) else {
+            continue;
+        };
+        if let Some(user) = step.user_input {
+            let text = [&user.query, &user.user_response]
+                .into_iter()
+                .find(|value| !value.trim().is_empty())
+                .cloned()
+                .or_else(|| {
+                    user.items
+                        .iter()
+                        .map(|item| item.text.as_str())
+                        .find(|text| !text.trim().is_empty())
+                        .map(str::to_string)
+                });
+            if let Some(content) = text {
+                messages.push(ImportedAgentMessage {
+                    role: ImportedAgentMessageRole::User,
+                    content,
+                    created_at: timestamp(&step.metadata),
+                    metadata: ImportedAgentMessageMetadata::default(),
+                });
+            }
+        }
+        if let Some(planner) = step.planner_response {
+            if !planner.response.trim().is_empty() {
+                messages.push(ImportedAgentMessage {
+                    role: ImportedAgentMessageRole::Assistant,
+                    content: planner.response,
+                    created_at: timestamp(&step.metadata),
+                    metadata: ImportedAgentMessageMetadata {
+                        model: step
+                            .metadata
+                            .as_ref()
+                            .and_then(|metadata| metadata.model_info.as_ref())
+                            .and_then(|info| {
+                                [&info.display_name, &info.model_name]
+                                    .into_iter()
+                                    .find(|name| !name.trim().is_empty())
+                                    .cloned()
+                            }),
+                        ..ImportedAgentMessageMetadata::default()
+                    },
+                });
+            }
+            for call in planner.tool_calls {
+                if call.name.trim().is_empty() {
+                    continue;
+                }
+                messages.push(ImportedAgentMessage {
+                    role: ImportedAgentMessageRole::Tool,
+                    content: call.name.clone(),
+                    created_at: timestamp(&step.metadata),
+                    metadata: ImportedAgentMessageMetadata {
+                        kind: Some("tool_use".to_string()),
+                        tool_call_id: (!call.id.is_empty()).then_some(call.id),
+                        tool_name: Some(call.name),
+                        raw_input: serde_json::from_str(&call.arguments_json).ok(),
+                        ..ImportedAgentMessageMetadata::default()
+                    },
+                });
+            }
+        }
+    }
+    if messages.is_empty() {
+        return Ok(Vec::new());
+    }
+    let session_id = path
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let title = messages
+        .iter()
+        .find(|message| message.role == ImportedAgentMessageRole::User)
+        .map(|message| truncate_title(&message.content));
+    let workspace_path = read_antigravity_cwd(path);
+    Ok(vec![ImportedAgentSession {
+        source_agent: AgentKind::Antigravity,
+        external_session_id: session_id,
+        title,
+        workspace_path,
+        messages,
+        raw_source_path: Some(path.to_path_buf()),
+    }])
+}
+
+fn timestamp(metadata: &Option<AntigravityStepMetadata>) -> Option<chrono::DateTime<Utc>> {
+    metadata
+        .as_ref()
+        .and_then(|metadata| metadata.created_at.as_ref())
+        .and_then(|ts| {
+            Utc.timestamp_opt(ts.seconds, ts.nanos.clamp(0, 999_999_999) as u32)
+                .single()
+        })
+}
+
+fn truncate_title(text: &str) -> String {
+    let trimmed = text.trim();
+    let mut chars = trimmed.chars();
+    let short: String = chars.by_ref().take(80).collect();
+    if chars.next().is_some() {
+        format!("{short}…")
+    } else {
+        short
+    }
+}
+
+fn read_antigravity_cwd(db_path: &Path) -> Option<PathBuf> {
+    let meta = db_path.with_extension("meta");
+    let raw = std::fs::read_to_string(meta).ok()?;
+    let value: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    value
+        .get("cwd")
+        .and_then(serde_json::Value::as_str)
+        .filter(|cwd| !cwd.trim().is_empty())
+        .map(PathBuf::from)
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+struct AntigravityTimestamp {
+    #[prost(int64, tag = "1")]
+    seconds: i64,
+    #[prost(int32, tag = "2")]
+    nanos: i32,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+struct AntigravityModelInfo {
+    #[prost(string, tag = "8")]
+    model_name: String,
+    #[prost(string, tag = "20")]
+    display_name: String,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+struct AntigravityStepMetadata {
+    #[prost(message, optional, tag = "1")]
+    created_at: Option<AntigravityTimestamp>,
+    #[prost(message, optional, tag = "24")]
+    model_info: Option<AntigravityModelInfo>,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+struct AntigravityTextItem {
+    #[prost(string, tag = "1")]
+    text: String,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+struct AntigravityUserInput {
+    #[prost(string, tag = "1")]
+    query: String,
+    #[prost(string, tag = "2")]
+    user_response: String,
+    #[prost(message, repeated, tag = "3")]
+    items: Vec<AntigravityTextItem>,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+struct AntigravityToolCall {
+    #[prost(string, tag = "1")]
+    id: String,
+    #[prost(string, tag = "2")]
+    name: String,
+    #[prost(string, tag = "3")]
+    arguments_json: String,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+struct AntigravityPlannerResponse {
+    #[prost(string, tag = "1")]
+    response: String,
+    #[prost(message, repeated, tag = "7")]
+    tool_calls: Vec<AntigravityToolCall>,
+}
+
+#[derive(Clone, PartialEq, prost::Message)]
+struct AntigravityStep {
+    #[prost(message, optional, tag = "5")]
+    metadata: Option<AntigravityStepMetadata>,
+    #[prost(message, optional, tag = "19")]
+    user_input: Option<AntigravityUserInput>,
+    #[prost(message, optional, tag = "20")]
+    planner_response: Option<AntigravityPlannerResponse>,
+}
+
+#[cfg(test)]
+mod antigravity_tests {
+    use prost::Message;
+    use rusqlite::Connection;
+
+    use super::*;
+
+    #[test]
+    fn imports_user_and_assistant_steps_from_an_antigravity_db() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("session-agy.db");
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute("CREATE TABLE steps (idx INTEGER, step_payload BLOB)", [])
+            .unwrap();
+        let user = AntigravityStep {
+            user_input: Some(AntigravityUserInput {
+                query: "Review this change".to_string(),
+                ..AntigravityUserInput::default()
+            }),
+            ..AntigravityStep::default()
+        };
+        let assistant = AntigravityStep {
+            planner_response: Some(AntigravityPlannerResponse {
+                response: "Review complete".to_string(),
+                ..AntigravityPlannerResponse::default()
+            }),
+            ..AntigravityStep::default()
+        };
+        connection
+            .execute(
+                "INSERT INTO steps (idx, step_payload) VALUES (1, ?1), (2, ?2)",
+                rusqlite::params![user.encode_to_vec(), assistant.encode_to_vec()],
+            )
+            .unwrap();
+        std::fs::write(path.with_extension("meta"), r#"{"cwd":"/workspace/agy"}"#).unwrap();
+
+        let sessions = import_antigravity_conversations(&path).unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].external_session_id, "session-agy");
+        assert_eq!(
+            sessions[0].workspace_path,
+            Some(PathBuf::from("/workspace/agy"))
+        );
+        assert_eq!(sessions[0].messages.len(), 2);
+        assert_eq!(sessions[0].messages[0].content, "Review this change");
+        assert_eq!(sessions[0].messages[1].content, "Review complete");
+    }
+}
