@@ -232,6 +232,10 @@ export function MainAppRoutes() {
           element={<Navigate to="/local-projects" replace />}
         />
       </Route>
+
+      {/* Catch-all: redirect any unmatched path to home instead of showing
+          React Router's default 404 error page. */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

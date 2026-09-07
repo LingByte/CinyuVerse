@@ -120,3 +120,4 @@ logs/
 
 # Local task execution history (private runtime data)
 .reasonix/
+target/.metadata_never_index
