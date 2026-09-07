@@ -77,6 +77,7 @@ import {
   type ArrangeLayoutOptions,
 } from '@/utils/dockviewLayoutTransform';
 import { SearchPalette } from '@/components/search/SearchPalette';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useWorkspaceShortcuts } from '@/hooks/useWorkspaceShortcuts';
 import {
   BOTTOM_PANEL_IDS,
@@ -1314,35 +1315,39 @@ export function IDELayout({
 
               {effectiveActiveTab === 'kanban' && (
                 <div className="kanban-overlay absolute inset-0 z-10">
-                  <Suspense
-                    fallback={
-                      <div className="kanban-loading-state flex h-full w-full items-center justify-center p-6 text-sm">
-                        <div className="workspace-loading-panel flex items-center gap-3 px-4 py-3">
-                          <div className="h-4 w-4 animate-spin rounded-full border border-primary border-t-transparent" />
-                          <span>Loading Kanban...</span>
+                  <ErrorBoundary label="Kanban">
+                    <Suspense
+                      fallback={
+                        <div className="kanban-loading-state flex h-full w-full items-center justify-center p-6 text-sm">
+                          <div className="workspace-loading-panel flex items-center gap-3 px-4 py-3">
+                            <div className="h-4 w-4 animate-spin rounded-full border border-primary border-t-transparent" />
+                            <span>Loading Kanban...</span>
+                          </div>
                         </div>
-                      </div>
-                    }
-                  >
-                    <LazyKanbanBoard />
-                  </Suspense>
+                      }
+                    >
+                      <LazyKanbanBoard />
+                    </Suspense>
+                  </ErrorBoundary>
                 </div>
               )}
 
               {effectiveActiveTab === 'overview' && (
                 <div className="overview-overlay absolute inset-0 z-10">
-                  <Suspense
-                    fallback={
-                      <div className="flex h-full w-full items-center justify-center p-6 text-sm">
-                        <div className="workspace-loading-panel flex items-center gap-3 px-4 py-3">
-                          <div className="h-4 w-4 animate-spin rounded-full border border-primary border-t-transparent" />
-                          <span>Loading Overview...</span>
+                  <ErrorBoundary label="Overview">
+                    <Suspense
+                      fallback={
+                        <div className="flex h-full w-full items-center justify-center p-6 text-sm">
+                          <div className="workspace-loading-panel flex items-center gap-3 px-4 py-3">
+                            <div className="h-4 w-4 animate-spin rounded-full border border-primary border-t-transparent" />
+                            <span>Loading Overview...</span>
+                          </div>
                         </div>
-                      </div>
-                    }
-                  >
-                    <LazyNovelOverview />
-                  </Suspense>
+                      }
+                    >
+                      <LazyNovelOverview />
+                    </Suspense>
+                  </ErrorBoundary>
                 </div>
               )}
 
