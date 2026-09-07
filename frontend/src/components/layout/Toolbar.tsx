@@ -29,6 +29,7 @@ import {
   MessagesSquare,
   Monitor,
   Puzzle,
+  BookOpen,
 } from 'lucide-react';
 import {
   Tooltip,
@@ -369,6 +370,7 @@ function WorkspaceTabSwitcher() {
   }[] = [
     { key: 'kanban', label: t('toolbar.kanban'), icon: LayoutDashboard },
     { key: 'workspace', label: t('toolbar.workspace'), icon: Monitor },
+    { key: 'overview', label: t('toolbar.overview'), icon: BookOpen },
   ];
 
   const handleTabSelect = useCallback(
@@ -378,6 +380,11 @@ function WorkspaceTabSwitcher() {
 
       if (tab === 'kanban') {
         navigate(paths.projectSessions(projectId));
+        return;
+      }
+
+      if (tab === 'overview') {
+        // Overview is a standalone panel — no navigation needed.
         return;
       }
 

@@ -123,6 +123,7 @@
     "resetLayout": "Reset layout",
     "kanban": "Kanban",
     "workspace": "Volume",
+    "overview": "Overview",
     "toggleSessionList": "Toggle writing session list",
     "toggleSessionMonitor": "Toggle writing session monitor",
     "toggleSessionExecution": "Toggle writing session execution",
@@ -372,5 +373,23 @@
     "duplicateFailed": "Failed to create duplicate",
     "createFileFailed": "Failed to create file",
     "createFolderFailed": "Failed to create folder"
+  },
+  "overview": {
+    "title": "Overview",
+    "noProject": "Select a project first",
+    "noWorkspace": "Workspace path not found",
+    "emptyHint": "No chapter files found yet. Create chapters and refresh.",
+    "chapterCount": "Chapters",
+    "totalWords": "Total Words",
+    "avgWords": "Avg {{avg}} words/chapter",
+    "characterCount": "Characters",
+    "hooks": "Foreshadowing",
+    "hookResolution": "Resolved {{resolved}} · Open {{open}} · Rate {{rate}}%",
+    "outlineChapters": "Planned Chapters",
+    "outlineProgress": "Written {{written}} / Planned {{planned}} · {{percent}}%",
+    "completionRate": "Completion {{percent}}%",
+    "chapterList": "Chapter List",
+    "chapterTitle": "Chapter Title",
+    "wordCount": "Words"
   }
 }

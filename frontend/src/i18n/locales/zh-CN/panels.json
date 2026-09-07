@@ -123,6 +123,7 @@
     "resetLayout": "重置布局",
     "kanban": "看板",
     "workspace": "草稿",
+    "overview": "概览",
     "toggleSessionList": "显示/隐藏创作会话列表",
     "toggleSessionMonitor": "显示/隐藏创作会话监控区",
     "toggleSessionExecution": "显示/隐藏创作会话执行区",
@@ -372,5 +373,23 @@
     "duplicateFailed": "创建副本失败",
     "createFileFailed": "创建文件失败",
     "createFolderFailed": "创建文件夹失败"
+  },
+  "overview": {
+    "title": "概览",
+    "noProject": "请先选择一个作品",
+    "noWorkspace": "未找到工作区路径",
+    "emptyHint": "尚未扫描到章节文件。创建章节后点击刷新。",
+    "chapterCount": "章节数",
+    "totalWords": "总字数",
+    "avgWords": "平均每章 {{avg}} 字",
+    "characterCount": "角色数",
+    "hooks": "伏笔",
+    "hookResolution": "已回收 {{resolved}} · 待回收 {{open}} · 回收率 {{rate}}%",
+    "outlineChapters": "规划章节数",
+    "outlineProgress": "已写 {{written}} / 规划 {{planned}} · {{percent}}%",
+    "completionRate": "完成度 {{percent}}%",
+    "chapterList": "章节列表",
+    "chapterTitle": "章节标题",
+    "wordCount": "字数"
   }
 }

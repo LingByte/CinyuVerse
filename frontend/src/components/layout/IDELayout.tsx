@@ -143,6 +143,12 @@ const LazyKanbanBoard = lazy(() =>
   }))
 );
 
+const LazyNovelOverview = lazy(() =>
+  import('@/components/panels/NovelOverviewPanel').then((module) => ({
+    default: module.NovelOverviewPanel,
+  }))
+);
+
 function getLeftGroup(api: DockviewApi): DockviewGroup | undefined {
   return (
     api.getGroup(GROUP_IDS.LEFT) ??
@@ -1319,6 +1325,23 @@ export function IDELayout({
                     }
                   >
                     <LazyKanbanBoard />
+                  </Suspense>
+                </div>
+              )}
+
+              {effectiveActiveTab === 'overview' && (
+                <div className="overview-overlay absolute inset-0 z-10">
+                  <Suspense
+                    fallback={
+                      <div className="flex h-full w-full items-center justify-center p-6 text-sm">
+                        <div className="workspace-loading-panel flex items-center gap-3 px-4 py-3">
+                          <div className="h-4 w-4 animate-spin rounded-full border border-primary border-t-transparent" />
+                          <span>Loading Overview...</span>
+                        </div>
+                      </div>
+                    }
+                  >
+                    <LazyNovelOverview />
                   </Suspense>
                 </div>
               )}
