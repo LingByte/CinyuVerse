@@ -1,10 +1,75 @@
 [workspace]
-members = ["src-tauri"]
-resolver = "2"
+resolver = "3"
+members = [
+    "crates/api-types",
+    "crates/agents",
+    "crates/browser-cef",
+    "crates/browser-runtime",
+    "crates/delegation-proto",
+    "crates/delegation",
+    "crates/cinyuverse-mcp",
+    "crates/cinyuverse-workflow-mcp",
+    "crates/db",
+    "crates/conversations",
+    "crates/executors",
+    "crates/services",
+    "crates/utils",
+    "crates/git",
+    "crates/local-deployment",
+    "crates/deployment",
+    "crates/review",
+    "crates/plugins",
+    "crates/plugin-sdk",
+    "crates/tool-runtime",
+    "crates/artifacts",
+    "crates/automation",
+    "crates/workflows",
+    "crates/remote-protocol",
+    "crates/application",
+    "crates/server",
+    "src-tauri",
+]
 
 [workspace.dependencies]
-tauri = { version = "1.5", features = ["api-all"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 tokio = { version = "1.0", features = ["full"] }
-reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+axum = { version = "0.8.4", features = ["macros", "multipart", "ws"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+anyhow = "1.0"
+git2 = { version = "0.20.3", default-features = false }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls-webpki-roots-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
+thiserror = "2.0.12"
+tracing = "0.1.43"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+tracing-appender = "0.2"
+ts-rs = { git = "https://github.com/xazukx/ts-rs.git", branch = "use-ts-enum", features = ["uuid-impl", "chrono-impl", "no-serde-warnings", "serde-json-impl"] }
+schemars = { version = "1.0.4", features = ["derive", "chrono04", "uuid1", "preserve_order"] }
+serde_with = "3"
+async-trait = "0.1"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+cef = { version = "=150.2.1", default-features = false }
+futures = "0.3"
+dirs = "5"
+command-group = { version = "5.0", features = ["with-tokio"] }
+strum = "0.27.2"
+strum_macros = "0.27.2"
+json-patch = "2.0"
+tempfile = "3"
+regex = "1"
+url = "2.5"
+
+[profile.release]
+debug = 1
+split-debuginfo = "packed"
+strip = true
+
+[profile.dev]
+debug = 1
+
+[profile.dev.package."*"]
+debug = 0
+
+[profile.dev.build-override]
+debug = 0

@@ -1,0 +1,23 @@
+services:
+  cinyuverse:
+    build:
+      context: .
+      args:
+        HOST_FAMILY: dist/host-family
+    # image: ghcr.io/cinyuverse/cinyuverse-server:latest
+    ports:
+      - "127.0.0.1:17891:17891"
+    volumes:
+      - cinyuverse-data:/data
+    environment:
+      # Bind all container interfaces so Docker port publishing can reach the
+      # process. Host publish stays loopback; set CINYUVERSE_SERVER_ALLOW_LAN=1 on a
+      # real host NIC only behind TLS.
+      CINYUVERSE_SERVER_LISTEN: 0.0.0.0:17891
+      CINYUVERSE_SERVER_ALLOW_LAN: "1"
+      CINYUVERSE_STATIC_ROOT: /app/web
+      CINYUVERSE_DATA_DIR: /data
+    restart: unless-stopped
+
+volumes:
+  cinyuverse-data:
