@@ -1,0 +1,82 @@
+//! Event-sourced conversation core (ADR-0003).
+//!
+//! Home of the projection fold, snapshot resume, and the incremental row projector —
+//! moved out of `crates/db` so the storage layer no longer depends on `agents` (the
+//! db→agents reverse dependency is now gone). `crates/db` is a dumb storage layer;
+//! this crate owns the folding of the event log into timeline projections.
+
+pub mod bundle;
+pub mod capability_catalog;
+pub mod commit_reminder;
+pub mod export;
+pub mod host;
+pub mod input;
+pub mod projection;
+pub mod relation;
+pub mod runtime_events;
+pub mod scoped_control;
+pub mod search;
+pub mod service;
+pub mod session_info;
+pub mod usage_accounting;
+pub mod workbench_status;
+
+pub use bundle::{
+    ConversationBundleError, ConversationExportResult, ConversationForkContinuity,
+    ConversationForkResult, ConversationImportResult, export_conversation_bundle,
+    import_conversation_bundle,
+};
+pub use capability_catalog::{
+    capability_catalog_is_fresh, invalidate_open_capability_catalog,
+    open_capability_catalog_fingerprint, read_matching_open_capability_catalog,
+    refresh_open_capability_catalog,
+};
+pub use export::{render_html, render_markdown};
+pub use host::{
+    DefaultConversationHost, resolve_absolute_workspace_agent_working_dir,
+    resolve_agent_runtime_launch_settings, resolve_workspace_agent_working_dir,
+    session_launch_rejection_from_pool, workspace_prompt_blocks,
+};
+pub use input::{
+    CancelConversationInput, ConversationInputClaim, ConversationInputControl,
+    ConversationInputControlError, ConversationInputEvent, ConversationInputQueue,
+    ConversationInputState, ConversationInputStatus, ConversationInputSubmission,
+    ConversationInputView, ReorderConversationInput, SubmitConversationInput,
+    UpdateConversationInput,
+};
+pub use projection::{
+    CONVERSATION_PROJECTION_VERSION, CachedRowProjector, ConversationEventAppender,
+    ConversationProjector, ConversationRowProjectors, ConversationStateApplier,
+    IncrementalRowProjector, evict_least_recently_used_projectors,
+};
+pub use relation::{
+    ConversationChildSummaryView, ConversationRelationControl, ConversationRelationView,
+    CreateConversationRelation,
+};
+pub use runtime_events::{
+    ConversationAgentEventRecorder, RecordedConversationBatch, RecordedConversationCompletion,
+    RuntimeEventRecordError, start_agent_event_persistence,
+};
+pub use scoped_control::{
+    ScopedConversationControl, ScopedConversationControlError, ScopedConversationWait,
+};
+pub use search::{
+    ConversationSearchHit, backfill_missing, reindex_from_projection, search_conversations,
+};
+pub use service::{
+    AgentRuntimeLaunchSettings, ConversationContext, ConversationEventPublisher, ConversationHost,
+    ConversationRuntimeState, ConversationServiceError, ConversationSessionService,
+    ConversationStartTurnInput, ConversationSteerInput, ConversationSteeringReceipt,
+    ConversationSteeringStatus, ConversationTurnSnapshot, CreateDelegatedConversation,
+    CreateForkConversation, CreateWorkflowConversation, NoopConversationEventPublisher,
+    QueuedConversationInputClaim, create_delegated_conversation, create_fork_conversation,
+    create_workflow_conversation, finalize_checkpoint_file_changes,
+    preview_checkpoint_file_changes,
+};
+pub use session_info::{
+    SessionInfo, load_compact_transcript, resolve_referenced_session, session_info_value,
+};
+pub use usage_accounting::{
+    assemble_project_usage_statistics, attributed_sessions_from_rows, catch_up_usage_snapshots,
+    sync_vendor_usage_logs,
+};

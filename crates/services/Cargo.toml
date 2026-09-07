@@ -1,0 +1,50 @@
+[package]
+name = "services"
+version = "0.2.0"
+edition = "2024"
+
+[features]
+default = []
+cloud = []
+qa-mode = ["executors/qa-mode"]
+
+[dependencies]
+api-types = { path = "../api-types" }
+utils = { path = "../utils" }
+git = { path = "../git" }
+executors = { path = "../executors" }
+agents = { path = "../agents" }
+db = { path = "../db" }
+tokio = { workspace = true }
+tokio-util = { version = "0.7", features = ["io"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+url = "2.5"
+anyhow = { workspace = true }
+tracing = { workspace = true }
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "sqlite-preupdate-hook", "chrono", "uuid"] }
+chrono = { workspace = true }
+uuid = { workspace = true }
+ts-rs = { workspace = true }
+dirs = { workspace = true }
+git2 = { workspace = true }
+tempfile = { workspace = true }
+async-trait = { workspace = true }
+enum_dispatch = "0.3.13"
+rust-embed = "8.2"
+ignore = "0.4"
+json-patch = { workspace = true }
+thiserror = { workspace = true }
+futures = { workspace = true }
+tokio-stream = "0.1.17"
+strum_macros = { workspace = true }
+strum = { workspace = true }
+notify = "8.2.0"
+notify-debouncer-full = "0.5.0"
+dunce = "1.0"
+dashmap = "6.1"
+sha2 = "0.10"
+reqwest = { workspace = true }
+toml = "0.8"
+serde_yaml = "0.9"
+which = "8.0.0"
