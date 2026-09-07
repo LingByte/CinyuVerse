@@ -45,7 +45,7 @@ import {
 } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectRepos } from '@/hooks/useProjectRepos';
-import { fileTreeApi, sessionsApi, storyGraphApi } from '@/lib/api';
+import { fileTreeApi, scratchApi, sessionsApi, storyGraphApi } from '@/lib/api';
 import { getWritingPrompt } from '@/lib/writingPrompts';
 import { useLayoutStore } from '@/stores/useLayoutStore';
 import { useKanbanSessionContext } from '@/contexts/KanbanSessionContext';
@@ -53,6 +53,7 @@ import { useUserSystem } from '@/components/ConfigProvider';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { OverviewSessionSlot } from '@/components/panels/OverviewSessionSlot';
+import { ScratchType } from 'shared/types';
 import type {
   StoryBeat,
   StoryGraph,
@@ -479,8 +480,28 @@ export function NovelOverviewPanel() {
           workspace_id: workspaceId,
           executor: configuredExecutor ?? undefined,
           name: sessionName,
-          initial_prompt: promptText,
         });
+
+        // Pre-fill the conversation input box with the prompt text so the
+        // user can review and send it themselves — do NOT auto-send.
+        try {
+          await scratchApi.update(ScratchType.DRAFT_FOLLOW_UP, session.id, {
+            payload: {
+              type: 'DRAFT_FOLLOW_UP',
+              data: {
+                message: promptText,
+                images: [],
+                executor_config: {
+                  executor: configuredExecutor ?? 'claude_code',
+                },
+                queued: false,
+                config_overrides: {},
+              },
+            },
+          });
+        } catch {
+          // Non-fatal — the user can still type manually
+        }
 
         // Show the right panel with the new session — no navigation,
         // the conversation renders inline in the overview's session slot.
