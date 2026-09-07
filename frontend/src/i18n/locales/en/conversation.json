@@ -193,7 +193,9 @@
     "before": "Before",
     "content": "Content",
     "after": "After",
-    "viewDetails": "View details"
+    "viewDetails": "View details",
+    "enableBypass": "ByPass — auto-approve all",
+    "bypassActive": "ByPass active"
   },
   "messageTurnView": {
     "streamingOutput": "AI is responding...",

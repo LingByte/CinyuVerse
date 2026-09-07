@@ -476,6 +476,7 @@ const AgentTimelineConversation = forwardRef<
   const [respondingPermissionId, setRespondingPermissionId] = useState<
     string | null
   >(null);
+  const [bypassActive, setBypassActive] = useState(false);
   const handleRespondPermission = useCallback(
     (permissionId: string, response: AgentPermissionResponse) => {
       setRespondingPermissionId(permissionId);
@@ -489,6 +490,43 @@ const AgentTimelineConversation = forwardRef<
     },
     [conversationRespondPermission]
   );
+  // Enable ByPass mode: auto-approve all subsequent permission requests for
+  // the connection bound to this session.
+  const handleEnableBypass = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      const snapshot = await agentsApi.snapshot();
+      const session = snapshot.sessions.find(
+        (s) => s.id === sessionId
+      );
+      if (!session?.connection_id) {
+        toast.error(getErrorMessage(new Error('No active agent connection')));
+        return;
+      }
+      await agentsApi.setAutoApproveMode({
+        connectionId: session.connection_id,
+        mode: 'bypass',
+      });
+      setBypassActive(true);
+      // Also auto-approve the current pending permission if one exists.
+      const pending = snapshot.permissions?.find(
+        (p) => p.session_id === sessionId
+      );
+      if (pending) {
+        const allowOption = pending.options.find(
+          (o) => o.kind === 'allow_once' || o.kind === 'allow_always'
+        );
+        if (allowOption) {
+          void conversationRespondPermission(pending.id, {
+            kind: 'selected',
+            option_id: allowOption.id,
+          });
+        }
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  }, [sessionId, conversationRespondPermission]);
   // Stable reference for answering agent questions (ACP elicitations) inline.
   const conversationRespondQuestion = conversation.respondQuestion;
   const [respondingQuestionId, setRespondingQuestionId] = useState<
@@ -1396,6 +1434,8 @@ const AgentTimelineConversation = forwardRef<
                         responding={
                           respondingPermissionId === request.permission_id
                         }
+                        onEnableBypass={handleEnableBypass}
+                        bypassActive={bypassActive}
                       />
                     ))}
                   </div>

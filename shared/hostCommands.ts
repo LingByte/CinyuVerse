@@ -72,6 +72,7 @@ export const HOST_COMMANDS = [
   'agent_scan_local_history',
   'agent_send_prompt',
   'agent_session_defaults',
+  'agent_set_auto_approve_mode',
   'agent_set_prepared_session_config',
   'agent_set_prepared_session_mode',
   'agent_set_session_defaults',

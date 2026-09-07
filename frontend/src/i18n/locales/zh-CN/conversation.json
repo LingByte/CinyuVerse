@@ -193,7 +193,9 @@
     "before": "变更前",
     "content": "内容",
     "after": "变更后",
-    "viewDetails": "查看详情"
+    "viewDetails": "查看详情",
+    "enableBypass": "ByPass — 自动允许全部",
+    "bypassActive": "ByPass 已开启"
   },
   "messageTurnView": {
     "streamingOutput": "AI 正在输出...",

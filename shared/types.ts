@@ -1338,7 +1338,7 @@ dependency?: AgentSessionConfigDependency | null, };
 
 export type AgentSessionMode = { id: string, label: string, description?: string | null, };
 
-export type AgentAutoApproveMode = "off" | "allow_always" | "yolo";
+export type AgentAutoApproveMode = "off" | "allow_always" | "bypass";
 
 export type AgentPermissionOptionKind = "allow_once" | "allow_always" | "reject_once" | "reject_always" | "unknown";
 

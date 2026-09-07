@@ -1,5 +1,6 @@
 import { backendCall, backendListen } from '@/lib/backendTransport';
 import type {
+  AgentAutoApproveMode,
   AgentPreparedSessionSnapshot,
   AgentSessionControlsSnapshot,
   AgentSessionListPage,
@@ -47,6 +48,11 @@ export type AgentRespondPermissionRequest = {
   connectionId: string;
   permissionId: string;
   response: AgentPermissionResponse;
+};
+
+export type AgentSetAutoApproveModeRequest = {
+  connectionId: string;
+  mode: AgentAutoApproveMode;
 };
 
 export type AgentConnectionRequest = {
@@ -249,6 +255,10 @@ export const agentsApi = {
 
   respondPermission: (request: AgentRespondPermissionRequest): Promise<void> =>
     backendCall('agent_respond_permission', { request }),
+
+  setAutoApproveMode: (
+    request: AgentSetAutoApproveModeRequest
+  ): Promise<void> => backendCall('agent_set_auto_approve_mode', { request }),
 
   terminalSnapshot: (
     request: AgentTerminalSnapshotRequest

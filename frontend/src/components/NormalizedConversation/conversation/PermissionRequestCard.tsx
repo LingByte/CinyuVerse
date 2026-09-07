@@ -43,10 +43,18 @@ export function PermissionRequestCard({
   request,
   onRespond,
   responding = false,
+  onEnableBypass,
+  bypassActive = false,
 }: {
   request: ConversationPermissionView;
   onRespond: (permissionId: string, response: AgentPermissionResponse) => void;
   responding?: boolean;
+  /** Enable ByPass mode: auto-approve all subsequent permission requests
+   *  in this session. When provided, a "ByPass" entry appears in the allow
+   *  split menu. */
+  onEnableBypass?: () => void;
+  /** Whether ByPass mode is currently active for this session. */
+  bypassActive?: boolean;
 }) {
   const { t } = useTranslation(['conversation', 'common']);
   const pending = request.status === 'pending';
@@ -165,6 +173,20 @@ export function PermissionRequestCard({
                         </DropdownMenuItem>
                       );
                     })}
+                    {onEnableBypass ? (
+                      <>
+                        <div className="my-1 border-t" />
+                        <DropdownMenuItem
+                          disabled={responding || bypassActive}
+                          className="px-2.5 py-2 text-amber-600 dark:text-amber-400"
+                          onSelect={onEnableBypass}
+                        >
+                          {bypassActive
+                            ? t('permissionRequestCard.bypassActive')
+                            : t('permissionRequestCard.enableBypass')}
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>

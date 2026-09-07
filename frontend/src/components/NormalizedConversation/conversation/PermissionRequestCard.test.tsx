@@ -204,4 +204,33 @@ describe('PermissionRequestCard', () => {
 
     expect(screen.getByRole('button', { name: '允许' })).toBeDisabled();
   });
+
+  it('invokes onEnableBypass when the ByPass entry is selected', async () => {
+    const user = userEvent.setup();
+    const onEnableBypass = vi.fn();
+    render(
+      <PermissionRequestCard
+        request={fileEditRequest({
+          options: [
+            { id: 'allow-once', label: '允许一次', kind: 'allow_once' },
+            { id: 'allow-always', label: '总是允许', kind: 'allow_always' },
+            { id: 'deny', label: '拒绝', kind: 'reject_once' },
+          ],
+        })}
+        onRespond={vi.fn()}
+        onEnableBypass={onEnableBypass}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: '展开允许选项' }));
+    await user.click(screen.getByRole('menuitem', { name: /ByPass/ }));
+
+    expect(onEnableBypass).toHaveBeenCalledOnce();
+  });
+
+  it('does not render the ByPass entry when onEnableBypass is absent', () => {
+    render(<PermissionRequestCard request={fileEditRequest()} onRespond={vi.fn()} />);
+
+    expect(screen.queryByRole('menuitem', { name: /ByPass/ })).toBeNull();
+  });
 });
