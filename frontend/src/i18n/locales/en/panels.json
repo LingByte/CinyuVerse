@@ -410,6 +410,7 @@
     "beatSuccessors": "Successors",
     "deleteConfirm": "Delete this beat? Related edges will also be removed.",
     "openingSession": "Opening conversation session…",
+    "noSession": "Please create a conversation session on the right first.",
     "filterAll": "All",
     "filterPlanned": "Planned",
     "filterCurrent": "Current",

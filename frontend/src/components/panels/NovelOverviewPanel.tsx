@@ -45,7 +45,7 @@ import {
 } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectRepos } from '@/hooks/useProjectRepos';
-import { fileTreeApi, scratchApi, sessionsApi, storyGraphApi } from '@/lib/api';
+import { fileTreeApi, scratchApi, storyGraphApi } from '@/lib/api';
 import { getWritingPrompt } from '@/lib/writingPrompts';
 import { useLayoutStore } from '@/stores/useLayoutStore';
 import { useKanbanSessionContext } from '@/contexts/KanbanSessionContext';
@@ -453,39 +453,26 @@ export function NovelOverviewPanel() {
   );
 
   // ----- agent session actions -----
-  const { replaceRightSession } = useKanbanSessionContext();
+  const { visibleRightSession } = useKanbanSessionContext();
   const setRightPanelVisible = useLayoutStore(
     (state) => state.setRightPanelVisible
   );
 
-  const openAgentSession = useCallback(
-    async (promptText: string, sessionName: string) => {
-      if (!projectId) return;
+  const fillPromptIntoSession = useCallback(
+    async (promptText: string) => {
+      // Require an existing session on the right panel — do NOT create one.
+      if (!visibleRightSession?.sessionId) {
+        setGraphError(t('panels:overview.noSession'));
+        setRightPanelVisible(true);
+        return;
+      }
       setActionLoading(true);
+      setGraphError(null);
       try {
-        // Ensure a workspace exists for this project
-        let workspaceId: string | null = null;
-        try {
-          const workspace = await sessionsApi.ensureProjectWorkspace({
-            project_id: projectId,
-            branch: null,
-          });
-          workspaceId = workspace.id;
-        } catch {
-          // fallback: try to find existing workspace from repos
-        }
-
-        const session = await sessionsApi.createProject({
-          project_id: projectId,
-          workspace_id: workspaceId,
-          executor: configuredExecutor ?? undefined,
-          name: sessionName,
-        });
-
-        // Pre-fill the conversation input box with the prompt text so the
-        // user can review and send it themselves — do NOT auto-send.
-        try {
-          await scratchApi.update(ScratchType.DRAFT_FOLLOW_UP, session.id, {
+        await scratchApi.update(
+          ScratchType.DRAFT_FOLLOW_UP,
+          visibleRightSession.sessionId,
+          {
             payload: {
               type: 'DRAFT_FOLLOW_UP',
               data: {
@@ -498,27 +485,16 @@ export function NovelOverviewPanel() {
                 config_overrides: {},
               },
             },
-          });
-        } catch {
-          // Non-fatal — the user can still type manually
-        }
-
-        // Show the right panel with the new session — no navigation,
-        // the conversation renders inline in the overview's session slot.
-        if (workspaceId) {
-          replaceRightSession({
-            sessionId: session.id,
-            workspaceId,
-          });
-          setRightPanelVisible(true);
-        }
+          }
+        );
+        setRightPanelVisible(true);
       } catch (err) {
         setGraphError(err instanceof Error ? err.message : String(err));
       } finally {
         setActionLoading(false);
       }
     },
-    [projectId, replaceRightSession, setRightPanelVisible, configuredExecutor]
+    [visibleRightSession, configuredExecutor, setRightPanelVisible, t]
   );
 
   const handleGenerateGraph = useCallback(() => {
@@ -528,8 +504,8 @@ export function NovelOverviewPanel() {
       bookName: undefined,
       guidance: '',
     });
-    void openAgentSession(prompt, t('panels:overview.generateStoryGraph'));
-  }, [openAgentSession, t]);
+    void fillPromptIntoSession(prompt);
+  }, [fillPromptIntoSession]);
 
   const handleInferBeat = useCallback(() => {
     if (!selectedBeat || !beatContext) return;
@@ -566,8 +542,8 @@ export function NovelOverviewPanel() {
         2
       ),
     });
-    void openAgentSession(prompt, `${t('panels:overview.inferBeat')}: ${selectedBeat.title}`);
-  }, [selectedBeat, beatContext, openAgentSession, t]);
+    void fillPromptIntoSession(prompt);
+  }, [selectedBeat, beatContext, fillPromptIntoSession]);
 
   const handleWriteBeat = useCallback(() => {
     if (!selectedBeat || !beatContext) return;
@@ -610,8 +586,8 @@ export function NovelOverviewPanel() {
         2
       ),
     });
-    void openAgentSession(prompt, `${t('panels:overview.writeBeat')}: ${selectedBeat.title}`);
-  }, [selectedBeat, beatContext, openAgentSession, t]);
+    void fillPromptIntoSession(prompt);
+  }, [selectedBeat, beatContext, fillPromptIntoSession]);
 
   // ----- status update (quick actions, no form) -----
   const updateStatus = useCallback(

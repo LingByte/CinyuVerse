@@ -410,6 +410,7 @@
     "beatSuccessors": "后继节拍",
     "deleteConfirm": "确认删除该节拍？相关连线也会被移除。",
     "openingSession": "正在唤起创作会话…",
+    "noSession": "请先在右侧创建一个创作会话，再使用此功能。",
     "filterAll": "全部",
     "filterPlanned": "计划",
     "filterCurrent": "当前",
