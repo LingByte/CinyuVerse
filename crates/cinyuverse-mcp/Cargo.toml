@@ -1,0 +1,16 @@
+[package]
+name = "cinyuverse-mcp"
+version = "0.2.0"
+edition = "2024"
+
+[[bin]]
+name = "cinyuverse-mcp"
+path = "src/main.rs"
+
+[dependencies]
+delegation-proto = { path = "../delegation-proto" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+rustls = { workspace = true }

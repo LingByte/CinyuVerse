@@ -1,0 +1,11 @@
+[package]
+name = "cinyuverse-workflow-mcp"
+version = "0.2.0"
+edition = "2024"
+
+[[bin]]
+name = "cinyuverse-workflow-mcp"
+path = "src/main.rs"
+
+[dependencies]
+utils = { path = "../utils" }
