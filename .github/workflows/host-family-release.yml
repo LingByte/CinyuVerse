@@ -1,0 +1,151 @@
+name: Server Release
+
+# Builds the unsigned Server directory (cinyuverse-server + web + bundled plugins).
+# Apple Developer ID and Windows Authenticode are intentionally not required.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional GitHub Release tag to upload Server archives to"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: server-release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: 22
+  PNPM_VERSION: 10.13.1
+  RUST_TOOLCHAIN: nightly-2025-12-04
+  SQLX_OFFLINE: "true"
+  NODE_OPTIONS: --max-old-space-size=6144
+  RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}
+
+jobs:
+  package:
+    name: Package ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: linux-x64
+            release_name: linux-x86_64
+            runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - name: linux-arm64
+            release_name: linux-aarch64
+            runner: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+          - name: macos-arm64
+            release_name: darwin-aarch64
+            runner: macos-15
+            target: aarch64-apple-darwin
+          - name: windows-x64
+            release_name: windows-x86_64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+          - name: windows-arm64
+            release_name: windows-aarch64
+            runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        run: pnpm run frontend:build
+
+      - name: Build Host binaries
+        run: cargo build --release --target ${{ matrix.target }} -p server -p cinyuverse-mcp -p cinyuverse-workflow-mcp --bin cinyuverse-server --bin cinyuverse-mcp --bin cinyuverse-workflow-mcp
+
+      - name: Package Server
+        shell: bash
+        run: |
+          ext=""
+          if [[ "${{ matrix.target }}" == *windows* ]]; then
+            ext=".exe"
+          fi
+          VERSION="$(node -p "require('./package.json').version")"
+          ARCHIVE="$(node npx-cli/bin/release-assets.js archive "${VERSION}" "${{ matrix.release_name }}")"
+          echo "SERVER_ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+          node scripts/package-host-family.js \
+            --server "target/${{ matrix.target }}/release/cinyuverse-server${ext}" \
+            --mcp "target/${{ matrix.target }}/release/cinyuverse-mcp${ext}" \
+            --workflow-mcp "target/${{ matrix.target }}/release/cinyuverse-workflow-mcp${ext}" \
+            --web frontend/dist \
+            --plugins assets/plugins \
+            --output "dist/server/${{ matrix.release_name }}"
+          tar -C dist/server -czf "dist/${ARCHIVE}" "${{ matrix.release_name }}"
+          (
+            cd dist
+            node -e '
+              const fs = require("node:fs");
+              const crypto = require("node:crypto");
+              const name = process.argv[1];
+              const digest = crypto
+                .createHash("sha256")
+                .update(fs.readFileSync(name))
+                .digest("hex");
+              fs.writeFileSync(`${name}.sha256`, `${digest}  ${name}\n`);
+            ' "${ARCHIVE}"
+          )
+
+      - name: Smoke install from the just-built archive
+        shell: bash
+        run: |
+          python3 -m http.server --bind 127.0.0.1 --directory dist 8765 &
+          pid=$!
+          trap 'kill "$pid"' EXIT
+          for _ in 1 2 3 4 5; do
+            curl -fsS "http://127.0.0.1:8765/${SERVER_ARCHIVE}.sha256" >/dev/null && break
+            sleep 1
+          done
+          HOME="$(mktemp -d)"
+          INSTALL_DIR="$(mktemp -d)"
+          HOME="$HOME" \
+          CINYUVERSE_VERSION="$(node -p "require('./package.json').version")" \
+          CINYUVERSE_PLATFORM="${{ matrix.release_name }}" \
+          CINYUVERSE_HOST_FAMILY_BASE="http://127.0.0.1:8765" \
+          CINYUVERSE_INSTALL_DIR="$INSTALL_DIR" \
+          sh install.sh
+          test -x "$INSTALL_DIR/cinyuverse" || test -f "$INSTALL_DIR/cinyuverse.cmd"
+
+      - name: Upload Server archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cinyuverse-server-${{ matrix.release_name }}
+          path: |
+            dist/${{ env.SERVER_ARCHIVE }}
+            dist/${{ env.SERVER_ARCHIVE }}.sha256
+
+      - name: Attach Server archive to GitHub Release
+        if: ${{ env.RELEASE_TAG != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: |
+            dist/${{ env.SERVER_ARCHIVE }}
+            dist/${{ env.SERVER_ARCHIVE }}.sha256
+          fail_on_unmatched_files: true

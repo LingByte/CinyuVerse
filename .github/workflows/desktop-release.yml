@@ -1,0 +1,536 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional GitHub Release tag to upload installers to"
+        required: false
+        type: string
+      upload_to_release:
+        description: "Upload installers to the GitHub Release named by release_tag"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: 22
+  PNPM_VERSION: 10.13.1
+  RUST_TOOLCHAIN: nightly-2025-12-04
+  RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}
+  SQLX_OFFLINE: "true"
+  SQLX_OFFLINE_DIR: ${{ github.workspace }}/crates/db/.sqlx
+
+jobs:
+  prepare-release:
+    name: Prepare GitHub Release
+    if: ${{ github.event_name == 'push' || inputs.upload_to_release }}
+    runs-on: ubuntu-22.04
+    outputs:
+      apple_signing_enabled: ${{ steps.signing.outputs.apple_signing_enabled }}
+      windows_signing_enabled: ${{ steps.signing.outputs.windows_signing_enabled }}
+      windows_signing_method: ${{ steps.signing.outputs.windows_signing_method }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Require a release tag
+        run: test -n "$RELEASE_TAG"
+
+      - name: Require updater signing credentials
+        id: signing
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          EVSIGN_LICENSE_KEY: ${{ secrets.EVSIGN_LICENSE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          missing=()
+          for name in \
+            TAURI_SIGNING_PRIVATE_KEY \
+            TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "Missing required updater signing secrets: ${missing[*]}"
+            exit 1
+          fi
+
+          check_optional_signing() {
+            label="$1"
+            output_name="$2"
+            shift 2
+            configured=()
+            missing=()
+            for name in "$@"; do
+              if [ -n "${!name}" ]; then
+                configured+=("$name")
+              else
+                missing+=("$name")
+              fi
+            done
+
+            if [ "${#configured[@]}" -eq 0 ]; then
+              echo "$output_name=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::$label code signing is disabled; installers will be published unsigned."
+            elif [ "${#missing[@]}" -ne 0 ]; then
+              echo "Optional $label signing credentials are incomplete: ${missing[*]}"
+              exit 1
+            else
+              echo "$output_name=true" >> "$GITHUB_OUTPUT"
+            fi
+          }
+
+          check_optional_signing \
+            "macOS" \
+            apple_signing_enabled \
+            APPLE_CERTIFICATE \
+            APPLE_CERTIFICATE_PASSWORD \
+            APPLE_SIGNING_IDENTITY \
+            APPLE_API_ISSUER \
+            APPLE_API_KEY \
+            APPLE_API_KEY_P8_BASE64
+          if [ -n "$EVSIGN_LICENSE_KEY" ]; then
+            echo "windows_signing_enabled=true" >> "$GITHUB_OUTPUT"
+            echo "windows_signing_method=evsign" >> "$GITHUB_OUTPUT"
+          else
+            check_optional_signing \
+              "Windows" \
+              windows_signing_enabled \
+              WINDOWS_CERTIFICATE \
+              WINDOWS_CERTIFICATE_PASSWORD
+            if [ -n "$WINDOWS_CERTIFICATE" ] && [ -n "$WINDOWS_CERTIFICATE_PASSWORD" ]; then
+              echo "windows_signing_method=pfx" >> "$GITHUB_OUTPUT"
+            else
+              echo "windows_signing_method=" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Create release if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists."
+          else
+            notes_path="docs/release/${RELEASE_TAG#v}.md"
+            if [ -f "$notes_path" ]; then
+              gh release create "$RELEASE_TAG" \
+                --repo "$RELEASE_REPOSITORY" \
+                --title "$RELEASE_TAG" \
+                --notes-file "$notes_path"
+            else
+              gh release create "$RELEASE_TAG" \
+                --repo "$RELEASE_REPOSITORY" \
+                --title "$RELEASE_TAG" \
+                --generate-notes
+            fi
+          fi
+
+  probe-runners:
+    name: Probe ${{ matrix.artifact_name }} runner
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: true
+      matrix:
+        include: &desktop-targets
+          - artifact_name: windows-x64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: nsis
+          - artifact_name: windows-arm64
+            runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            bundles: nsis
+          - artifact_name: linux-x64
+            runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            bundles: appimage
+          - artifact_name: linux-arm64
+            runner: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+            bundles: appimage
+          - artifact_name: macos-arm64
+            runner: macos-15
+            target: aarch64-apple-darwin
+            bundles: app
+    steps:
+      - name: Confirm runner
+        run: |
+          echo "runner=${{ matrix.runner }}"
+          echo "target=${{ matrix.target }}"
+          echo "os=${{ runner.os }}"
+          echo "arch=${{ runner.arch }}"
+
+  build-frontend:
+    name: Build frontend
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: pnpm run frontend:build
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    name: Build ${{ matrix.artifact_name }}
+    needs: [prepare-release, build-frontend, probe-runners]
+    if: ${{ always() && !failure() && !cancelled() }}
+    runs-on: ${{ matrix.runner }}
+    env:
+      CARGO_INCREMENTAL: "0"
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
+      SCCACHE_CACHE_SIZE: "10G"
+      CEF_PATH: ${{ github.workspace }}/.cef
+      CINYUVERSE_SKIP_FRONTEND_BUILD: "1"
+    strategy:
+      fail-fast: true
+      matrix:
+        include: *desktop-targets
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            xdg-utils \
+            xauth \
+            xvfb
+
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node
+
+      - name: Setup sccache
+        if: runner.os != 'Windows'
+        uses: BloopAI/sccache-action@main
+
+      - name: Disable sccache on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+          echo "SCCACHE_GHA_ENABLED=false" >> "$GITHUB_ENV"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+          cache-provider: github
+          cache-on-failure: true
+          shared-key: desktop-${{ runner.os }}-${{ runner.arch }}-${{ matrix.target }}
+          cache-targets: false
+
+      - name: Cache CEF downloads
+        uses: actions/cache@v4
+        with:
+          path: .cef
+          key: cef-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            cef-${{ matrix.target }}-
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - name: Import macOS signing certificate and notarization key
+        if: ${{ runner.os == 'macOS' && needs.prepare-release.outputs.apple_signing_enabled == 'true' }}
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+        run: |
+          certificate_path="$RUNNER_TEMP/cinyuverse-release-certificate.p12"
+          keychain_path="$RUNNER_TEMP/cinyuverse-release.keychain-db"
+          api_key_path="$RUNNER_TEMP/AuthKey_${{ secrets.APPLE_API_KEY }}.p8"
+          keychain_password="$(openssl rand -hex 24)"
+
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
+          printf '%s' "$APPLE_API_KEY_P8_BASE64" | base64 --decode > "$api_key_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" \
+            -k "$keychain_path" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain_path"
+          security list-keychains -d user -s "$keychain_path" login.keychain-db
+          security find-identity -v -p codesigning "$keychain_path"
+
+          printf 'APPLE_SIGNING_IDENTITY=%s\n' "$APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+          echo "APPLE_API_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
+          echo "CINYUVERSE_MACOS_KEYCHAIN=$keychain_path" >> "$GITHUB_ENV"
+
+      - name: Import Windows signing certificate
+        if: ${{ runner.os == 'Windows' && needs.prepare-release.outputs.windows_signing_method == 'pfx' }}
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'cinyuverse-release-certificate.pfx'
+          [IO.File]::WriteAllBytes(
+            $certificatePath,
+            [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
+          )
+          $password = ConvertTo-SecureString `
+            -String $env:WINDOWS_CERTIFICATE_PASSWORD `
+            -AsPlainText `
+            -Force
+          $sourceCertificate = [Security.Cryptography.X509Certificates.X509Certificate2]::new(
+            $certificatePath,
+            $env:WINDOWS_CERTIFICATE_PASSWORD,
+            [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
+          )
+          "CINYUVERSE_WINDOWS_CERTIFICATE_THUMBPRINT=$($sourceCertificate.Thumbprint)" >> $env:GITHUB_ENV
+          $certificate = Import-PfxCertificate `
+            -FilePath $certificatePath `
+            -CertStoreLocation Cert:\CurrentUser\My `
+            -Password $password
+          if (-not $certificate.HasPrivateKey) {
+            throw 'Imported Windows signing certificate has no private key.'
+          }
+
+          $configPath = Join-Path $env:RUNNER_TEMP 'tauri-windows-signing.json'
+          @{
+            bundle = @{
+              windows = @{
+                certificateThumbprint = $certificate.Thumbprint
+                digestAlgorithm = 'sha256'
+                timestampUrl = 'http://timestamp.digicert.com'
+              }
+            }
+          } | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 $configPath
+
+          "CINYUVERSE_TAURI_RELEASE_CONFIG=$configPath" >> $env:GITHUB_ENV
+
+      - name: Build desktop installers
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_API_KEY: ""
+          APPLE_API_ISSUER: ""
+          APPLE_API_KEY_PATH: ""
+        run: node scripts/run-tauri-build.js --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+
+      - name: Notarize macOS app and create DMG
+        if: runner.os == 'macOS'
+        timeout-minutes: 140
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
+          APPLE_SIGNING_IDENTITY: ${{ env.APPLE_SIGNING_IDENTITY }}
+        run: node scripts/macos-notarize-and-dmg.js --target ${{ matrix.target }}
+
+      - name: Sign Windows installers with EVSign
+        if: ${{ runner.os == 'Windows' && needs.prepare-release.outputs.windows_signing_method == 'evsign' }}
+        shell: pwsh
+        env:
+          EVSIGN_LICENSE_KEY: ${{ secrets.EVSIGN_LICENSE_KEY }}
+          EVSIGN_SIGN_PASSWORD: ${{ secrets.EVSIGN_SIGN_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          scripts/sign-windows-evsign.ps1 -BundleRoot "target/${{ matrix.target }}/release/bundle"
+
+      - name: Verify signed and notarized macOS bundle
+        if: ${{ runner.os == 'macOS' && needs.prepare-release.outputs.apple_signing_enabled == 'true' }}
+        run: |
+          app_path="$(find "target/${{ matrix.target }}/release/bundle/macos" -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$app_path"
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          spctl --assess --type execute --verbose=2 "$app_path"
+
+      - name: Verify signed Windows artifacts
+        if: ${{ runner.os == 'Windows' && needs.prepare-release.outputs.windows_signing_enabled == 'true' }}
+        shell: pwsh
+        run: |
+          $artifacts = Get-ChildItem `
+            "target/${{ matrix.target }}/release/bundle" `
+            -Recurse `
+            -File | Where-Object { $_.Extension -in '.exe', '.msi' }
+          if ($artifacts.Count -eq 0) {
+            throw 'No Windows installers were produced.'
+          }
+          foreach ($artifact in $artifacts) {
+            $signature = Get-AuthenticodeSignature $artifact.FullName
+            if ($signature.Status -ne 'Valid') {
+              throw "Invalid Authenticode signature for $($artifact.FullName): $($signature.Status)"
+            }
+          }
+
+      - name: Smoke-test Linux desktop startup through XWayland
+        if: runner.os == 'Linux'
+        run: scripts/smoke-linux-desktop.sh "target/${{ matrix.target }}/release/cinyuverse"
+
+      - name: Smoke-test macOS desktop startup
+        if: runner.os == 'macOS'
+        timeout-minutes: 2
+        run: |
+          app_path="$(find "target/${{ matrix.target }}/release/bundle/macos" -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$app_path"
+          scripts/smoke-macos-desktop.sh "$app_path"
+
+      - name: Smoke-test Windows desktop startup without a console
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: scripts/smoke-windows-desktop.ps1 -Executable "target/${{ matrix.target }}/release/cinyuverse.exe"
+
+      - name: Remove temporary macOS signing material
+        if: ${{ always() && runner.os == 'macOS' && needs.prepare-release.outputs.apple_signing_enabled == 'true' }}
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          security delete-keychain "$RUNNER_TEMP/cinyuverse-release.keychain-db" || true
+          rm -f \
+            "$RUNNER_TEMP/cinyuverse-release-certificate.p12" \
+            "$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+
+      - name: Remove temporary Windows signing material
+        if: ${{ always() && runner.os == 'Windows' && needs.prepare-release.outputs.windows_signing_method == 'pfx' }}
+        shell: pwsh
+        run: |
+          if ($env:CINYUVERSE_WINDOWS_CERTIFICATE_THUMBPRINT) {
+            Remove-Item `
+              "Cert:\CurrentUser\My\$env:CINYUVERSE_WINDOWS_CERTIFICATE_THUMBPRINT" `
+              -Force `
+              -ErrorAction SilentlyContinue
+          }
+          Remove-Item `
+            (Join-Path $env:RUNNER_TEMP 'cinyuverse-release-certificate.pfx') `
+            -Force `
+            -ErrorAction SilentlyContinue
+          Remove-Item `
+            (Join-Path $env:RUNNER_TEMP 'tauri-windows-signing.json') `
+            -Force `
+            -ErrorAction SilentlyContinue
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cinyuverse-${{ matrix.artifact_name }}
+          if-no-files-found: error
+          path: |
+            target/${{ matrix.target }}/release/bundle/**/*
+            target/release/bundle/**/*
+
+  publish-updater:
+    name: Publish updater manifest
+    needs: build
+    if: ${{ github.event_name == 'push' || (inputs.upload_to_release && inputs.release_tag != '') }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Download desktop build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: Cinyuverse-*
+          path: updater-artifacts
+
+      - name: Generate updater manifest
+        env:
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          NOTES_FILE="docs/release/${RELEASE_TAG#v}.md"
+          NOTES_ARGS=()
+          if [ -f "$NOTES_FILE" ]; then
+            NOTES_ARGS=(--notes-file "$NOTES_FILE")
+          fi
+          node scripts/generate-updater-manifest.js \
+            --artifacts-dir updater-artifacts \
+            --output-dir updater-release \
+            --repository "$RELEASE_REPOSITORY" \
+            --release-tag "$RELEASE_TAG" \
+            --version "$VERSION" \
+            "${NOTES_ARGS[@]}"
+
+      - name: Upload updater manifest and signed bundles
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          fail_on_unmatched_files: true
+          files: updater-release/*
+
+      - name: Mark desktop release as latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$RELEASE_TAG" --latest

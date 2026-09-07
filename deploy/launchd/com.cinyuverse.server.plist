@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.cinyuverse.server</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/cinyuverse-server</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>CINYUVERSE_DATA_DIR</key>
+    <string>/usr/local/var/cinyuverse</string>
+    <key>CINYUVERSE_STATIC_ROOT</key>
+    <string>/usr/local/share/cinyuverse/web</string>
+    <key>CINYUVERSE_SERVER_LISTEN</key>
+    <string>127.0.0.1:17891</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/usr/local/var/log/cinyuverse-server.log</string>
+  <key>StandardErrorPath</key>
+  <string>/usr/local/var/log/cinyuverse-server.err</string>
+</dict>
+</plist>
