@@ -10,6 +10,7 @@
  */
 import '@xyflow/react/dist/style.css';
 
+import dagre from 'dagre';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -53,11 +54,35 @@ import { useKanbanSessionContext } from '@/contexts/KanbanSessionContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { OverviewSessionSlot } from '@/components/panels/OverviewSessionSlot';
-import type {
-  StoryBeat,
-  StoryGraph,
-  BeatContext,
-} from 'shared/types';
+// The JSON file format uses arrays for characters/hooks, while the SQLite
+// model uses JSON strings. We use a local type that matches the file format.
+type JsonBeat = {
+  id: string;
+  title: string;
+  description?: string | null;
+  beat_type: string;
+  chapter_hint?: number | null;
+  status: string;
+  characters?: string[] | null;
+  hooks?: string[] | null;
+  volume?: number | null;
+  arc?: string | null;
+  sort_order?: number;
+  completion_criteria?: string[] | null;
+};
+
+type JsonGraph = {
+  beats: JsonBeat[];
+  edges: Array<{ from_beat: string; to_beat: string; edge_type: string; note?: string | null }>;
+};
+
+type JsonBeatContext = {
+  beat: JsonBeat;
+  predecessors: JsonBeat[];
+  successors: JsonBeat[];
+  characters: string[];
+  related_hooks: string[];
+};
 
 // ---------------------------------------------------------------------------
 // Stats helpers (kept from the previous implementation)
@@ -148,7 +173,7 @@ async function scanWorkspace(rootPath: string): Promise<OverviewStats> {
 // ---------------------------------------------------------------------------
 
 type BeatNodeData = {
-  beat: StoryBeat;
+  beat: JsonBeat;
   isSelected: boolean;
 };
 
@@ -200,34 +225,79 @@ const BEAT_TYPE_LABELS: Record<string, string> = {
   turning_point: '转折点',
 };
 
+// Top accent bar color per beat type — gives each node a visual identity
+const BEAT_TYPE_ACCENT: Record<string, string> = {
+  plot_point: '#6366f1',
+  character_arc: '#8b5cf6',
+  hook_plant: '#ef4444',
+  hook_advance: '#f97316',
+  hook_resolve: '#22c55e',
+  world_change: '#06b6d4',
+  relationship_shift: '#ec4899',
+  climax: '#eab308',
+  turning_point: '#f43f5e',
+};
+
 function BeatNodeComponent({ data }: NodeProps) {
   const nodeData = data as unknown as BeatNodeData;
   const { beat, isSelected } = nodeData;
   const style = STATUS_STYLES[beat.status] ?? STATUS_STYLES.planned;
   const Icon = style.icon;
+  const accent = BEAT_TYPE_ACCENT[beat.beat_type] ?? '#94a3b8';
   return (
     <div
       className={cn(
-        'rounded-lg border-2 px-3 py-2 min-w-[160px] max-w-[220px] shadow-sm transition-shadow',
+        'rounded-lg border-2 shadow-sm transition-all overflow-hidden',
+        'min-w-[180px] max-w-[220px]',
         style.border,
         style.bg,
-        isSelected && 'ring-2 ring-offset-1 ring-blue-400 shadow-md'
+        isSelected && 'ring-2 ring-offset-1 ring-blue-400 shadow-lg scale-[1.02]'
       )}
     >
-      <Handle type="target" position={Position.Top} className="!bg-slate-400" />
-      <div className="flex items-center gap-1.5 mb-1">
-        <Icon className={cn('h-3.5 w-3.5', style.label)} />
-        <span className="text-[10px] uppercase tracking-wide text-slate-400">
-          {BEAT_TYPE_LABELS[beat.beat_type] ?? beat.beat_type}
-        </span>
+      <Handle type="target" position={Position.Top} className="!bg-slate-400 !w-2 !h-2" />
+      {/* Accent bar */}
+      <div className="h-1 w-full" style={{ backgroundColor: accent }} />
+      <div className="px-3 py-2">
+        <div className="flex items-center gap-1.5 mb-1">
+          <Icon className={cn('h-3.5 w-3.5 shrink-0', style.label)} />
+          <span
+            className="text-[10px] font-semibold uppercase tracking-wide"
+            style={{ color: accent }}
+          >
+            {BEAT_TYPE_LABELS[beat.beat_type] ?? beat.beat_type}
+          </span>
+          {beat.status === 'current' && (
+            <span className="ml-auto text-[9px] rounded-full bg-blue-500 text-white px-1.5 py-0.5 animate-pulse">
+              当前
+            </span>
+          )}
+        </div>
+        <div className="text-sm font-medium text-foreground leading-snug line-clamp-2">
+          {beat.title}
+        </div>
+        {beat.chapter_hint != null && (
+          <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+            <span className="inline-block w-1 h-1 rounded-full bg-slate-400" />
+            第 {Number(beat.chapter_hint)} 章
+          </div>
+        )}
+        {beat.characters && beat.characters.length > 0 && (
+          <div className="flex flex-wrap gap-0.5 mt-1">
+            {beat.characters.slice(0, 3).map((c) => (
+              <span
+                key={c}
+                className="text-[9px] rounded bg-slate-200/60 dark:bg-slate-700/60 px-1 py-0.5 text-slate-600 dark:text-slate-300"
+              >
+                {c}
+              </span>
+            ))}
+            {beat.characters.length > 3 && (
+              <span className="text-[9px] text-slate-400">+{beat.characters.length - 3}</span>
+            )}
+          </div>
+        )}
       </div>
-      <div className="text-sm font-medium text-foreground leading-snug line-clamp-2">
-        {beat.title}
-      </div>
-      {beat.chapter_hint != null && (
-        <div className="text-[10px] text-slate-400 mt-1">第 {Number(beat.chapter_hint)} 章</div>
-      )}
-      <Handle type="source" position={Position.Bottom} className="!bg-slate-400" />
+      <Handle type="source" position={Position.Bottom} className="!bg-slate-400 !w-2 !h-2" />
     </div>
   );
 }
@@ -235,48 +305,75 @@ function BeatNodeComponent({ data }: NodeProps) {
 const nodeTypes = { beatNode: BeatNodeComponent };
 
 // ---------------------------------------------------------------------------
-// Edge styling
+// Edge styling — each edge type has a distinct visual identity
 // ---------------------------------------------------------------------------
 
-const EDGE_STYLES: Record<string, { stroke: string; dashed: boolean; label: string }> = {
-  sequential: { stroke: '#94a3b8', dashed: false, label: '顺序' },
-  causal: { stroke: '#f97316', dashed: false, label: '因果' },
-  foreshadow: { stroke: '#ef4444', dashed: true, label: '伏笔' },
-  parallel: { stroke: '#3b82f6', dashed: false, label: '并行' },
-  alternative: { stroke: '#a855f7', dashed: true, label: '备选' },
-  character_arc: { stroke: '#a855f7', dashed: true, label: '角色弧' },
-  item_flow: { stroke: '#14b8a6', dashed: false, label: '物品流' },
+const EDGE_STYLES: Record<
+  string,
+  { stroke: string; dashed: boolean; label: string; animated: boolean; width: number }
+> = {
+  sequential: { stroke: '#94a3b8', dashed: false, label: '顺序', animated: false, width: 1.5 },
+  causal: { stroke: '#f97316', dashed: false, label: '因果', animated: true, width: 2 },
+  foreshadow: { stroke: '#ef4444', dashed: true, label: '伏笔', animated: true, width: 2 },
+  parallel: { stroke: '#3b82f6', dashed: false, label: '并行', animated: false, width: 1.5 },
+  alternative: { stroke: '#a855f7', dashed: true, label: '备选', animated: false, width: 1.5 },
+  character_arc: { stroke: '#8b5cf6', dashed: true, label: '角色弧', animated: true, width: 2 },
+  item_flow: { stroke: '#14b8a6', dashed: false, label: '物品流', animated: false, width: 1.5 },
 };
 
 // ---------------------------------------------------------------------------
-// Layout — simple layered DAG layout by sort_order + volume
+// Layout — dagre auto-layout for a proper DAG with visible cross-edges
 // ---------------------------------------------------------------------------
 
-function layoutGraph(beats: StoryBeat[]): Map<string, { x: number; y: number }> {
+function layoutGraph(
+  beats: JsonBeat[],
+  edges: Array<{ from_beat: string; to_beat: string; edge_type: string }>
+): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>();
   if (beats.length === 0) return positions;
 
-  const sorted = [...beats].sort((a, b) => {
-    const va = Number(a.volume ?? 0);
-    const vb = Number(b.volume ?? 0);
-    if (va !== vb) return va - vb;
-    return Number(a.sort_order) - Number(b.sort_order);
+  const NODE_W = 200;
+  const NODE_H = 100;
+
+  const g = new dagre.graphlib.Graph();
+  g.setGraph({
+    rankdir: 'TB',
+    nodesep: 60,
+    edgesep: 30,
+    ranksep: 80,
+    marginx: 20,
+    marginy: 20,
   });
+  g.setDefaultEdgeLabel(() => ({}));
 
-  const NODE_W = 220;
-  const NODE_H = 90;
-  const GAP_X = 60;
-  const GAP_Y = 80;
-  const MAX_PER_ROW = 4;
+  // Add nodes
+  for (const beat of beats) {
+    g.setNode(beat.id, { width: NODE_W, height: NODE_H });
+  }
 
-  sorted.forEach((beat, idx) => {
-    const row = Math.floor(idx / MAX_PER_ROW);
-    const col = idx % MAX_PER_ROW;
-    positions.set(beat.id, {
-      x: col * (NODE_W + GAP_X),
-      y: row * (NODE_H + GAP_Y),
+  // Add edges — use sort_order as weight for sequential edges so the main
+  // storyline flows top-to-bottom, while foreshadow/character_arc cross-edges
+  // get lower weight and spread out naturally.
+  for (const edge of edges) {
+    const isMainline =
+      edge.edge_type === 'sequential' || edge.edge_type === 'causal';
+    g.setEdge(edge.from_beat, edge.to_beat, {
+      weight: isMainline ? 10 : 1,
+      minlen: isMainline ? 1 : 2,
     });
-  });
+  }
+
+  dagre.layout(g);
+
+  for (const beat of beats) {
+    const node = g.node(beat.id);
+    if (node) {
+      positions.set(beat.id, {
+        x: node.x - NODE_W / 2,
+        y: node.y - NODE_H / 2,
+      });
+    }
+  }
   return positions;
 }
 
@@ -291,13 +388,13 @@ export function NovelOverviewPanel() {
   const rootPath = repos?.[0]?.path ?? '';
 
   const [stats, setStats] = useState<OverviewStats>(EMPTY_STATS);
-  const [graph, setGraph] = useState<StoryGraph | null>(null);
+  const [graph, setGraph] = useState<JsonGraph | null>(null);
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphError, setGraphError] = useState<string | null>(null);
   const [promptNotice, setPromptNotice] = useState<string | null>(null);
 
   const [selectedBeatId, setSelectedBeatId] = useState<string | null>(null);
-  const [beatContext, setBeatContext] = useState<BeatContext | null>(null);
+  const [beatContext, setJsonBeatContext] = useState<JsonBeatContext | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
@@ -328,7 +425,7 @@ export function NovelOverviewPanel() {
     setGraphError(null);
     try {
       const content = await fileTreeApi.readFile(storyGraphPath);
-      const parsed = JSON.parse(content) as StoryGraph;
+      const parsed = JSON.parse(content) as JsonGraph;
       // Ensure required arrays exist and edges have required fields
       setGraph({
         beats: parsed.beats ?? [],
@@ -349,7 +446,7 @@ export function NovelOverviewPanel() {
 
   // ----- save graph (write to .cinyuverse/story-graph.json) -----
   const saveGraph = useCallback(
-    async (nextGraph: StoryGraph) => {
+    async (nextGraph: JsonGraph) => {
       if (!storyGraphPath) return;
       try {
         const content = JSON.stringify(nextGraph, null, 2);
@@ -370,12 +467,12 @@ export function NovelOverviewPanel() {
   // ----- build context when selection changes (computed from local graph) -----
   useEffect(() => {
     if (!selectedBeatId || !graph) {
-      setBeatContext(null);
+      setJsonBeatContext(null);
       return;
     }
     const beat = graph.beats.find((b) => b.id === selectedBeatId);
     if (!beat) {
-      setBeatContext(null);
+      setJsonBeatContext(null);
       return;
     }
     const predecessorIds = new Set(
@@ -386,18 +483,21 @@ export function NovelOverviewPanel() {
     );
     const predecessors = graph.beats.filter((b) => predecessorIds.has(b.id));
     const successors = graph.beats.filter((b) => successorIds.has(b.id));
-    setBeatContext({
+    setJsonBeatContext({
       beat,
       predecessors,
       successors,
       characters: beat.characters ?? [],
       related_hooks: beat.hooks ?? [],
-    } as BeatContext);
+    });
   }, [selectedBeatId, graph]);
 
   // ----- React Flow nodes/edges -----
   const positions = useMemo(
-    () => (graph ? layoutGraph(graph.beats) : new Map<string, { x: number; y: number }>()),
+    () =>
+      graph
+        ? layoutGraph(graph.beats, graph.edges)
+        : new Map<string, { x: number; y: number }>(),
     [graph]
   );
 
@@ -425,15 +525,32 @@ export function NovelOverviewPanel() {
       .filter((e) => visibleIds.has(e.from_beat) && visibleIds.has(e.to_beat))
       .map((edge) => {
         const style = EDGE_STYLES[edge.edge_type] ?? EDGE_STYLES.sequential;
+        const isCrossEdge =
+          edge.edge_type === 'foreshadow' ||
+          edge.edge_type === 'character_arc' ||
+          edge.edge_type === 'item_flow' ||
+          edge.edge_type === 'alternative';
         return {
           id: `${edge.from_beat}->${edge.to_beat}:${edge.edge_type}`,
           source: edge.from_beat,
           target: edge.to_beat,
           label: style.label,
-          type: 'smoothstep',
+          // Cross-edges use bezier curves so they arc over/under the main
+          // flow; mainline edges use smoothstep for clean vertical routing.
+          type: isCrossEdge ? 'default' : 'smoothstep',
+          animated: style.animated,
           style: {
             stroke: style.stroke,
+            strokeWidth: style.width,
             strokeDasharray: style.dashed ? '6 4' : undefined,
+          },
+          labelStyle: {
+            fill: style.stroke,
+            fontSize: 10,
+            fontWeight: 600,
+          },
+          labelBgStyle: {
+            fill: 'rgba(255,255,255,0.85)',
           },
         };
       });
@@ -579,7 +696,6 @@ export function NovelOverviewPanel() {
             id: p.id,
             title: p.title,
             status: p.status,
-            completed_chapter: p.completed_chapter,
           })),
           successors: beatContext.successors.map((s) => ({
             id: s.id,
