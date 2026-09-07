@@ -288,7 +288,7 @@ function buildDefaultLayout(api: DockviewApi) {
   api.addPanel({
     id: PANEL_IDS.AI_CHAT,
     component: PANEL_IDS.AI_CHAT,
-    title: 'Sessions',
+    title: 'Writing Sessions',
     position: {
       referenceGroup: rightGroup,
       direction: 'within',
@@ -740,7 +740,7 @@ export function IDELayout({
       api.addPanel({
         id: PANEL_IDS.AI_CHAT,
         component: PANEL_IDS.AI_CHAT,
-        title: 'Sessions',
+        title: 'Writing Sessions',
         position: {
           referenceGroup: rightGroup.id,
           direction: 'within',

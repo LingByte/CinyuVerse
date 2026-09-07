@@ -99,7 +99,7 @@ export function WorkspaceSelector({
                       : 'rounded-full bg-[hsl(var(--warning)/0.12)] px-1.5 py-0.5 text-[10px] text-[hsl(var(--warning))]'
                   }
                 >
-                  {option.useWorktree ? 'Worktree' : 'Project'}
+                  {option.useWorktree ? 'Draft tree' : 'Novel'}
                 </span>
               </div>
               <div className="truncate text-[10px] text-muted-foreground">

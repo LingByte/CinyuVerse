@@ -39,9 +39,9 @@ const SLOT_C_ZH: SlotItem[] = [
   { id: 'skills', label: 'Skills', kind: 'mark' },
   { id: 'mcp', label: 'MCP', kind: 'mark' },
   { id: 'cli', label: 'CLI', kind: 'mark' },
-  { id: 'terminal', label: 'Terminal', kind: 'mark' },
-  { id: 'git', label: 'Git', kind: 'mark' },
-  { id: 'worktree', label: 'WorktreeManager', kind: 'mark' },
+  { id: 'editor', label: '编辑器', kind: 'mark' },
+  { id: 'version', label: '版本管理', kind: 'mark' },
+  { id: 'draft', label: '草稿管理', kind: 'mark' },
   { id: 'local', label: '本地运行', kind: 'mark' },
 ];
 
@@ -51,9 +51,9 @@ const SLOT_C_EN: SlotItem[] = [
   { id: 'skills', label: 'Skills', kind: 'mark' },
   { id: 'mcp', label: 'MCP', kind: 'mark' },
   { id: 'cli', label: 'CLI', kind: 'mark' },
-  { id: 'terminal', label: 'Terminal', kind: 'mark' },
-  { id: 'git', label: 'Git', kind: 'mark' },
-  { id: 'worktree', label: 'Worktree Manager', kind: 'mark' },
+  { id: 'editor', label: 'Editor', kind: 'mark' },
+  { id: 'version', label: 'Version History', kind: 'mark' },
+  { id: 'draft', label: 'Draft Manager', kind: 'mark' },
   { id: 'local', label: 'Local-first', kind: 'mark' },
 ];
 

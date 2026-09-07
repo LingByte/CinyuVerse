@@ -21,10 +21,10 @@ export const DEFAULT_ACTIVITY_RAIL_ORDER: readonly ActivityRailItemId[] =
   ACTIVITY_RAIL_ITEMS;
 
 export const ACTIVITY_RAIL_PANEL_TITLES: Record<ActivityRailItemId, string> = {
-  [PANEL_IDS.FILE_TREE]: 'Files',
+  [PANEL_IDS.FILE_TREE]: 'Chapters',
   [PANEL_IDS.GIT]: 'Git',
   [PANEL_IDS.SEARCH]: 'Search',
-  [PANEL_IDS.SESSION_LIST]: 'Sessions',
+  [PANEL_IDS.SESSION_LIST]: 'Writing Sessions',
 };
 
 export const ACTIVITY_RAIL_ORDER_KEY = 'cinyuverse:activity-rail-order' as const;

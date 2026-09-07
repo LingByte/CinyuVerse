@@ -42,10 +42,12 @@ function truncateSessionName(name: string, length = 7) {
 
 const SESSION_PLACEHOLDERS = new Set([
   'Session',
-  '会话',
+  'Writing Session',
+  '创作会话',
   'New session',
   'New Session',
-  '新会话',
+  'New Writing Session',
+  '新创作会话',
 ]);
 
 function isSessionPlaceholder(value: string) {
