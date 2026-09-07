@@ -1,0 +1,82 @@
+{
+  "categories": {
+    "foundation": "作品基础",
+    "chapter": "章节创作",
+    "review": "审校修订",
+    "character": "角色管理",
+    "worldbuilding": "世界观",
+    "meta": "工具"
+  },
+  "templates": {
+    "init-foundation": {
+      "label": "初始化作品基础",
+      "description": "生成故事圣经、卷大纲、写作规则、初始伏笔和当前状态"
+    },
+    "revise-foundation": {
+      "label": "修订作品基础",
+      "description": "根据反馈修订故事圣经、大纲或写作规则"
+    },
+    "plan-chapter": {
+      "label": "规划章节",
+      "description": "为目标章节生成备忘录和写作意图"
+    },
+    "write-chapter": {
+      "label": "撰写章节",
+      "description": "根据备忘录撰写章节正文"
+    },
+    "audit-chapter": {
+      "label": "审校章节",
+      "description": "从多个维度审计章节质量"
+    },
+    "revise-chapter": {
+      "label": "修订章节",
+      "description": "根据审校报告修订章节正文"
+    },
+    "update-state": {
+      "label": "更新章节状态",
+      "description": "章节完成后更新摘要、伏笔池和当前状态"
+    },
+    "create-character": {
+      "label": "创建角色卡",
+      "description": "生成角色设定卡"
+    },
+    "refine-character": {
+      "label": "完善角色卡",
+      "description": "根据反馈完善已有角色设定"
+    },
+    "expand-world-view": {
+      "label": "扩展世界观",
+      "description": "深化世界观设定"
+    },
+    "add-glossary": {
+      "label": "补充设定词条",
+      "description": "为专有名词创建解释词条"
+    },
+    "continuity-check": {
+      "label": "全书连贯性检查",
+      "description": "检查全书时间线、伏笔、角色一致性"
+    },
+    "writing-stats": {
+      "label": "写作统计",
+      "description": "统计字数、章节进度、伏笔回收率"
+    },
+    "export-prep": {
+      "label": "导出准备",
+      "description": "整理章节顺序、生成目录和简介"
+    }
+  },
+  "fields": {
+    "bookName": "书名",
+    "genre": "题材",
+    "chapterNumber": "章节号",
+    "wordCount": "目标字数",
+    "guidance": "作者指导",
+    "characterName": "角色名",
+    "volumeNumber": "卷号"
+  },
+  "actions": {
+    "insert": "插入到对话",
+    "copy": "复制提示词",
+    "send": "发送"
+  }
+}

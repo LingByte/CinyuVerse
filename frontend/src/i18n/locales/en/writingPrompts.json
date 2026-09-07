@@ -1,0 +1,82 @@
+{
+  "categories": {
+    "foundation": "Foundation",
+    "chapter": "Chapter",
+    "review": "Review",
+    "character": "Characters",
+    "worldbuilding": "Worldbuilding",
+    "meta": "Tools"
+  },
+  "templates": {
+    "init-foundation": {
+      "label": "Initialize Foundation",
+      "description": "Generate story bible, volume outline, writing rules, initial hooks and current state"
+    },
+    "revise-foundation": {
+      "label": "Revise Foundation",
+      "description": "Revise story bible, outline, or writing rules from feedback"
+    },
+    "plan-chapter": {
+      "label": "Plan Chapter",
+      "description": "Generate chapter memo and writing intent"
+    },
+    "write-chapter": {
+      "label": "Write Chapter",
+      "description": "Write chapter prose from memo"
+    },
+    "audit-chapter": {
+      "label": "Audit Chapter",
+      "description": "Audit chapter quality across multiple dimensions"
+    },
+    "revise-chapter": {
+      "label": "Revise Chapter",
+      "description": "Revise chapter prose from audit report"
+    },
+    "update-state": {
+      "label": "Update Chapter State",
+      "description": "Update summaries, hooks, and current state after chapter completion"
+    },
+    "create-character": {
+      "label": "Create Character Card",
+      "description": "Generate a character setting card"
+    },
+    "refine-character": {
+      "label": "Refine Character Card",
+      "description": "Refine existing character from feedback"
+    },
+    "expand-world-view": {
+      "label": "Expand World View",
+      "description": "Deepen world-building settings"
+    },
+    "add-glossary": {
+      "label": "Add Glossary Entries",
+      "description": "Create glossary entries for proper nouns"
+    },
+    "continuity-check": {
+      "label": "Continuity Check",
+      "description": "Check timeline, hooks, and character consistency across the book"
+    },
+    "writing-stats": {
+      "label": "Writing Stats",
+      "description": "Count words, chapter progress, and hook resolution rate"
+    },
+    "export-prep": {
+      "label": "Export Preparation",
+      "description": "Order chapters, generate TOC and synopsis"
+    }
+  },
+  "fields": {
+    "bookName": "Book name",
+    "genre": "Genre",
+    "chapterNumber": "Chapter number",
+    "wordCount": "Target word count",
+    "guidance": "Author guidance",
+    "characterName": "Character name",
+    "volumeNumber": "Volume number"
+  },
+  "actions": {
+    "insert": "Insert into conversation",
+    "copy": "Copy prompt",
+    "send": "Send"
+  }
+}
