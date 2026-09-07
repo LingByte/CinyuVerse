@@ -51,7 +51,7 @@
   },
   "projectCard": {
     "viewDetails": "View details",
-    "openInIde": "Open in IDE",
+    "openInIde": "Open in Editor",
     "edit": "Edit",
     "createdAt": "Created {{date}}"
   },
@@ -59,14 +59,14 @@
     "more": "More"
   },
   "projectList": {
-    "title": "Projects",
-    "subtitle": "Manage your projects and track their progress",
-    "createProject": "Create Project",
-    "fetchFailed": "Failed to fetch projects",
-    "loading": "Loading projects...",
-    "emptyTitle": "No projects yet",
-    "emptyDescription": "Get started by creating your first project.",
-    "createFirstProject": "Create your first project"
+    "title": "Novels",
+    "subtitle": "Manage your novels and track their progress",
+    "createProject": "Create Novel",
+    "fetchFailed": "Failed to fetch novels",
+    "loading": "Loading novels...",
+    "emptyTitle": "No novels yet",
+    "emptyDescription": "Get started by creating your first novel.",
+    "createFirstProject": "Create your first novel"
   },
   "errorBoundary": {
     "title": "Page Error",
@@ -78,7 +78,7 @@
     "addTask": "Add task"
   },
   "fullAttemptLogs": {
-    "loadingSession": "Loading session..."
+    "loadingSession": "Loading writing session..."
   },
   "prCommentCard": {
     "viewEditHint": "Click to view, double-click to edit",
@@ -90,7 +90,7 @@
     "noCommands": "No commands available for the current configuration."
   },
   "followUpSend": {
-    "sessionScopedSlashCommandError": "This / command must run in an existing session and cannot be triggered by creating a new session.",
+    "sessionScopedSlashCommandError": "This / command must run in an existing writing session and cannot be triggered by creating a new writing session.",
     "startFailed": "Failed to start follow-up execution: {{error}}",
     "imageUploadFailed": "Could not attach image: {{error}}",
     "unknownError": "Unknown error"
@@ -113,20 +113,20 @@
   },
   "welcomePage": {
     "processing": "Processing...",
-    "recentProjectTooltip": "Left-click to open the project, right-click for open and delete actions",
-    "createProjectFailed": "Failed to create project: {{error}}",
-    "deleteProjectConfirmTitle": "Delete project \"{{name}}\"?",
-    "deleteProjectConfirmMessage": "Deleting the project will remove all sessions and workspace data under it. This action cannot be undone.",
+    "recentProjectTooltip": "Left-click to open the novel, right-click for open and delete actions",
+    "createProjectFailed": "Failed to create novel: {{error}}",
+    "deleteProjectConfirmTitle": "Delete novel \"{{name}}\"?",
+    "deleteProjectConfirmMessage": "Deleting the novel will remove all writing sessions and volume data under it. This action cannot be undone.",
     "confirmDelete": "Confirm Delete",
-    "projectDeleted": "Deleted project \"{{name}}\"",
-    "deleteProjectFailed": "Failed to delete project",
+    "projectDeleted": "Deleted novel \"{{name}}\"",
+    "deleteProjectFailed": "Failed to delete novel",
     "startSection": "Get Started",
-    "createNewProject": "Create New Project",
+    "createNewProject": "Create New Novel",
     "selectFolder": "Select Folder",
-    "cloneRepo": "Clone Repository",
-    "recentProjects": "Recent Projects",
-    "loadingProjects": "Loading projects...",
-    "noProjects": "No projects yet. Create one to get started.",
+    "cloneRepo": "Clone Library",
+    "recentProjects": "Recent Novels",
+    "loadingProjects": "Loading novels...",
+    "noProjects": "No novels yet. Create one to get started.",
     "open": "Open",
     "tagline": "Super Agent Coding Platform"
   },
@@ -145,7 +145,7 @@
     "authFailed": "Could not reach that Host. Check the address and token."
   },
   "kanbanSessions": {
-    "sessionFallback": "New session"
+    "sessionFallback": "New writing session"
   },
   "turnTool": {
     "editFile": "Edit {{path}}",
@@ -159,28 +159,28 @@
   },
   "gitHostErrors": {
     "noRemotes": {
-      "title": "Failed to load {{subject}}: the current repository has no remote configured yet.",
-      "hint": "How to fix: first add a remote such as origin to the repository, for example run git remote add origin <repository-url>, then click Refresh."
+      "title": "Failed to load {{subject}}: the current library has no remote configured yet.",
+      "hint": "How to fix: first add a remote such as origin to the library, for example run git remote add origin <library-url>, then click Refresh."
     },
     "invalidRepository": {
-      "title": "Failed to load {{subject}}: the current repository's Git remote configuration is invalid.",
-      "hint": "How to fix: make sure the repository is initialized and has a working remote configured, and that the current project directory points to the correct repository, then try again."
+      "title": "Failed to load {{subject}}: the current library's Git remote configuration is invalid.",
+      "hint": "How to fix: make sure the library is initialized and has a working remote configured, and that the current novel directory points to the correct library, then try again."
     },
     "generic": {
       "title": "Failed to load {{subject}}."
     }
   },
   "workspaceBranch": {
-    "checkoutHint": "After selecting, it will first check out this branch in the current project directory to ensure the workspace is correct."
+    "checkoutHint": "After selecting, it will first check out this draft in the current novel directory to ensure the volume is correct."
   },
   "searchTags": {
     "devServer": {
-      "name": "Start project dev server",
-      "content": "Analyze the current project and identify the correct way to start its dev server; check or install dependencies and fix basic environment issues as needed; after a successful start, verify that the service is reachable, then tell me the reachable local URL directly."
+      "name": "Start novel dev server",
+      "content": "Analyze the current novel and identify the correct way to start its dev server; check or install dependencies and fix basic environment issues as needed; after a successful start, verify that the service is reachable, then tell me the reachable local URL directly."
     },
     "reviewChanges": {
       "name": "Review changes",
-      "content": "Please review all uncommitted code changes in the current workspace. Prioritize pointing out possible bugs, behavior regressions, maintainability issues, performance issues, and test gaps; sort them by severity and include file and line numbers where possible. If you find no issues, clearly state that no high-risk problems were found, and list the risks that remain unverified."
+      "content": "Please review all unsaved content changes in the current volume. Prioritize pointing out possible bugs, behavior regressions, maintainability issues, performance issues, and test gaps; sort them by severity and include file and line numbers where possible. If you find no issues, clearly state that no high-risk problems were found, and list the risks that remain unverified."
     }
   },
   "fileTreeUtils": {
@@ -191,13 +191,13 @@
     "deleteFileConfirm": "Are you sure you want to delete the file \"{{name}}\"?"
   },
   "sessionErrors": {
-    "uncommittedChangesCannotSwitch": "The current branch has uncommitted changes, so the branch cannot be switched. Please commit or discard your changes first.",
-    "workspaceRequired": "Please select a workspace.",
-    "sessionStillRunning": "The session is still running and cannot be deleted right now.",
-    "sessionNotFound": "The session does not exist or has already been deleted.",
-    "workspaceNotFound": "The workspace does not exist.",
-    "executorMismatch": "The agent bound to the current session does not match the selected agent.",
-    "invalidReference": "The selected branch does not exist; the workspace/branch list may be out of date. Please refresh and select again."
+    "uncommittedChangesCannotSwitch": "The current draft has unsaved changes, so the draft cannot be switched. Please save or discard your changes first.",
+    "workspaceRequired": "Please select a volume.",
+    "sessionStillRunning": "The writing session is still running and cannot be deleted right now.",
+    "sessionNotFound": "The writing session does not exist or has already been deleted.",
+    "workspaceNotFound": "The volume does not exist.",
+    "executorMismatch": "The agent bound to the current writing session does not match the selected agent.",
+    "invalidReference": "The selected draft does not exist; the volume/draft list may be out of date. Please refresh and select again."
   },
   "localDeps": {
     "notInstalled": "Not installed",
@@ -241,15 +241,15 @@
     },
     "newSession": {
       "shortLabel": "Fresh context",
-      "retryLabel": "Retry in new session",
+      "retryLabel": "Retry in new writing session",
       "retryDescription": "Creates a new execution context and starts over."
     }
   },
   "installCompanion": {
     "entryFileNotFound": "Could not find an entry file for automatic integration: src/main.tsx/jsx/ts/js.",
     "appTagNotFound": "Could not find <App /> in the entry file; cannot automatically integrate Web Companion.",
-    "noProjectDir": "The current workspace has no available project directory.",
-    "noRepo": "The current workspace has no available repository."
+    "noProjectDir": "The current volume has no available novel directory.",
+    "noRepo": "The current volume has no available library."
   },
   "date": {
     "justNow": "just now",

@@ -1,18 +1,18 @@
 {
   "changeTargetBranch": {
-    "title": "更改目标分支",
-    "description": "为任务尝试选择新的目标分支。",
-    "targetBranchLabel": "目标分支",
-    "selectPlaceholder": "选择目标分支",
+    "title": "更改目标版本",
+    "description": "为任务尝试选择新的目标版本。",
+    "targetBranchLabel": "目标版本",
+    "selectPlaceholder": "选择目标版本",
     "changing": "更改中...",
-    "changeBranch": "更改分支"
+    "changeBranch": "更改版本"
   },
   "rebase": {
-    "title": "选择目标分支",
-    "description": "选择一个目标分支继续执行当前 Git 操作。",
+    "title": "选择目标版本",
+    "description": "选择一个目标版本继续执行当前 Git 操作。",
     "confirm": "确认",
-    "targetBranchLabel": "目标分支",
-    "targetBranchPlaceholder": "选择目标分支",
+    "targetBranchLabel": "目标版本",
+    "targetBranchPlaceholder": "选择目标版本",
     "processing": "处理中..."
   },
   "gitActions": {
@@ -28,12 +28,12 @@
     "add": "添加"
   },
   "editBranchName": {
-    "title": "编辑分支名称",
-    "description": "输入分支的新名称。如果存在未关闭的 PR，则无法重命名。",
-    "branchNameLabel": "分支名称",
+    "title": "编辑版本名称",
+    "description": "输入版本的新名称。如果存在未关闭的 PR，则无法重命名。",
+    "branchNameLabel": "版本名称",
     "placeholder": "例如：feature/my-branch",
     "renaming": "重命名中...",
-    "renameButton": "重命名分支"
+    "renameButton": "重命名版本"
   },
   "viewProcesses": {
     "title": "执行进程"
@@ -55,7 +55,7 @@
   "createPr": {
     "gitNotAuthenticated": "Git 未通过身份验证。运行 gh auth login（或配置 Git 凭据）然后重试。",
     "gitCliNotInstalled": "未安装 Git CLI。安装 Git 以创建 PR。",
-    "targetBranchNotFound": "远程上不存在目标分支 {{branch}}。请在创建拉取请求之前确保该分支存在。",
+    "targetBranchNotFound": "远程上不存在目标版本 {{branch}}。请在创建拉取请求之前确保该版本存在。",
     "createFailed": "创建 PR 失败",
     "title": "创建拉取请求",
     "description": "为此任务尝试创建拉取请求。",
@@ -64,23 +64,23 @@
     "titlePlaceholder": "输入 PR 标题",
     "descriptionLabel": "描述（可选）",
     "descriptionPlaceholder": "输入 PR 描述",
-    "baseBranchLabel": "基础分支",
-    "loadingBranches": "加载分支中...",
-    "selectBaseBranch": "选择基础分支",
+    "baseBranchLabel": "基础版本",
+    "loadingBranches": "加载版本中...",
+    "selectBaseBranch": "选择基础版本",
     "createAsDraft": "创建为草稿",
     "creating": "创建中...",
     "createButton": "创建 PR"
   },
   "cloneRepo": {
-    "title": "克隆仓库",
-    "description": "输入 Git 仓库地址并选择本地目录，克隆完成后自动加入工作区。",
-    "urlLabel": "仓库地址",
+    "title": "克隆作品集",
+    "description": "输入 Git 作品集地址并选择本地目录，克隆完成后自动加入草稿。",
+    "urlLabel": "作品集地址",
     "urlPlaceholder": "https://github.com/owner/repo.git 或 git@...",
     "cloneToLabel": "克隆到",
     "parentDirPlaceholder": "选择父目录",
     "browse": "浏览…",
     "willCloneTo": "将克隆到：{{path}}",
-    "urlRequired": "请填写仓库地址",
+    "urlRequired": "请填写作品集地址",
     "dirRequired": "请选择克隆到的目录",
     "cloneFailed": "克隆失败",
     "cloning": "克隆中…",
@@ -97,22 +97,22 @@
     "go": "前往",
     "searchLabel": "搜索当前目录:",
     "selectCurrent": "选择当前",
-    "gitRepo": "git 仓库",
+    "gitRepo": "git 作品集",
     "selectPath": "选择路径"
   },
   "disclaimer": {
     "title": "安全提示",
     "runModeIntro": "{{appName}} 默认以",
-    "runModeAccess": "模式运行 AI 编程 Agent，赋予其在你系统上执行代码和运行命令的完全访问权限。",
+    "runModeAccess": "模式运行 AI 写作 Agent，赋予其在你系统上执行脚本和运行命令的完全访问权限。",
     "importantLabel": "重要：",
     "importantBody": "请始终关注 Agent 的操作行为，并确保重要工作已备份。本软件仍处于实验阶段，请谨慎使用。",
     "acceptButton": "我已了解，继续使用"
   },
   "forcePush": {
     "title": "需要强制推送",
-    "description": "远程分支{{branch}}已与您的本地分支分离。常规推送被拒绝。",
+    "description": "远程版本{{branch}}已与您的本地版本分离。常规推送被拒绝。",
     "warning": "强制推送将用您的本地更改覆盖远程更改。此操作无法撤消。",
-    "hint": "仅当您确定要替换远程分支历史记录时才继续。",
+    "hint": "仅当您确定要替换远程版本历史记录时才继续。",
     "pushFailed": "强制推送失败",
     "processing": "强制推送中...",
     "confirmButton": "强制推送"
@@ -128,7 +128,7 @@
     "manualIntroAfter": "安装 GitHub CLI，然后使用您的 GitHub 账户进行身份验证。",
     "runFailed": "运行 GitHub CLI 设置失败。",
     "title": "GitHub CLI 设置",
-    "description": "需要 GitHub CLI 身份验证才能创建拉取请求并与 GitHub 仓库交互。",
+    "description": "需要 GitHub CLI 身份验证才能创建拉取请求并与 GitHub 作品集交互。",
     "setupWill": "此设置将：",
     "step1": "检查是否安装了 GitHub CLI (gh)",
     "step2": "如果需要，通过 Homebrew 安装它（macOS）",
@@ -148,56 +148,56 @@
     "scriptProcesses": "{{count}} 个脚本进程",
     "scriptBreakdown": "({{setup}} 个设置，{{cleanup}} 个清理)",
     "permanentWarning": "此操作将永久更改历史记录，无法撤消。",
-    "uncommittedDetected": "检测到未提交的更改",
-    "youHaveUncommitted": "您有 {{count}} 个未提交的更改",
+    "uncommittedDetected": "检测到未保存的更改",
+    "youHaveUncommitted": "您有 {{count}} 个未保存的更改",
     "andUntracked": "和 {{count}} 个未跟踪的文件",
     "acknowledgeAffected": "我了解这些更改可能会受到影响",
-    "acknowledgeRiskLabel": "确认了解未提交更改风险",
-    "resetWorktree": "重置工作树",
+    "acknowledgeRiskLabel": "确认了解未保存更改风险",
+    "resetWorktree": "重置草稿树",
     "enabled": "已启用",
     "disabled": "已禁用",
-    "toggleResetWorktree": "切换重置工作树",
-    "worktreeRestoreNote": "您的工作树将被恢复到此提交。",
-    "discardUncommitted": "丢弃 {{count}} 个未提交的更改。",
+    "toggleResetWorktree": "切换重置草稿树",
+    "worktreeRestoreNote": "您的草稿树将被恢复到此提交。",
+    "discardUncommitted": "丢弃 {{count}} 个未保存的更改。",
     "untrackedNote": "存在 {{count}} 个未跟踪的文件（不受重置影响）。",
-    "disabledUncommitted": "已禁用（检测到未提交的更改）",
-    "forceResetLabel": "强制重置（丢弃未提交的更改）",
+    "disabledUncommitted": "已禁用（检测到未保存的更改）",
+    "forceResetLabel": "强制重置（丢弃未保存的更改）",
     "toggleForceReset": "切换强制重置",
-    "forceDiscardNote": "未提交的更改将被丢弃。",
-    "uncommittedBlockNote": "存在未提交的更改。请打开强制重置或提交/暂存后继续。",
+    "forceDiscardNote": "未保存的更改将被丢弃。",
+    "uncommittedBlockNote": "存在未保存的更改。请打开强制重置或提交/暂存后继续。",
     "retry": "重试"
   },
   "projectForm": {
-    "pickFolderTitleExisting": "选择项目文件夹",
-    "pickFolderTitleNew": "选择项目创建位置",
+    "pickFolderTitleExisting": "选择作品文件夹",
+    "pickFolderTitleNew": "选择作品创建位置",
     "pickFolderFailed": "选择文件夹失败",
-    "nameRequired": "请输入项目名称",
-    "invalidFolderName": "项目名称无法作为文件夹名称，请修改项目名称",
-    "locationRequired": "请选择项目创建位置",
-    "createFailed": "创建项目失败",
-    "selectFolderRequired": "请先选择项目文件夹",
+    "nameRequired": "请输入作品名称",
+    "invalidFolderName": "作品名称无法作为文件夹名称，请修改作品名称",
+    "locationRequired": "请选择作品创建位置",
+    "createFailed": "创建作品失败",
+    "selectFolderRequired": "请先选择作品文件夹",
     "openFolderFailed": "打开文件夹失败",
     "submitInitGitAndOpen": "初始化 Git 并打开",
     "submitOpenFolder": "打开文件夹",
-    "submitCreate": "创建项目",
+    "submitCreate": "创建作品",
     "titleExisting": "选择文件夹",
-    "titleNew": "创建新项目",
-    "descriptionExisting": "打开已有项目文件夹；如果还不是 Git 仓库，会先完成 Git 初始化。",
-    "descriptionNew": "创建新项目会在指定位置新建文件夹，并自动完成 Git 初始化。",
-    "folderLabel": "项目文件夹",
+    "titleNew": "创建新作品",
+    "descriptionExisting": "打开已有作品文件夹；如果还不是 Git 作品集，会先完成 Git 初始化。",
+    "descriptionNew": "创建新作品会在指定位置新建文件夹，并自动完成 Git 初始化。",
+    "folderLabel": "作品文件夹",
     "chooseFolder": "选择文件夹",
     "noFolderSelected": "未选择文件夹",
-    "recognizedGitRepo": "已识别为 Git 仓库",
-    "notGitRepoHint": "该文件夹还不是 Git 仓库，打开时会先初始化 Git。",
-    "nameLabel": "项目名称",
+    "recognizedGitRepo": "已识别为 Git 作品集",
+    "notGitRepoHint": "该文件夹还不是 Git 作品集，打开时会先初始化 Git。",
+    "nameLabel": "作品名称",
     "namePlaceholder": "例如：Marketing Site",
-    "descriptionLabel": "项目简介（可选，用于 README）",
-    "descriptionPlaceholder": "简单描述这个项目要解决的问题",
+    "descriptionLabel": "作品简介（可选，用于 README）",
+    "descriptionPlaceholder": "简单描述这个作品要解决的问题",
     "locationLabel": "创建位置",
     "chooseLocation": "选择位置",
     "noLocationSelected": "未选择创建位置",
     "willCreate": "将创建：{{path}}",
-    "gitInitNote": "创建后会自动初始化 Git 仓库",
+    "gitInitNote": "创建后会自动初始化 Git 作品集",
     "createReadme": "创建 README.md",
     "createGitignore": "创建 .gitignore",
     "createLicense": "创建 MIT LICENSE",
@@ -209,7 +209,7 @@
     "titleCleanup": "修复清理脚本",
     "titleArchive": "修复归档脚本",
     "titleDevServer": "修复开发服务器脚本",
-    "repo": "仓库",
+    "repo": "作品集",
     "scriptEdit": "脚本（编辑）",
     "lastExecutionLogs": "上次执行日志",
     "running": "运行中...",
@@ -251,13 +251,13 @@
     "builtIn": "内置",
     "recommended": "推荐",
     "enableAgentAria": "启用 {{agent}}",
-    "loginNotice": "安装只负责 ACP 启动命令。安装完成后，请自行登录 Agent 账户或配置 API。会话模型、权限和推理选项将在创建会话时读取，不在这里设置。",
+    "loginNotice": "安装只负责 ACP 启动命令。安装完成后，请自行登录 Agent 账户或配置 API。创作会话模型、权限和推理选项将在创建创作会话时读取，不在这里设置。",
     "editorTitle": "选择外部编辑器",
     "disclaimerAcceptHint": "继续即表示你已阅读并同意",
     "disclaimerLink": "免责声明",
     "disclaimerTitle": "免责声明",
     "disclaimerClose": "关闭",
-    "disclaimerPreamble": "{{appName}} 会在你的计算机上编排多个 AI 编程 Agent，并可能安装软件、读写仓库、执行命令、连接远程设备与聊天通道。继续初始化或使用本软件，即表示你已阅读、理解并同意本声明。若不同意，请立即停止使用并卸载。",
+    "disclaimerPreamble": "{{appName}} 会在你的计算机上编排多个 AI 写作 Agent，并可能安装软件、读写作品集、执行命令、连接远程设备与聊天通道。继续初始化或使用本软件，即表示你已阅读、理解并同意本声明。若不同意，请立即停止使用并卸载。",
     "disclaimerSections": {
       "nature": {
         "title": "软件性质与无担保",
@@ -265,7 +265,7 @@
       },
       "agents": {
         "title": "Agent 与本机执行",
-        "body": "你启用的 ACP Agent（含内置 Agent）在本机以与 {{appName}} 相同的权限运行。它们可以读写、修改或删除文件，执行终端命令，安装软件，访问网络，读取环境变量与凭据，并启动其他程序。{{appName}} 不为 Agent 提供操作系统级沙箱，也不能保证阻止有害、错误或越权操作。无工作区会话使用专用临时目录，并不构成安全隔离。权限请求、会话权限模式和「始终允许」只是你自己的控制开关，不是安全边界。你必须亲自监督 Agent 行为。Agent 在崩溃、取消或中断前可能已经产生不可撤销的副作用；中断的回合不会自动重试，已发生的文件、网络或命令变更也不会被回滚。"
+        "body": "你启用的 ACP Agent（含内置 Agent）在本机以与 {{appName}} 相同的权限运行。它们可以读写、修改或删除文件，执行终端命令，安装软件，访问网络，读取环境变量与凭据，并启动其他程序。{{appName}} 不为 Agent 提供操作系统级沙箱，也不能保证阻止有害、错误或越权操作。无草稿创作会话使用专用临时目录，并不构成安全隔离。权限请求、创作会话权限模式和「始终允许」只是你自己的控制开关，不是安全边界。你必须亲自监督 Agent 行为。Agent 在崩溃、取消或中断前可能已经产生不可撤销的副作用；中断的回合不会自动重试，已发生的文件、网络或命令变更也不会被回滚。"
       },
       "thirdPartyAgents": {
         "title": "第三方 Agent、安装与凭据",
@@ -273,43 +273,43 @@
       },
       "plugins": {
         "title": "插件与扩展",
-        "body": "你安装或启用的 {{appName}} 插件（含链接开发插件、官方产品 MCP、会话增强与多智能体协同插件）采用全信任模型。插件的 Worker、界面和声明的 Runtime 拥有与宿主相同的本机文件、网络、环境变量和进程能力。独立进程或界面框架只用于生命周期与崩溃隔离，不是安全沙箱。Agent 原生插件（Skill、MCP、Hook 等）的信任由其各自 Runtime 负责。不要安装你不信任的来源。"
+        "body": "你安装或启用的 {{appName}} 插件（含链接开发插件、官方产品 MCP、创作会话增强与多智能体协同插件）采用全信任模型。插件的 Worker、界面和声明的 Runtime 拥有与宿主相同的本机文件、网络、环境变量和进程能力。独立进程或界面框架只用于生命周期与崩溃隔离，不是安全沙箱。Agent 原生插件（Skill、MCP、Hook 等）的信任由其各自 Runtime 负责。不要安装你不信任的来源。"
       },
       "git": {
-        "title": "Git、工作区与破坏性操作",
-        "body": "{{appName}} 会创建与管理 Git worktree，并可能执行提交、变基、重置、还原、强制推送、克隆与拉取请求。这些操作可能改写本地和远程历史、丢弃未提交更改或覆盖远程分支。仓库中的 setup、cleanup、archive 与开发服务器脚本会经系统 shell 执行。恶意或不可信仓库可能包含有害脚本或 Git 内容。初始化时安装 Git 或 GitHub CLI 会改动你的本机环境。你对所有 Git 操作及其后果负责。"
+        "title": "Git、草稿与破坏性操作",
+        "body": "{{appName}} 会创建与管理 Git worktree，并可能执行提交、变基、重置、还原、强制推送、克隆与拉取请求。这些操作可能改写本地和远程历史、丢弃未保存更改或覆盖远程版本。作品集中的 setup、cleanup、archive 与开发服务器脚本会经系统 shell 执行。恶意或不可信作品集可能包含有害脚本或 Git 内容。初始化时安装 Git 或 GitHub CLI 会改动你的本机环境。你对所有 Git 操作及其后果负责。"
       },
       "automation": {
         "title": "自动化、工作流与无人值守运行",
-        "body": "自动化与工作流可在你不在场时启动 Agent 回合。默认每次运行使用独立 worktree，但共享根目录模式会直接在你指定的仓库中工作。运行不会自动合并、推送、发布或部署，但运行中的 Agent 仍可能按已授予的权限执行这些操作。暂停、取消或中断不会回滚已经发生的文件或外部副作用。定时任务可能在你不在场时产生费用与变更。"
+        "body": "自动化与工作流可在你不在场时启动 Agent 回合。默认每次运行使用独立 worktree，但共享根目录模式会直接在你指定的作品集中工作。运行不会自动合并、推送、发布或部署，但运行中的 Agent 仍可能按已授予的权限执行这些操作。暂停、取消或中断不会回滚已经发生的文件或外部副作用。定时任务可能在你不在场时产生费用与变更。"
       },
       "delegation": {
         "title": "多智能体委派",
-        "body": "多智能体协同允许父 Agent 创建子会话并并行执行任务。子 Agent 在其工作区内同样具有本机执行能力，其操作可能同时修改文件、执行命令或调用外部服务。你对委派策略、深度、结果以及子 Agent 的副作用负责。"
+        "body": "多智能体协同允许父 Agent 创建子创作会话并并行执行任务。子 Agent 在其草稿内同样具有本机执行能力，其操作可能同时修改文件、执行命令或调用外部服务。你对委派策略、深度、结果以及子 Agent 的副作用负责。"
       },
       "remote": {
         "title": "远程访问、配对与隧道",
-        "body": "开启远程访问、设备配对、局域网发布或主机隧道后，已配对的工作站设备几乎可以接管会话、文件、Git、终端、工作流、自动化与已安装插件；伴随设备可以查看会话并处理审批。配对邀请包含可达地址；公网 HTTP 可能以明文传输。FRP、Tailscale、Cloudflare 等隧道由你自行配置与维护，{{appName}} 不运营这些中继。任何取得已授权设备、邀请或凭据的人，都可能对你的 Host 执行与你本人等价的操作。你必须保管凭据、及时撤销失联设备，并理解把 Host 暴露到网络的风险。"
+        "body": "开启远程访问、设备配对、局域网发布或主机隧道后，已配对的工作站设备几乎可以接管创作会话、文件、Git、终端、工作流、自动化与已安装插件；伴随设备可以查看创作会话并处理审批。配对邀请包含可达地址；公网 HTTP 可能以明文传输。FRP、Tailscale、Cloudflare 等隧道由你自行配置与维护，{{appName}} 不运营这些中继。任何取得已授权设备、邀请或凭据的人，都可能对你的 Host 执行与你本人等价的操作。你必须保管凭据、及时撤销失联设备，并理解把 Host 暴露到网络的风险。"
       },
       "channels": {
         "title": "聊天通道与外部指令",
-        "body": "聊天通道（Telegram、飞书、QQ、微信、Webhook 等）可将会话通知外发，并允许授权发送者远程发任务、审批权限、取消回合。通道密钥按产品设计以明文保存在本机配置中。授权名单为空时入站关闭；一旦授权，该发送者的指令与桌面操作等效。泄露的机器人 Token、错误的授权名单或被冒用的发送者身份可能导致未授权操作。"
+        "body": "聊天通道（Telegram、飞书、QQ、微信、Webhook 等）可将创作会话通知外发，并允许授权发送者远程发任务、审批权限、取消回合。通道密钥按产品设计以明文保存在本机配置中。授权名单为空时入站关闭；一旦授权，该发送者的指令与桌面操作等效。泄露的机器人 Token、错误的授权名单或被冒用的发送者身份可能导致未授权操作。"
       },
       "data": {
         "title": "数据、模型服务与隐私",
-        "body": "会话、事件、草稿、产物元数据与配置主要保存在本机。当你使用第三方模型或 Agent 时，提示词、代码、文件摘录、仓库上下文与对话内容可能被发送到对应供应商或其自定义端点。{{appName}} 不控制这些服务如何存储或使用数据。崩溃报告仅在你选择提交时离开本机。伴随设备上的离线缓存为只读。你有责任遵守适用的数据保护、保密与出口管制要求，以及各供应商条款。"
+        "body": "创作会话、事件、草稿、产物元数据与配置主要保存在本机。当你使用第三方模型或 Agent 时，提示词、文本、文件摘录、作品集上下文与对话内容可能被发送到对应供应商或其自定义端点。{{appName}} 不控制这些服务如何存储或使用数据。崩溃报告仅在你选择提交时离开本机。伴随设备上的离线缓存为只读。你有责任遵守适用的数据保护、保密与出口管制要求，以及各供应商条款。"
       },
       "runtime": {
         "title": "预览、脚本与终端",
-        "body": "Web Preview 使用独立 Chromium 运行时加载本地或远程页面，可能访问你的开发服务器、Cookie 与下载。交互式终端打开真实登录壳。外部编辑器由你选择并在本机启动。仓库脚本与 Agent 创建的终端命令在你的用户环境中执行。这些能力都不是隔离沙箱。"
+        "body": "Web Preview 使用独立 Chromium 运行时加载本地或远程页面，可能访问你的开发服务器、Cookie 与下载。交互式终端打开真实登录壳。外部编辑器由你选择并在本机启动。作品集脚本与 Agent 创建的终端命令在你的用户环境中执行。这些能力都不是隔离沙箱。"
       },
       "costs": {
         "title": "费用、合规与第三方条款",
-        "body": "Agent 订阅、API 调用、云模型、自动化重复运行与第三方插件产生的费用由你的账户承担。{{appName}} 不承担欠费、配额耗尽或意外高额账单。你须确保使用方式合法，并遵守所连接服务、开源许可证与所在司法辖区的规定。本软件生成或修改的代码、提交与发布内容的知识产权与法律责任由你承担；你应在用于生产前自行审查。"
+        "body": "Agent 订阅、API 调用、云模型、自动化重复运行与第三方插件产生的费用由你的账户承担。{{appName}} 不承担欠费、配额耗尽或意外高额账单。你须确保使用方式合法，并遵守所连接服务、开源许可证与所在司法辖区的规定。本软件生成或修改的内容、保存与发布内容的知识产权与法律责任由你承担；你应在用于生产前自行审查。"
       },
       "liability": {
         "title": "责任限制",
-        "body": "在适用法律允许的最大范围内，{{appName}} 及其开发者、贡献者不对下列事项承担责任：数据丢失或损坏；代码、仓库或生产环境被破坏；安全事件、凭据泄露或未授权访问；第三方服务中断、变更或违约；自动化、委派、远程访问或聊天通道造成的意外后果；生成代码的质量、合法性、知识产权或适用性；利润、商誉或其他间接、附带、特殊或后果性损害。你应自行备份重要工作并监督所有 Agent 与插件行为。本声明构成你使用本软件的条件；某一条款无法执行时，其余条款仍然有效。"
+        "body": "在适用法律允许的最大范围内，{{appName}} 及其开发者、贡献者不对下列事项承担责任：数据丢失或损坏；代码、作品集或生产环境被破坏；安全事件、凭据泄露或未授权访问；第三方服务中断、变更或违约；自动化、委派、远程访问或聊天通道造成的意外后果；生成内容的质量、合法性、知识产权或适用性；利润、商誉或其他间接、附带、特殊或后果性损害。你应自行备份重要工作并监督所有 Agent 与插件行为。本声明构成你使用本软件的条件；某一条款无法执行时，其余条款仍然有效。"
       }
     },
     "versionControlTitle": "配置版本管理器",

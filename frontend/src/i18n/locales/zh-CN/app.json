@@ -51,7 +51,7 @@
   },
   "projectCard": {
     "viewDetails": "查看详情",
-    "openInIde": "在 IDE 中打开",
+    "openInIde": "在编辑器中打开",
     "edit": "编辑",
     "createdAt": "创建于 {{date}}"
   },
@@ -59,14 +59,14 @@
     "more": "更多"
   },
   "projectList": {
-    "title": "项目",
-    "subtitle": "管理您的项目并跟踪其进度",
-    "createProject": "创建项目",
-    "fetchFailed": "获取项目失败",
-    "loading": "加载项目中...",
-    "emptyTitle": "还没有项目",
-    "emptyDescription": "通过创建您的第一个项目开始。",
-    "createFirstProject": "创建您的第一个项目"
+    "title": "作品",
+    "subtitle": "管理您的作品并跟踪其进度",
+    "createProject": "创建作品",
+    "fetchFailed": "获取作品失败",
+    "loading": "加载作品中...",
+    "emptyTitle": "还没有作品",
+    "emptyDescription": "通过创建您的第一个作品开始。",
+    "createFirstProject": "创建您的第一个作品"
   },
   "errorBoundary": {
     "title": "页面发生错误",
@@ -78,7 +78,7 @@
     "addTask": "添加任务"
   },
   "fullAttemptLogs": {
-    "loadingSession": "加载会话中..."
+    "loadingSession": "加载创作会话中..."
   },
   "prCommentCard": {
     "viewEditHint": "点击查看，双击编辑",
@@ -90,7 +90,7 @@
     "noCommands": "当前配置没有可用命令。"
   },
   "followUpSend": {
-    "sessionScopedSlashCommandError": "该 / 命令需要在已有会话中执行，不能创建新会话触发。",
+    "sessionScopedSlashCommandError": "该 / 命令需要在已有创作会话中执行，不能创建新创作会话触发。",
     "startFailed": "启动后续执行失败：{{error}}",
     "imageUploadFailed": "无法附加图片：{{error}}",
     "unknownError": "未知错误"
@@ -113,20 +113,20 @@
   },
   "welcomePage": {
     "processing": "处理中...",
-    "recentProjectTooltip": "左键打开项目，右键显示打开和删除操作",
-    "createProjectFailed": "创建项目失败：{{error}}",
-    "deleteProjectConfirmTitle": "删除项目“{{name}}”？",
-    "deleteProjectConfirmMessage": "删除项目将移除该项目下的所有会话与工作区数据，此操作不可撤销。",
+    "recentProjectTooltip": "左键打开作品，右键显示打开和删除操作",
+    "createProjectFailed": "创建作品失败：{{error}}",
+    "deleteProjectConfirmTitle": "删除作品“{{name}}”？",
+    "deleteProjectConfirmMessage": "删除作品将移除该作品下的所有创作会话与草稿数据，此操作不可撤销。",
     "confirmDelete": "确认删除",
-    "projectDeleted": "已删除项目“{{name}}”",
-    "deleteProjectFailed": "删除项目失败",
+    "projectDeleted": "已删除作品“{{name}}”",
+    "deleteProjectFailed": "删除作品失败",
     "startSection": "开始",
-    "createNewProject": "创建新项目",
+    "createNewProject": "创建新作品",
     "selectFolder": "选择文件夹",
-    "cloneRepo": "克隆仓库",
-    "recentProjects": "最近项目",
-    "loadingProjects": "加载项目中...",
-    "noProjects": "暂无项目，创建一个开始使用吧。",
+    "cloneRepo": "克隆作品集",
+    "recentProjects": "最近作品",
+    "loadingProjects": "加载作品中...",
+    "noProjects": "暂无作品，创建一个开始使用吧。",
     "open": "打开",
     "tagline": "超级 Agent Coding 平台"
   },
@@ -145,7 +145,7 @@
     "authFailed": "无法连接到该主机。请检查地址和 Token。"
   },
   "kanbanSessions": {
-    "sessionFallback": "新会话"
+    "sessionFallback": "新创作会话"
   },
   "turnTool": {
     "editFile": "编辑 {{path}}",
@@ -154,33 +154,33 @@
   },
   "codexGoal": {},
   "exportConversation": {
-    "success": "已导出会话",
+    "success": "已导出创作会话",
     "failed": "导出失败：{{error}}"
   },
   "gitHostErrors": {
     "noRemotes": {
-      "title": "无法加载{{subject}}：当前仓库还没有配置远程仓库。",
-      "hint": "解决方法：先为仓库添加 origin 等远程地址，例如执行 git remote add origin <仓库地址>，然后再点击刷新。"
+      "title": "无法加载{{subject}}：当前作品集还没有配置远程作品集。",
+      "hint": "解决方法：先为作品集添加 origin 等远程地址，例如执行 git remote add origin <作品集地址>，然后再点击刷新。"
     },
     "invalidRepository": {
-      "title": "无法加载{{subject}}：当前仓库的 Git 远程配置无效。",
-      "hint": "解决方法：确认仓库已初始化、已配置可用远程地址，并且当前项目目录指向正确仓库后再重试。"
+      "title": "无法加载{{subject}}：当前作品集的 Git 远程配置无效。",
+      "hint": "解决方法：确认作品集已初始化、已配置可用远程地址，并且当前作品目录指向正确作品集后再重试。"
     },
     "generic": {
       "title": "无法加载{{subject}}。"
     }
   },
   "workspaceBranch": {
-    "checkoutHint": "选择后会先在当前项目目录 checkout 到该分支，以确保工作区正确。"
+    "checkoutHint": "选择后会先在当前作品目录 checkout 到该版本，以确保草稿正确。"
   },
   "searchTags": {
     "devServer": {
-      "name": "启动项目开发服务器",
-      "content": "分析当前项目并识别正确的开发服务器启动方式；必要时检查或安装依赖并修复基础环境问题；成功启动后验证服务可访问，再把可访问的本地 URL 直接告诉我。"
+      "name": "启动作品开发服务器",
+      "content": "分析当前作品并识别正确的开发服务器启动方式；必要时检查或安装依赖并修复基础环境问题；成功启动后验证服务可访问，再把可访问的本地 URL 直接告诉我。"
     },
     "reviewChanges": {
       "name": "审查变更",
-      "content": "请审查当前工作区的所有未提交代码变更。优先指出可能的 Bug、行为回归、可维护性问题、性能问题和测试缺口；按严重程度排序，尽量附上文件和行号。若没有发现问题，请明确说明未发现高风险问题，并列出仍未验证的风险。"
+      "content": "请审查当前草稿的所有未保存内容变更。优先指出可能的 Bug、行为回归、可维护性问题、性能问题和测试缺口；按严重程度排序，尽量附上文件和行号。若没有发现问题，请明确说明未发现高风险问题，并列出仍未验证的风险。"
     }
   },
   "fileTreeUtils": {
@@ -191,13 +191,13 @@
     "deleteFileConfirm": "确定要删除文件“{{name}}”吗？"
   },
   "sessionErrors": {
-    "uncommittedChangesCannotSwitch": "当前分支存在未提交更改，无法切换分支，请先提交或放弃更改。",
-    "workspaceRequired": "请选择工作区。",
-    "sessionStillRunning": "会话仍在执行，暂时无法删除。",
-    "sessionNotFound": "会话不存在或已被删除。",
-    "workspaceNotFound": "工作区不存在。",
-    "executorMismatch": "当前会话绑定的代理与所选代理不一致。",
-    "invalidReference": "所选分支不存在，工作区/分支列表可能已过期。请刷新后重新选择。"
+    "uncommittedChangesCannotSwitch": "当前版本存在未保存更改，无法切换版本，请先提交或放弃更改。",
+    "workspaceRequired": "请选择草稿。",
+    "sessionStillRunning": "创作会话仍在执行，暂时无法删除。",
+    "sessionNotFound": "创作会话不存在或已被删除。",
+    "workspaceNotFound": "草稿不存在。",
+    "executorMismatch": "当前创作会话绑定的代理与所选代理不一致。",
+    "invalidReference": "所选版本不存在，草稿/版本列表可能已过期。请刷新后重新选择。"
   },
   "localDeps": {
     "notInstalled": "未安装",
@@ -241,15 +241,15 @@
     },
     "newSession": {
       "shortLabel": "全新上下文",
-      "retryLabel": "新会话重试",
+      "retryLabel": "新创作会话重试",
       "retryDescription": "会创建一条新的执行上下文重新开始。"
     }
   },
   "installCompanion": {
     "entryFileNotFound": "未找到可自动接入的入口文件：src/main.tsx/jsx/ts/js。",
     "appTagNotFound": "未在入口文件中找到 <App />，无法自动接入 Web Companion。",
-    "noProjectDir": "当前工作区没有可用的项目目录。",
-    "noRepo": "当前工作区没有可用的仓库。"
+    "noProjectDir": "当前草稿没有可用的作品目录。",
+    "noRepo": "当前草稿没有可用的作品集。"
   },
   "date": {
     "justNow": "刚刚",
