@@ -1,77 +1,68 @@
+use std::path::PathBuf;
+
 fn main() {
-    tauri_build::build();
-    
-    // 在 macOS 上，修改 Info.plist 以支持文件拖放
+    println!("cargo:rerun-if-changed=icons");
+
+    prepare_cef_bundle_root();
+
     #[cfg(target_os = "macos")]
-    {
-        use std::path::PathBuf;
-        use std::fs::File;
-        use plist::Value;
-        
-        // 查找 Info.plist 文件
-        let out_dir = std::env::var("OUT_DIR").unwrap();
-        let info_plist_path = PathBuf::from(&out_dir)
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join("out")
-            .join("Info.plist");
-        
-        if info_plist_path.exists() {
-            if let Ok(mut file) = File::open(&info_plist_path) {
-                if let Ok(mut plist) = plist::from_reader::<_, Value>(&mut file) {
-                    // 检查是否已经包含 CFBundleDocumentTypes
-                    if let Some(dict) = plist.as_dictionary_mut() {
-                        if !dict.contains_key("CFBundleDocumentTypes") {
-                            // 创建文件关联配置
-                            let mut document_types = Vec::new();
-                            
-                            // 所有文件类型
-                            let mut all_files = plist::Dictionary::new();
-                            all_files.insert("CFBundleTypeName".to_string(), Value::String("All Files".to_string()));
-                            all_files.insert("CFBundleTypeRole".to_string(), Value::String("Editor".to_string()));
-                            all_files.insert("LSHandlerRank".to_string(), Value::String("Owner".to_string()));
-                            
-                            let mut content_types = Vec::new();
-                            content_types.push(Value::String("public.data".to_string()));
-                            content_types.push(Value::String("public.content".to_string()));
-                            content_types.push(Value::String("public.item".to_string()));
-                            content_types.push(Value::String("public.directory".to_string()));
-                            all_files.insert("LSItemContentTypes".to_string(), Value::Array(content_types));
-                            
-                            document_types.push(Value::Dictionary(all_files));
-                            
-                            // 文件夹类型
-                            let mut folder = plist::Dictionary::new();
-                            folder.insert("CFBundleTypeName".to_string(), Value::String("Folder".to_string()));
-                            folder.insert("CFBundleTypeRole".to_string(), Value::String("Editor".to_string()));
-                            folder.insert("LSHandlerRank".to_string(), Value::String("Owner".to_string()));
-                            
-                            let mut folder_types = Vec::new();
-                            folder_types.push(Value::String("public.folder".to_string()));
-                            folder_types.push(Value::String("public.directory".to_string()));
-                            folder.insert("LSItemContentTypes".to_string(), Value::Array(folder_types));
-                            
-                            document_types.push(Value::Dictionary(folder));
-                            
-                            // 添加到 plist
-                            dict.insert("CFBundleDocumentTypes".to_string(), Value::Array(document_types));
-                            
-                            // 写回文件
-                            if let Ok(mut out_file) = File::create(&info_plist_path) {
-                                if let Err(e) = plist::to_writer_xml(&mut out_file, &plist) {
-                                    eprintln!("警告: 无法写入 Info.plist: {}", e);
-                                } else {
-                                    println!("已添加文件关联配置到 Info.plist");
-                                }
-                            }
-                        }
-                    }
+    prepare_macos_cef_bundle_inputs();
+
+    prepare_host_sidecar_stubs();
+
+    tauri_build::build();
+
+    #[cfg(target_os = "linux")]
+    println!(
+        "cargo:rustc-link-arg-bins=-Wl,-rpath,$ORIGIN:$ORIGIN/../lib/cinyuverse:$ORIGIN/../lib/Cinyuverse"
+    );
+}
+
+fn prepare_host_sidecar_stubs() {
+    let manifest_dir = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
+    let triple = std::env::var("TARGET").unwrap_or_else(|_| "unknown".to_string());
+    let ext = if cfg!(windows) { ".exe" } else { "" };
+    let binaries = manifest_dir.join("binaries");
+    let _ = std::fs::create_dir_all(&binaries);
+    for name in ["cinyuverse-mcp", "cinyuverse-workflow-mcp"] {
+        let path = binaries.join(format!("{name}-{triple}{ext}"));
+        if !path.is_file() {
+            let _ = std::fs::write(&path, []);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                if let Ok(metadata) = std::fs::metadata(&path) {
+                    let mut permissions = metadata.permissions();
+                    permissions.set_mode(0o755);
+                    let _ = std::fs::set_permissions(&path, permissions);
                 }
             }
         }
+    }
+}
+
+fn prepare_cef_bundle_root() {
+    let manifest_dir = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
+    let bundle_root = manifest_dir
+        .join("../target/cef-runtime")
+        .join(std::env::consts::OS);
+    std::fs::create_dir_all(bundle_root).expect("failed to prepare CEF bundle root");
+}
+
+#[cfg(target_os = "macos")]
+fn prepare_macos_cef_bundle_inputs() {
+    let manifest_dir = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
+    let frameworks =
+        manifest_dir.join("../target/cef-runtime/macos/app/cinyuverse.app/Contents/Frameworks");
+    let bundle_inputs = [
+        frameworks.join("Chromium Embedded Framework.framework"),
+        manifest_dir.join("../target/cef-runtime/macos/framework-links"),
+    ];
+    for bundle_input in bundle_inputs {
+        std::fs::create_dir_all(bundle_input).expect("failed to prepare CEF bundle input path");
+    }
+    let manifest = manifest_dir.join("../target/cef-runtime/macos/cef-runtime-manifest.json");
+    if !manifest.is_file() {
+        std::fs::write(manifest, "{}\n").expect("failed to prepare CEF runtime manifest");
     }
 }

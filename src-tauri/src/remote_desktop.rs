@@ -1,0 +1,508 @@
+use std::{collections::HashMap, sync::Arc, time::Duration};
+
+use remote_protocol::{CommandResponse, ErrorEnvelope, OperationId, ServerCapabilities};
+use serde::Deserialize;
+use serde_json::Value;
+use tokio::sync::RwLock;
+use url::Url;
+
+use crate::error::AppError;
+
+#[derive(Clone)]
+struct RemoteCredential(String);
+
+impl std::fmt::Debug for RemoteCredential {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("RemoteCredential([REDACTED])")
+    }
+}
+
+#[derive(Clone)]
+struct RemoteProfile {
+    base_url: String,
+    token: RemoteCredential,
+}
+
+#[derive(Clone)]
+pub struct RemoteDesktopRegistry {
+    profiles: Arc<RwLock<HashMap<(String, String), RemoteProfile>>>,
+    client: reqwest::Client,
+}
+
+impl RemoteDesktopRegistry {
+    pub fn new() -> Result<Self, AppError> {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        Ok(Self {
+            profiles: Arc::new(RwLock::new(HashMap::new())),
+            client: reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(60))
+                .build()
+                .map_err(internal)?,
+        })
+    }
+
+    pub async fn connect(
+        &self,
+        window_label: &str,
+        profile_id: &str,
+        base_url: &str,
+        token: String,
+    ) -> Result<(), AppError> {
+        if window_label.trim().is_empty() || profile_id.trim().is_empty() {
+            return Err(AppError::BadRequest(
+                "window and profile identifiers are required".to_string(),
+            ));
+        }
+        if token.len() < 32 {
+            return Err(AppError::BadRequest(
+                "remote Server token must contain at least 32 bytes".to_string(),
+            ));
+        }
+        let base_url = validate_base_url(base_url)?;
+        self.profiles.write().await.insert(
+            (window_label.to_string(), profile_id.to_string()),
+            RemoteProfile {
+                base_url,
+                token: RemoteCredential(token),
+            },
+        );
+        Ok(())
+    }
+
+    pub async fn disconnect(&self, window_label: &str, profile_id: &str) {
+        self.profiles
+            .write()
+            .await
+            .remove(&(window_label.to_string(), profile_id.to_string()));
+    }
+
+    pub async fn disconnect_window(&self, window_label: &str) {
+        self.profiles
+            .write()
+            .await
+            .retain(|(connected_window, _), _| connected_window != window_label);
+    }
+
+    pub async fn disconnect_profile(&self, profile_id: &str) {
+        self.profiles
+            .write()
+            .await
+            .retain(|(_, connected_profile), _| connected_profile != profile_id);
+    }
+
+    pub async fn call(
+        &self,
+        window_label: &str,
+        profile_id: &str,
+        command: &str,
+        args: Value,
+        operation_id: Option<OperationId>,
+    ) -> Result<Value, AppError> {
+        if command.is_empty()
+            || !command
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte == b'_' || byte.is_ascii_digit())
+        {
+            return Err(AppError::BadRequest(
+                "remote command identifier is invalid".to_string(),
+            ));
+        }
+        let profile = self
+            .profiles
+            .read()
+            .await
+            .get(&(window_label.to_string(), profile_id.to_string()))
+            .cloned()
+            .ok_or_else(|| AppError::NotFound("remote Server profile not connected".to_string()))?;
+        let response = self
+            .client
+            .post(format!("{}/api/v1/call/{command}", profile.base_url))
+            .bearer_auth(&profile.token.0)
+            .header(
+                "x-cinyuverse-protocol-version",
+                remote_protocol::PROTOCOL_VERSION,
+            )
+            .json(&serde_json::json!({
+                "operation_id": operation_id.unwrap_or_default(),
+                "args": args,
+            }))
+            .send()
+            .await
+            .map_err(internal)?;
+        decode_command_response(response).await
+    }
+
+    pub async fn capabilities(
+        &self,
+        window_label: &str,
+        profile_id: &str,
+    ) -> Result<ServerCapabilities, AppError> {
+        let profile = self
+            .profiles
+            .read()
+            .await
+            .get(&(window_label.to_string(), profile_id.to_string()))
+            .cloned()
+            .ok_or_else(|| AppError::NotFound("remote Server profile not connected".to_string()))?;
+        let response = self
+            .client
+            .get(format!("{}/api/v1/capabilities", profile.base_url))
+            .bearer_auth(&profile.token.0)
+            .header(
+                "x-cinyuverse-protocol-version",
+                remote_protocol::PROTOCOL_VERSION,
+            )
+            .send()
+            .await
+            .map_err(internal)?;
+        if response.status().is_success() {
+            return response.json().await.map_err(internal);
+        }
+        Err(remote_error(response).await)
+    }
+
+    pub async fn listen_host_event(
+        &self,
+        app: tauri::AppHandle,
+        window_label: &str,
+        profile_id: &str,
+        event: String,
+    ) -> Result<(), AppError> {
+        let profile = self
+            .profiles
+            .read()
+            .await
+            .get(&(window_label.to_string(), profile_id.to_string()))
+            .cloned()
+            .ok_or_else(|| AppError::NotFound("remote Server profile not connected".to_string()))?;
+        let channel = format!("remote-desktop:{profile_id}:{event}");
+        let subscription_id = uuid::Uuid::new_v4().to_string();
+        tokio::spawn(async move {
+            if let Err(error) =
+                pump_host_event_socket(app, profile, event, channel, subscription_id).await
+            {
+                tracing::warn!(%error, "remote desktop host event listen failed");
+            }
+        });
+        Ok(())
+    }
+
+    pub async fn subscribe_events(
+        &self,
+        window_label: &str,
+        profile_id: &str,
+        request: serde_json::Value,
+        on_event: tauri::ipc::Channel<serde_json::Value>,
+    ) -> Result<(), AppError> {
+        let profile = self
+            .profiles
+            .read()
+            .await
+            .get(&(window_label.to_string(), profile_id.to_string()))
+            .cloned()
+            .ok_or_else(|| AppError::NotFound("remote Server profile not connected".to_string()))?;
+        tokio::spawn(async move {
+            if let Err(error) = pump_subscription_socket(profile, request, on_event).await {
+                tracing::warn!(%error, "remote desktop subscription failed");
+            }
+        });
+        Ok(())
+    }
+}
+
+async fn decode_command_response(response: reqwest::Response) -> Result<Value, AppError> {
+    if response.status().is_success() {
+        return response
+            .json::<CommandResponse<Value>>()
+            .await
+            .map(|response| response.data)
+            .map_err(internal);
+    }
+    Err(remote_error(response).await)
+}
+
+async fn remote_error(response: reqwest::Response) -> AppError {
+    let status = response.status();
+    match response.json::<ErrorEnvelope>().await {
+        Ok(envelope) => AppError::BadRequest(format!(
+            "remote Server rejected the request ({status}): {}",
+            envelope.message
+        )),
+        Err(_) => AppError::Internal(format!("remote Server returned HTTP {status}")),
+    }
+}
+
+pub(crate) fn validate_base_url(value: &str) -> Result<String, AppError> {
+    let url = Url::parse(value.trim())
+        .map_err(|error| AppError::BadRequest(format!("invalid Server URL: {error}")))?;
+    if !matches!(url.scheme(), "https" | "http") {
+        return Err(AppError::BadRequest(
+            "remote Server URL must use HTTP or HTTPS".to_string(),
+        ));
+    }
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || !matches!(url.path(), "" | "/")
+    {
+        return Err(AppError::BadRequest(
+            "remote Server URL must be an origin without credentials, path, query, or fragment"
+                .to_string(),
+        ));
+    }
+    Ok(url.as_str().trim_end_matches('/').to_string())
+}
+
+fn internal(error: impl std::fmt::Display) -> AppError {
+    AppError::Internal(error.to_string())
+}
+
+fn websocket_url(base_url: &str) -> String {
+    format!("{}/api/v1/ws", base_url.replacen("http", "ws", 1))
+}
+
+fn token_protocol(token: &str) -> String {
+    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+    format!("cinyuverse.token.{}", URL_SAFE_NO_PAD.encode(token.as_bytes()))
+}
+
+async fn connect_remote_socket(
+    profile: &RemoteProfile,
+) -> Result<
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+    AppError,
+> {
+    use tokio_tungstenite::tungstenite::{client::IntoClientRequest, http::HeaderValue};
+    let mut request = websocket_url(&profile.base_url)
+        .into_client_request()
+        .map_err(internal)?;
+    let protocol = format!("cinyuverse.v1, {}", token_protocol(&profile.token.0));
+    request.headers_mut().insert(
+        "Sec-WebSocket-Protocol",
+        HeaderValue::from_str(&protocol).map_err(internal)?,
+    );
+    let (stream, _) = tokio_tungstenite::connect_async(request)
+        .await
+        .map_err(internal)?;
+    Ok(stream)
+}
+
+async fn pump_host_event_socket(
+    app: tauri::AppHandle,
+    profile: RemoteProfile,
+    event: String,
+    channel: String,
+    subscription_id: String,
+) -> Result<(), AppError> {
+    use futures::{SinkExt, StreamExt};
+    use tauri::Emitter;
+    use tokio_tungstenite::tungstenite::Message;
+    let mut stream = connect_remote_socket(&profile).await?;
+    let attach = serde_json::json!({
+        "type": "attach",
+        "request": {
+            "subscription_id": subscription_id,
+            "resource": "host_event",
+            "channel": event,
+            "after_sequence": 0,
+        }
+    });
+    stream
+        .send(Message::Text(attach.to_string().into()))
+        .await
+        .map_err(internal)?;
+    while let Some(frame) = stream.next().await {
+        let Message::Text(text) = frame.map_err(internal)? else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<Value>(&text) else {
+            continue;
+        };
+        if value.get("type").and_then(Value::as_str) != Some("event") {
+            continue;
+        }
+        if let Some(payload) = value.pointer("/event/payload") {
+            let _ = app.emit(&channel, payload);
+        }
+    }
+    Ok(())
+}
+
+async fn pump_subscription_socket(
+    profile: RemoteProfile,
+    request: Value,
+    on_event: tauri::ipc::Channel<Value>,
+) -> Result<(), AppError> {
+    use futures::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message;
+    let mut stream = connect_remote_socket(&profile).await?;
+    let attach = serde_json::json!({
+        "type": "attach",
+        "request": request,
+    });
+    stream
+        .send(Message::Text(attach.to_string().into()))
+        .await
+        .map_err(internal)?;
+    while let Some(frame) = stream.next().await {
+        let Message::Text(text) = frame.map_err(internal)? else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<Value>(&text) else {
+            continue;
+        };
+        match value.get("type").and_then(Value::as_str) {
+            Some("event") => {
+                if let Some(event) = value.get("event") {
+                    let _ = on_event.send(event.clone());
+                }
+            }
+            Some("snapshot") => {
+                if let Some(snapshot) = value.get("snapshot") {
+                    let _ = on_event.send(serde_json::json!({
+                        "kind": "subscription_snapshot",
+                        "payload": snapshot.get("payload"),
+                        "sequence": snapshot.get("through_sequence"),
+                    }));
+                }
+            }
+            Some("detached") => break,
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteDesktopProfileInput {
+    pub profile_id: String,
+    pub base_url: String,
+    pub token: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::{Json, Router, extract::Request, http::header, routing::post};
+    use remote_protocol::{CommandResponse, OperationId};
+
+    use super::{RemoteCredential, RemoteDesktopRegistry, validate_base_url};
+
+    #[test]
+    fn remote_server_urls_accept_http_or_https_origins() {
+        assert!(validate_base_url("https://server.example").is_ok());
+        assert!(validate_base_url("http://127.0.0.1:17891").is_ok());
+        assert!(validate_base_url("http://192.168.1.20:17891").is_ok());
+        assert!(validate_base_url("http://studio.local:17891").is_ok());
+        assert!(validate_base_url("http://203.0.113.10:443").is_ok());
+        assert!(validate_base_url("ftp://server.example").is_err());
+        assert!(validate_base_url("https://user@server.example").is_err());
+        assert!(validate_base_url("https://server.example/path").is_err());
+    }
+
+    #[tokio::test]
+    async fn same_profile_name_is_isolated_by_desktop_window() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("listener");
+        let address = listener.local_addr().expect("address");
+        let router = Router::new().route(
+            "/api/v1/call/{command}",
+            post(|request: Request| async move {
+                let authorization = request
+                    .headers()
+                    .get(header::AUTHORIZATION)
+                    .and_then(|value| value.to_str().ok())
+                    .unwrap_or_default();
+                Json(CommandResponse::new(
+                    OperationId::new(),
+                    serde_json::json!(if authorization.ends_with('a') {
+                        "window-a"
+                    } else {
+                        "window-b"
+                    }),
+                ))
+            }),
+        );
+        let task = tokio::spawn(async move { axum::serve(listener, router).await });
+        let registry = RemoteDesktopRegistry::new().expect("registry");
+        let base_url = format!("http://{address}");
+        registry
+            .connect(
+                "window-a",
+                "shared-name",
+                &base_url,
+                format!("{}a", "x".repeat(32)),
+            )
+            .await
+            .expect("window a");
+        registry
+            .connect(
+                "window-b",
+                "shared-name",
+                &base_url,
+                format!("{}b", "x".repeat(32)),
+            )
+            .await
+            .expect("window b");
+
+        assert_eq!(
+            registry
+                .call(
+                    "window-a",
+                    "shared-name",
+                    "ping",
+                    serde_json::json!({}),
+                    None
+                )
+                .await
+                .expect("call a"),
+            "window-a"
+        );
+        assert_eq!(
+            registry
+                .call(
+                    "window-b",
+                    "shared-name",
+                    "ping",
+                    serde_json::json!({}),
+                    None
+                )
+                .await
+                .expect("call b"),
+            "window-b"
+        );
+        registry.disconnect_window("window-a").await;
+        assert!(
+            registry
+                .call(
+                    "window-a",
+                    "shared-name",
+                    "ping",
+                    serde_json::json!({}),
+                    None
+                )
+                .await
+                .is_err()
+        );
+        assert!(
+            registry
+                .call(
+                    "window-b",
+                    "shared-name",
+                    "ping",
+                    serde_json::json!({}),
+                    None
+                )
+                .await
+                .is_ok()
+        );
+        assert_eq!(
+            format!("{:?}", RemoteCredential("super-secret".to_string())),
+            "RemoteCredential([REDACTED])"
+        );
+        task.abort();
+    }
+}
