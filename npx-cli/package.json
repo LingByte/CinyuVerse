@@ -1,0 +1,34 @@
+{
+  "name": "cinyuverse",
+  "private": false,
+  "version": "0.2.0",
+  "main": "index.js",
+  "bin": {
+    "cinyuverse": "bin/cli.js"
+  },
+  "keywords": [],
+  "author": "cinyuverse",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LingByte/CinyuVerse"
+  },
+  "license": "",
+  "description": "NPX launcher for the Cinyuverse Host family (cinyuverse-server)",
+  "scripts": {
+    "prepack": "node bin/prepare-plugin-cli.js",
+    "postpack": "node bin/prepare-plugin-cli.js --clean"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16"
+  },
+  "files": [
+    "bin/cli.js",
+    "bin/control.js",
+    "bin/download.js",
+    "bin/help.js",
+    "bin/plugin.js",
+    "bin/release-assets.js",
+    "dist",
+    "plugin-cli"
+  ]
+}
