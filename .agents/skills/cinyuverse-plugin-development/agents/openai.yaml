@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cinyuverse Plugin Development"
+  short_description: "Build and validate Cinyuverse v4 App + Agent plugins"
+  default_prompt: "Use the local Cinyuverse SDK, schema, and CLI to create or update a complete full-trust v4 product plugin."
