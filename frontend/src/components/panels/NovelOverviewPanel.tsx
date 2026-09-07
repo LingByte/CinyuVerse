@@ -299,6 +299,7 @@ export function NovelOverviewPanel() {
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphError, setGraphError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [promptNotice, setPromptNotice] = useState<string | null>(null);
 
   const [selectedBeatId, setSelectedBeatId] = useState<string | null>(null);
   const [beatContext, setBeatContext] = useState<BeatContext | null>(null);
@@ -460,14 +461,14 @@ export function NovelOverviewPanel() {
 
   const fillPromptIntoSession = useCallback(
     async (promptText: string) => {
+      setPromptNotice(null);
       // Require an existing session on the right panel — do NOT create one.
       if (!visibleRightSession?.sessionId) {
-        setGraphError(t('panels:overview.noSession'));
+        setPromptNotice(t('panels:overview.noSession'));
         setRightPanelVisible(true);
         return;
       }
       setActionLoading(true);
-      setGraphError(null);
       try {
         await scratchApi.update(
           ScratchType.DRAFT_FOLLOW_UP,
@@ -489,7 +490,7 @@ export function NovelOverviewPanel() {
         );
         setRightPanelVisible(true);
       } catch (err) {
-        setGraphError(err instanceof Error ? err.message : String(err));
+        setPromptNotice(err instanceof Error ? err.message : String(err));
       } finally {
         setActionLoading(false);
       }
@@ -670,6 +671,19 @@ export function NovelOverviewPanel() {
           </Button>
         </div>
       </div>
+
+      {/* Prompt action notice (e.g. "no session" warning) */}
+      {promptNotice && (
+        <div className="flex items-center justify-between gap-2 border-b bg-amber-50 dark:bg-amber-950/30 px-4 py-1.5 text-xs text-amber-700 dark:text-amber-400">
+          <span>{promptNotice}</span>
+          <button
+            className="text-amber-500 hover:text-amber-700"
+            onClick={() => setPromptNotice(null)}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* Stats strip */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-4 py-1.5 text-xs text-muted-foreground">
