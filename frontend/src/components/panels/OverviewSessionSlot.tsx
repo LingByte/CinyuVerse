@@ -4,12 +4,9 @@ import { useRightPanelSlot } from '@/contexts/RightPanelSlotContext';
 import { cn } from '@/lib/utils';
 
 /**
- * Session (right panel) slot for the overview page. Adopts the shared
- * session host element while the overview page owns the placement, so
- * the conversation keeps its React state when moving between tabs.
- *
- * This mirrors KanbanSessionSlot but is simpler — a single right-side
- * slot with a resize handle.
+ * Full-height session column on the overview page. Adopts the shared
+ * session host while overview owns placement, so conversation state
+ * survives tab switches.
  */
 export function OverviewSessionSlot({ visible }: { visible: boolean }) {
   const { host, placement } = useRightPanelSlot();
@@ -67,7 +64,10 @@ export function OverviewSessionSlot({ visible }: { visible: boolean }) {
   if (!shouldShow) return null;
 
   return (
-    <div className="flex h-full shrink-0" data-panel="overview-session-slot">
+    <div
+      className="flex h-full min-h-0 shrink-0 self-stretch"
+      data-panel="overview-session-slot"
+    >
       <div
         role="separator"
         aria-orientation="vertical"
@@ -76,7 +76,9 @@ export function OverviewSessionSlot({ visible }: { visible: boolean }) {
       />
       <div
         ref={containerRef}
-        className={cn('workspace-right-panel h-full min-w-0 overflow-hidden border-l')}
+        className={cn(
+          'workspace-right-panel h-full min-h-0 min-w-0 overflow-hidden border-l'
+        )}
         style={{ width: sessionWidth }}
       />
     </div>

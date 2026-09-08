@@ -78,7 +78,12 @@ type JsonBeat = {
 
 type JsonGraph = {
   beats: JsonBeat[];
-  edges: Array<{ from_beat: string; to_beat: string; edge_type: string; note?: string | null }>;
+  edges: Array<{
+    from_beat: string;
+    to_beat: string;
+    edge_type: string;
+    note?: string | null;
+  }>;
 };
 
 type JsonBeatContext = {
@@ -118,18 +123,25 @@ function countWords(text: string): number {
     .replace(/```[\s\S]*?```/g, '')
     .trim();
   if (!cleaned) return 0;
-  const cjkMatches = cleaned.match(/[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]/g);
+  const cjkMatches = cleaned.match(
+    /[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]/g
+  );
   const cjkCount = cjkMatches ? cjkMatches.length : 0;
   const latinText = cleaned
     .replace(/[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]/g, ' ')
     .trim();
-  const latinWords = latinText ? latinText.split(/\s+/).filter(Boolean).length : 0;
+  const latinWords = latinText
+    ? latinText.split(/\s+/).filter(Boolean).length
+    : 0;
   return cjkCount + latinWords;
 }
 
 async function scanWorkspace(rootPath: string): Promise<OverviewStats> {
   try {
-    const chaptersDir = await fileTreeApi.listDirectoryChildren(rootPath, 'chapters');
+    const chaptersDir = await fileTreeApi.listDirectoryChildren(
+      rootPath,
+      'chapters'
+    );
     const chapterFiles = chaptersDir.files.filter((f) => f.endsWith('.md'));
     let totalWords = 0;
     for (const fileName of chapterFiles) {
@@ -140,7 +152,10 @@ async function scanWorkspace(rootPath: string): Promise<OverviewStats> {
 
     let characterCount = 0;
     try {
-      const charsDir = await fileTreeApi.listDirectoryChildren(rootPath, '.cinyuverse/characters');
+      const charsDir = await fileTreeApi.listDirectoryChildren(
+        rootPath,
+        '.cinyuverse/characters'
+      );
       characterCount = charsDir.files.filter((f) => f.endsWith('.md')).length;
     } catch {
       // characters dir may not exist
@@ -150,7 +165,9 @@ async function scanWorkspace(rootPath: string): Promise<OverviewStats> {
     let hookResolved = 0;
     let hookOpen = 0;
     try {
-      const hooksContent = await fileTreeApi.readFile(`${rootPath}/.cinyuverse/hooks.md`);
+      const hooksContent = await fileTreeApi.readFile(
+        `${rootPath}/.cinyuverse/hooks.md`
+      );
       const resolvedMatches = hooksContent.match(/-\s*\[[xX]\]\s/g) || [];
       const openMatches = hooksContent.match(/-\s*\[\s\]\s/g) || [];
       hookResolved = resolvedMatches.length;
@@ -256,10 +273,15 @@ const BeatNodeComponent = memo(function BeatNodeComponent({ data }: NodeProps) {
         'min-w-[180px] max-w-[220px]',
         style.border,
         style.bg,
-        isSelected && 'ring-2 ring-offset-1 ring-blue-400 shadow-lg scale-[1.02]'
+        isSelected &&
+          'ring-2 ring-offset-1 ring-blue-400 shadow-lg scale-[1.02]'
       )}
     >
-      <Handle type="target" position={Position.Top} className="!bg-slate-400 !w-2 !h-2" />
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="!bg-slate-400 !w-2 !h-2"
+      />
       {/* Accent bar */}
       <div className="h-1 w-full" style={{ backgroundColor: accent }} />
       <div className="px-3 py-2">
@@ -297,12 +319,18 @@ const BeatNodeComponent = memo(function BeatNodeComponent({ data }: NodeProps) {
               </span>
             ))}
             {beat.characters.length > 3 && (
-              <span className="text-[9px] text-slate-400">+{beat.characters.length - 3}</span>
+              <span className="text-[9px] text-slate-400">
+                +{beat.characters.length - 3}
+              </span>
             )}
           </div>
         )}
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-slate-400 !w-2 !h-2" />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="!bg-slate-400 !w-2 !h-2"
+      />
     </div>
   );
 });
@@ -324,14 +352,19 @@ type ArcNodeData = {
   onToggle: (arc: string) => void;
 };
 
-const ArcNodeComponent = memo(function ArcNodeComponent({ data, selected }: NodeProps) {
+const ArcNodeComponent = memo(function ArcNodeComponent({
+  data,
+  selected,
+}: NodeProps) {
   const nodeData = data as unknown as ArcNodeData;
-  const { arc, beatCount, statusCounts, characters, isExpanded, onToggle } = nodeData;
+  const { arc, beatCount, statusCounts, characters, isExpanded, onToggle } =
+    nodeData;
   const completed = statusCounts.completed ?? 0;
   const current = statusCounts.current ?? 0;
   const planned = statusCounts.planned ?? 0;
   const skipped = statusCounts.skipped ?? 0;
-  const progress = beatCount > 0 ? Math.round((completed / beatCount) * 100) : 0;
+  const progress =
+    beatCount > 0 ? Math.round((completed / beatCount) * 100) : 0;
 
   if (isExpanded) {
     // Expanded: render as a large container with just a header bar.
@@ -346,7 +379,11 @@ const ArcNodeComponent = memo(function ArcNodeComponent({ data, selected }: Node
           selected && 'ring-2 ring-indigo-400'
         )}
       >
-        <Handle type="target" position={Position.Top} className="!bg-slate-500 !w-2.5 !h-2.5" />
+        <Handle
+          type="target"
+          position={Position.Top}
+          className="!bg-slate-500 !w-2.5 !h-2.5"
+        />
 
         {/* Header bar — fixed height, clickable to collapse */}
         <div
@@ -355,7 +392,9 @@ const ArcNodeComponent = memo(function ArcNodeComponent({ data, selected }: Node
         >
           <ChevronDown className="h-4 w-4 text-slate-500 shrink-0" />
           <Layers className="h-4 w-4 text-indigo-500 shrink-0" />
-          <span className="text-sm font-semibold text-foreground flex-1">{arc}</span>
+          <span className="text-sm font-semibold text-foreground flex-1">
+            {arc}
+          </span>
           <span className="text-[10px] text-slate-400">{beatCount} 节拍</span>
           {/* Progress bar inline */}
           <div className="w-16 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
@@ -364,7 +403,9 @@ const ArcNodeComponent = memo(function ArcNodeComponent({ data, selected }: Node
               style={{ width: `${progress}%` }}
             />
           </div>
-          <span className="text-[9px] text-slate-400 w-8 text-right">{progress}%</span>
+          <span className="text-[9px] text-slate-400 w-8 text-right">
+            {progress}%
+          </span>
         </div>
 
         {/* Status pills row */}
@@ -400,7 +441,9 @@ const ArcNodeComponent = memo(function ArcNodeComponent({ data, selected }: Node
                 </span>
               ))}
               {characters.length > 4 && (
-                <span className="text-[9px] text-slate-400">+{characters.length - 4}</span>
+                <span className="text-[9px] text-slate-400">
+                  +{characters.length - 4}
+                </span>
               )}
             </div>
           )}
@@ -409,7 +452,11 @@ const ArcNodeComponent = memo(function ArcNodeComponent({ data, selected }: Node
         {/* Body is transparent — beat nodes render on top via parentNode */}
         <div className="flex-1" />
 
-        <Handle type="source" position={Position.Bottom} className="!bg-slate-500 !w-2.5 !h-2.5" />
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          className="!bg-slate-500 !w-2.5 !h-2.5"
+        />
       </div>
     );
   }
@@ -425,7 +472,11 @@ const ArcNodeComponent = memo(function ArcNodeComponent({ data, selected }: Node
           : 'border-slate-400/60 bg-slate-50/90 dark:bg-slate-800/70'
       )}
     >
-      <Handle type="target" position={Position.Top} className="!bg-slate-500 !w-2.5 !h-2.5" />
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="!bg-slate-500 !w-2.5 !h-2.5"
+      />
 
       <div
         className="flex items-center gap-2 px-3 py-2 cursor-pointer select-none hover:bg-slate-200/40 dark:hover:bg-slate-700/40 transition-colors"
@@ -433,7 +484,9 @@ const ArcNodeComponent = memo(function ArcNodeComponent({ data, selected }: Node
       >
         <ChevronRight className="h-4 w-4 text-slate-500 shrink-0" />
         <Layers className="h-4 w-4 text-indigo-500 shrink-0" />
-        <span className="text-sm font-semibold text-foreground flex-1">{arc}</span>
+        <span className="text-sm font-semibold text-foreground flex-1">
+          {arc}
+        </span>
         <span className="text-[10px] text-slate-400">{beatCount} 节拍</span>
       </div>
 
@@ -483,12 +536,18 @@ const ArcNodeComponent = memo(function ArcNodeComponent({ data, selected }: Node
             </span>
           ))}
           {characters.length > 5 && (
-            <span className="text-[9px] text-slate-400">+{characters.length - 5}</span>
+            <span className="text-[9px] text-slate-400">
+              +{characters.length - 5}
+            </span>
           )}
         </div>
       )}
 
-      <Handle type="source" position={Position.Bottom} className="!bg-slate-500 !w-2.5 !h-2.5" />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="!bg-slate-500 !w-2.5 !h-2.5"
+      />
     </div>
   );
 });
@@ -501,11 +560,16 @@ const minimapNodeColor = (n: Node): string => {
   const beat = (n.data as unknown as BeatNodeData)?.beat;
   if (!beat) return '#94a3b8';
   switch (beat.status) {
-    case 'completed': return '#10b981';
-    case 'current': return '#3b82f6';
-    case 'skipped': return '#f43f5e';
-    case 'revised': return '#f59e0b';
-    default: return '#94a3b8';
+    case 'completed':
+      return '#10b981';
+    case 'current':
+      return '#3b82f6';
+    case 'skipped':
+      return '#f43f5e';
+    case 'revised':
+      return '#f59e0b';
+    default:
+      return '#94a3b8';
   }
 };
 
@@ -515,15 +579,71 @@ const minimapNodeColor = (n: Node): string => {
 
 const EDGE_STYLES: Record<
   string,
-  { stroke: string; dashed: boolean; label: string; description: string; animated: boolean; width: number }
+  {
+    stroke: string;
+    dashed: boolean;
+    label: string;
+    description: string;
+    animated: boolean;
+    width: number;
+  }
 > = {
-  sequential: { stroke: '#94a3b8', dashed: false, label: '顺序', description: 'A 完成后 B 自然发生，主线推进', animated: false, width: 1.5 },
-  causal: { stroke: '#f97316', dashed: false, label: '因果', description: 'A 导致 B 发生，B 是 A 的直接后果', animated: true, width: 2 },
-  foreshadow: { stroke: '#ef4444', dashed: true, label: '伏笔', description: 'A 埋下的伏笔在 B 处回收或推进', animated: true, width: 2 },
-  parallel: { stroke: '#3b82f6', dashed: false, label: '并行', description: 'A 和 B 在同一时间线并行发生', animated: false, width: 1.5 },
-  alternative: { stroke: '#a855f7', dashed: true, label: '备选', description: 'B 是 A 的替代走向，非确定路径', animated: false, width: 1.5 },
-  character_arc: { stroke: '#8b5cf6', dashed: true, label: '角色弧', description: '同一角色的成长轨迹串联', animated: true, width: 2 },
-  item_flow: { stroke: '#14b8a6', dashed: false, label: '物品流', description: '某物品或关键信息从 A 流转到 B', animated: false, width: 1.5 },
+  sequential: {
+    stroke: '#94a3b8',
+    dashed: false,
+    label: '顺序',
+    description: 'A 完成后 B 自然发生，主线推进',
+    animated: false,
+    width: 1.5,
+  },
+  causal: {
+    stroke: '#f97316',
+    dashed: false,
+    label: '因果',
+    description: 'A 导致 B 发生，B 是 A 的直接后果',
+    animated: true,
+    width: 2,
+  },
+  foreshadow: {
+    stroke: '#ef4444',
+    dashed: true,
+    label: '伏笔',
+    description: 'A 埋下的伏笔在 B 处回收或推进',
+    animated: true,
+    width: 2,
+  },
+  parallel: {
+    stroke: '#3b82f6',
+    dashed: false,
+    label: '并行',
+    description: 'A 和 B 在同一时间线并行发生',
+    animated: false,
+    width: 1.5,
+  },
+  alternative: {
+    stroke: '#a855f7',
+    dashed: true,
+    label: '备选',
+    description: 'B 是 A 的替代走向，非确定路径',
+    animated: false,
+    width: 1.5,
+  },
+  character_arc: {
+    stroke: '#8b5cf6',
+    dashed: true,
+    label: '角色弧',
+    description: '同一角色的成长轨迹串联',
+    animated: true,
+    width: 2,
+  },
+  item_flow: {
+    stroke: '#14b8a6',
+    dashed: false,
+    label: '物品流',
+    description: '某物品或关键信息从 A 流转到 B',
+    animated: false,
+    width: 1.5,
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -569,7 +689,8 @@ function layoutProgressive(
     const fromArc = beatToArc.get(edge.from_beat);
     const toArc = beatToArc.get(edge.to_beat);
     if (fromArc && toArc && fromArc !== toArc) {
-      const isMainline = edge.edge_type === 'sequential' || edge.edge_type === 'causal';
+      const isMainline =
+        edge.edge_type === 'sequential' || edge.edge_type === 'causal';
       arcEdges.push({ from: fromArc, to: toArc, weight: isMainline ? 10 : 1 });
     }
   }
@@ -582,14 +703,19 @@ function layoutProgressive(
 
   const subLayouts = new Map<
     string,
-    { positions: Map<string, { x: number; y: number }>; width: number; height: number }
+    {
+      positions: Map<string, { x: number; y: number }>;
+      width: number;
+      height: number;
+    }
   >();
 
   for (const arc of arcs) {
     if (!expandedArcs.has(arc)) continue;
     const arcBeats = arcGroups.get(arc)!;
     const subEdges = edges.filter(
-      (e) => beatToArc.get(e.from_beat) === arc && beatToArc.get(e.to_beat) === arc
+      (e) =>
+        beatToArc.get(e.from_beat) === arc && beatToArc.get(e.to_beat) === arc
     );
 
     const subG = new dagre.graphlib.Graph();
@@ -613,7 +739,10 @@ function layoutProgressive(
     dagre.layout(subG);
 
     // Calculate bounding box of sub-layout
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity;
     const subPositions = new Map<string, { x: number; y: number }>();
     for (const beat of arcBeats) {
       const subNode = subG.node(beat.id);
@@ -627,7 +756,12 @@ function layoutProgressive(
         maxY = Math.max(maxY, y + BEAT_H);
       }
     }
-    if (minX === Infinity) { minX = 0; maxX = BEAT_W; minY = 0; maxY = BEAT_H; }
+    if (minX === Infinity) {
+      minX = 0;
+      maxX = BEAT_W;
+      minY = 0;
+      maxY = BEAT_H;
+    }
 
     const contentW = maxX - minX;
     const contentH = maxY - minY;
@@ -731,7 +865,9 @@ export function NovelOverviewPanel() {
   const [promptNotice, setPromptNotice] = useState<string | null>(null);
 
   const [selectedBeatId, setSelectedBeatId] = useState<string | null>(null);
-  const [beatContext, setJsonBeatContext] = useState<JsonBeatContext | null>(null);
+  const [beatContext, setJsonBeatContext] = useState<JsonBeatContext | null>(
+    null
+  );
   const [expandedArcs, setExpandedArcs] = useState<Set<string>>(new Set());
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -751,7 +887,9 @@ export function NovelOverviewPanel() {
   }, [rootPath]);
 
   // ----- story graph file path -----
-  const storyGraphPath = rootPath ? `${rootPath}/.cinyuverse/story-graph.json` : '';
+  const storyGraphPath = rootPath
+    ? `${rootPath}/.cinyuverse/story-graph.json`
+    : '';
 
   // ----- refresh graph (read from .cinyuverse/story-graph.json) -----
   const refreshGraph = useCallback(async () => {
@@ -814,10 +952,14 @@ export function NovelOverviewPanel() {
       return;
     }
     const predecessorIds = new Set(
-      graph.edges.filter((e) => e.to_beat === selectedBeatId).map((e) => e.from_beat)
+      graph.edges
+        .filter((e) => e.to_beat === selectedBeatId)
+        .map((e) => e.from_beat)
     );
     const successorIds = new Set(
-      graph.edges.filter((e) => e.from_beat === selectedBeatId).map((e) => e.to_beat)
+      graph.edges
+        .filter((e) => e.from_beat === selectedBeatId)
+        .map((e) => e.to_beat)
     );
     const predecessors = graph.beats.filter((b) => predecessorIds.has(b.id));
     const successors = graph.beats.filter((b) => successorIds.has(b.id));
@@ -915,7 +1057,10 @@ export function NovelOverviewPanel() {
         id: beat.id,
         type: 'beatNode',
         position: pos,
-        data: { beat, isSelected: beat.id === selectedBeatId } as unknown as Record<string, unknown>,
+        data: {
+          beat,
+          isSelected: beat.id === selectedBeatId,
+        } as unknown as Record<string, unknown>,
         selected: beat.id === selectedBeatId,
         // Nest inside the arc container — positions are relative to parent
         parentId: `arc:${arc}`,
@@ -925,7 +1070,16 @@ export function NovelOverviewPanel() {
     }
 
     return result;
-  }, [graph, arcData, arcPositions, arcSizes, positions, expandedArcs, selectedBeatId, statusFilter]);
+  }, [
+    graph,
+    arcData,
+    arcPositions,
+    arcSizes,
+    positions,
+    expandedArcs,
+    selectedBeatId,
+    statusFilter,
+  ]);
 
   // Build edges: cross-arc edges (always visible, between arc nodes) +
   // within-arc edges (only when arc is expanded, between beat nodes)
@@ -1027,11 +1181,13 @@ export function NovelOverviewPanel() {
   }, [edges]);
 
   const onNodesChange = useCallback(
-    (changes: NodeChange[]) => setRfNodes((nds) => applyNodeChanges(changes, nds)),
+    (changes: NodeChange[]) =>
+      setRfNodes((nds) => applyNodeChanges(changes, nds)),
     []
   );
   const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) => setRfEdges((eds) => applyEdgeChanges(changes, eds)),
+    (changes: EdgeChange[]) =>
+      setRfEdges((eds) => applyEdgeChanges(changes, eds)),
     []
   );
   const onConnect: OnConnect = useCallback(
@@ -1039,15 +1195,18 @@ export function NovelOverviewPanel() {
       const fromBeat = connection.source;
       const toBeat = connection.target;
       if (graph && fromBeat && toBeat) {
-        const newEdge = { from_beat: fromBeat, to_beat: toBeat, edge_type: 'sequential', note: null };
+        const newEdge = {
+          from_beat: fromBeat,
+          to_beat: toBeat,
+          edge_type: 'sequential',
+          note: null,
+        };
         void saveGraph({
           beats: graph.beats,
           edges: [...graph.edges, newEdge],
         });
       }
-      setRfEdges((eds) =>
-        addEdge({ ...connection, type: 'smoothstep' }, eds)
-      );
+      setRfEdges((eds) => addEdge({ ...connection, type: 'smoothstep' }, eds));
     },
     [graph, saveGraph]
   );
@@ -1159,7 +1318,9 @@ export function NovelOverviewPanel() {
   const beatStats = useMemo(() => {
     if (!graph) return { total: 0, completed: 0, current: 0, planned: 0 };
     const total = graph.beats.length;
-    const completed = graph.beats.filter((b) => b.status === 'completed').length;
+    const completed = graph.beats.filter(
+      (b) => b.status === 'completed'
+    ).length;
     const current = graph.beats.filter((b) => b.status === 'current').length;
     const planned = graph.beats.filter((b) => b.status === 'planned').length;
     return { total, completed, current, planned };
@@ -1169,309 +1330,403 @@ export function NovelOverviewPanel() {
   if (!projectId) {
     return (
       <div className="overview-overlay bg-background text-foreground flex h-full w-full items-center justify-center">
-        <p className="text-muted-foreground">{t('panels:overview.noProject')}</p>
+        <p className="text-muted-foreground">
+          {t('panels:overview.noProject')}
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="overview-overlay bg-background text-foreground flex h-full w-full flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-2">
-        <div className="flex items-center gap-2">
-          <BookOpen className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold">{t('panels:overview.storyGraph')}</h2>
-          <span className="text-xs text-muted-foreground">
-            {t('panels:overview.statsBeats', beatStats)}
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Button size="sm" variant="secondary" onClick={handleGenerateGraph} disabled={false}>
-            <Wand2 className="h-3.5 w-3.5" />
-            {t('panels:overview.generateStoryGraph')}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              const allArcs = new Set<string>();
-              for (const b of graph?.beats ?? []) allArcs.add(b.arc ?? '未分类');
-              setExpandedArcs(allArcs);
-            }}
-            title="展开全部"
-          >
-            <Maximize2 className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setExpandedArcs(new Set())}
-            title="折叠全部"
-          >
-            <Minimize2 className="h-3.5 w-3.5" />
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => { refreshGraph(); refreshStats(); }}>
-            <RefreshCw className={cn('h-3.5 w-3.5', graphLoading && 'animate-spin')} />
-          </Button>
-        </div>
-      </div>
-
-      {/* Prompt action notice / edge tooltip */}
-      {promptNotice && (
-        <div className="flex items-center justify-between gap-2 border-b bg-slate-100 dark:bg-slate-800/60 px-4 py-1.5 text-xs text-slate-600 dark:text-slate-300">
-          <span>{promptNotice}</span>
-          <button
-            className="text-slate-400 hover:text-slate-600"
-            onClick={() => setPromptNotice(null)}
-          >
-            ×
-          </button>
-        </div>
-      )}
-
-      {/* Stats strip */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-4 py-1.5 text-xs text-muted-foreground">
-        <span>{t('panels:overview.chapterCount')}: {stats.chapterCount}</span>
-        <span>{t('panels:overview.totalWords')}: {stats.totalWords.toLocaleString()}</span>
-        <span>{t('panels:overview.characterCount')}: {stats.characterCount}</span>
-        <span>
-          {t('panels:overview.hooks')}: {stats.hookTotal}
-          {stats.hookTotal > 0 && (
-            <span className="ml-1">
-              ({t('panels:overview.hookResolution', {
-                resolved: stats.hookResolved,
-                open: stats.hookOpen,
-                rate: stats.hookTotal > 0 ? Math.round((stats.hookResolved / stats.hookTotal) * 100) : 0,
-              })})
+    <div className="overview-overlay bg-background text-foreground flex h-full w-full overflow-hidden">
+      {/* Left column: story graph chrome + canvas */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b px-4 py-2">
+          <div className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold">
+              {t('panels:overview.storyGraph')}
+            </h2>
+            <span className="text-xs text-muted-foreground">
+              {t('panels:overview.statsBeats', beatStats)}
             </span>
-          )}
-        </span>
-      </div>
-
-      {/* Filter bar + edge legend */}
-      <div className="flex items-center gap-1.5 border-b px-4 py-1.5 flex-wrap">
-        {['all', 'planned', 'current', 'completed', 'skipped'].map((s) => (
-          <Button
-            key={s}
-            size="sm"
-            variant={statusFilter === s ? 'secondary' : 'ghost'}
-            onClick={() => setStatusFilter(s)}
-            className="h-6 px-2 text-xs"
-          >
-            {t(`panels:overview.filter${s.charAt(0).toUpperCase() + s.slice(1)}`)}
-          </Button>
-        ))}
-        <div className="ml-auto flex items-center gap-2 text-[10px] text-muted-foreground">
-          {Object.entries(EDGE_STYLES).map(([type, s]) => (
-            <span
-              key={type}
-              className="flex items-center gap-1 cursor-help"
-              title={`${s.label}：${s.description}`}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleGenerateGraph}
+              disabled={false}
             >
-              <span
-                className="inline-block w-4 h-0"
-                style={{
-                  borderTop: `${s.width}px ${s.dashed ? 'dashed' : 'solid'} ${s.stroke}`,
-                }}
-              />
-              {s.label}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* Main content: graph + side panel */}
-      <div className="flex flex-1 overflow-hidden">
-        <div className="relative flex-1">
-          {graphLoading && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-sm text-muted-foreground">
-                {t('panels:overview.graphLoading')}
-              </span>
-            </div>
-          )}
-          {graphError && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center">
-              <p className="text-sm text-rose-500">{t('panels:overview.graphError')}: {graphError}</p>
-            </div>
-          )}
-          {!graphLoading && graph && graph.beats.length === 0 && (
-            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3">
-              <p className="text-sm text-muted-foreground">{t('panels:overview.graphEmpty')}</p>
-              <Button size="sm" variant="secondary" onClick={handleGenerateGraph} disabled={false}>
-                <Wand2 className="h-3.5 w-3.5" />
-                {t('panels:overview.generateStoryGraph')}
-              </Button>
-            </div>
-          )}
-          {graph && graph.beats.length > 0 && (
-            <ReactFlow
-              nodes={rfNodes}
-              edges={rfEdges}
-              nodeTypes={nodeTypes}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              onNodeClick={onNodeClick}
-              onEdgeClick={(_, edge) => {
-                const edgeType = edge.id.split(':').pop() ?? '';
-                const style = EDGE_STYLES[edgeType];
-                if (style) {
-                  setPromptNotice(`${style.label}：${style.description}`);
-                }
+              <Wand2 className="h-3.5 w-3.5" />
+              {t('panels:overview.generateStoryGraph')}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                const allArcs = new Set<string>();
+                for (const b of graph?.beats ?? [])
+                  allArcs.add(b.arc ?? '未分类');
+                setExpandedArcs(allArcs);
               }}
-              onEdgeMouseEnter={(_, edge) => {
-                const edgeType = edge.id.split(':').pop() ?? '';
-                const style = EDGE_STYLES[edgeType];
-                if (style) {
-                  setPromptNotice(`${style.label}：${style.description}`);
-                }
-              }}
-              onEdgeMouseLeave={() => {
-                setPromptNotice(null);
-              }}
-              fitView
-              fitViewOptions={{ padding: 0.2 }}
-              proOptions={{ hideAttribution: true }}
-              minZoom={0.05}
-              maxZoom={4}
-              defaultEdgeOptions={{ type: 'smoothstep' }}
-              nodesDraggable
-              nodesConnectable
-              elementsSelectable
+              title="展开全部"
             >
-              <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-              <Controls showInteractive={false} />
-              <MiniMap
-                pannable
-                zoomable
-                nodeColor={minimapNodeColor}
+              <Maximize2 className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setExpandedArcs(new Set())}
+              title="折叠全部"
+            >
+              <Minimize2 className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                refreshGraph();
+                refreshStats();
+              }}
+            >
+              <RefreshCw
+                className={cn('h-3.5 w-3.5', graphLoading && 'animate-spin')}
               />
-            </ReactFlow>
-          )}
+            </Button>
+          </div>
         </div>
 
-        {/* Side panel: beat details + agent actions */}
-        {selectedBeat && (
-          <div className="w-72 border-l overflow-y-auto p-3 space-y-3">
-            <div>
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                {BEAT_TYPE_LABELS[selectedBeat.beat_type] ?? selectedBeat.beat_type}
-              </div>
-              <h3 className="text-sm font-semibold leading-snug">{selectedBeat.title}</h3>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {t('panels:overview.beatStatus')}: {selectedBeat.status}
-              </div>
-            </div>
-
-            {selectedBeat.description && (
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                {selectedBeat.description}
-              </p>
-            )}
-
-            {selectedBeat.chapter_hint != null && (
-              <div className="text-xs">
-                <span className="text-muted-foreground">{t('panels:overview.beatChapter')}: </span>
-                <span>第 {Number(selectedBeat.chapter_hint)} 章</span>
-              </div>
-            )}
-
-            {beatContext ? (
-              <div className="space-y-2 text-xs">
-                {beatContext.predecessors.length > 0 && (
-                  <div>
-                    <div className="text-muted-foreground mb-0.5">
-                      {t('panels:overview.beatPredecessors')}
-                    </div>
-                    <ul className="list-disc pl-4 space-y-0.5">
-                      {beatContext.predecessors.map((p) => (
-                        <li key={p.id} className="cursor-pointer hover:text-blue-500"
-                          onClick={() => setSelectedBeatId(p.id)}>
-                          {p.title}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {beatContext.successors.length > 0 && (
-                  <div>
-                    <div className="text-muted-foreground mb-0.5">
-                      {t('panels:overview.beatSuccessors')}
-                    </div>
-                    <ul className="list-disc pl-4 space-y-0.5">
-                      {beatContext.successors.map((s) => (
-                        <li key={s.id} className="cursor-pointer hover:text-blue-500"
-                          onClick={() => setSelectedBeatId(s.id)}>
-                          {s.title}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {beatContext.characters.length > 0 && (
-                  <div>
-                    <div className="text-muted-foreground mb-0.5">
-                      {t('panels:overview.beatCharacters')}
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {beatContext.characters.map((c) => (
-                        <span key={c} className="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5">
-                          {c}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {beatContext.related_hooks.length > 0 && (
-                  <div>
-                    <div className="text-muted-foreground mb-0.5">
-                      {t('panels:overview.beatHooks')}
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {beatContext.related_hooks.map((h) => (
-                        <span key={h} className="rounded bg-rose-50 dark:bg-rose-950/40 px-1.5 py-0.5 text-rose-600">
-                          {h}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : null}
-
-            {/* Agent actions — primary */}
-            <div className="flex flex-col gap-1.5 pt-2 border-t">
-              <Button size="sm" variant="secondary" onClick={handleInferBeat} disabled={!beatContext}>
-                <Sparkles className="h-3.5 w-3.5" /> {t('panels:overview.inferBeat')}
-              </Button>
-              <Button size="sm" variant="secondary" onClick={handleWriteBeat} disabled={!beatContext}>
-                <PenLine className="h-3.5 w-3.5" /> {t('panels:overview.writeBeat')}
-              </Button>
-            </div>
-
-            {/* Quick status actions */}
-            <div className="flex flex-col gap-1.5 pt-2 border-t">
-              <Button size="sm" variant="ghost" onClick={() => updateStatus(selectedBeat.id, 'current')}>
-                <CircleDot className="h-3.5 w-3.5" /> {t('panels:overview.markCurrent')}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => updateStatus(selectedBeat.id, 'completed')}>
-                <CheckCircle2 className="h-3.5 w-3.5" /> {t('panels:overview.markCompleted')}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => updateStatus(selectedBeat.id, 'planned')}>
-                <Circle className="h-3.5 w-3.5" /> {t('panels:overview.markPlanned')}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => deleteBeat(selectedBeat.id)}>
-                <Trash2 className="h-3.5 w-3.5" /> {t('panels:overview.deleteBeat')}
-              </Button>
-            </div>
+        {/* Prompt action notice / edge tooltip */}
+        {promptNotice && (
+          <div className="flex items-center justify-between gap-2 border-b bg-slate-100 dark:bg-slate-800/60 px-4 py-1.5 text-xs text-slate-600 dark:text-slate-300">
+            <span>{promptNotice}</span>
+            <button
+              className="text-slate-400 hover:text-slate-600"
+              onClick={() => setPromptNotice(null)}
+            >
+              ×
+            </button>
           </div>
         )}
 
-        {/* Inline conversation session slot — adopts the shared right panel host */}
-        <OverviewSessionSlot visible={true} />
+        {/* Stats strip */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b px-4 py-1.5 text-xs text-muted-foreground">
+          <span>
+            {t('panels:overview.chapterCount')}: {stats.chapterCount}
+          </span>
+          <span>
+            {t('panels:overview.totalWords')}:{' '}
+            {stats.totalWords.toLocaleString()}
+          </span>
+          <span>
+            {t('panels:overview.characterCount')}: {stats.characterCount}
+          </span>
+          <span>
+            {t('panels:overview.hooks')}: {stats.hookTotal}
+            {stats.hookTotal > 0 && (
+              <span className="ml-1">
+                (
+                {t('panels:overview.hookResolution', {
+                  resolved: stats.hookResolved,
+                  open: stats.hookOpen,
+                  rate:
+                    stats.hookTotal > 0
+                      ? Math.round((stats.hookResolved / stats.hookTotal) * 100)
+                      : 0,
+                })}
+                )
+              </span>
+            )}
+          </span>
+        </div>
+
+        {/* Filter bar + edge legend */}
+        <div className="flex items-center gap-1.5 border-b px-4 py-1.5 flex-wrap">
+          {['all', 'planned', 'current', 'completed', 'skipped'].map((s) => (
+            <Button
+              key={s}
+              size="sm"
+              variant={statusFilter === s ? 'secondary' : 'ghost'}
+              onClick={() => setStatusFilter(s)}
+              className="h-6 px-2 text-xs"
+            >
+              {t(
+                `panels:overview.filter${s.charAt(0).toUpperCase() + s.slice(1)}`
+              )}
+            </Button>
+          ))}
+          <div className="ml-auto flex items-center gap-2 text-[10px] text-muted-foreground">
+            {Object.entries(EDGE_STYLES).map(([type, s]) => (
+              <span
+                key={type}
+                className="flex items-center gap-1 cursor-help"
+                title={`${s.label}：${s.description}`}
+              >
+                <span
+                  className="inline-block w-4 h-0"
+                  style={{
+                    borderTop: `${s.width}px ${s.dashed ? 'dashed' : 'solid'} ${s.stroke}`,
+                  }}
+                />
+                {s.label}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Graph canvas + beat detail panel */}
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <div className="relative min-h-0 flex-1">
+            {graphLoading && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-sm text-muted-foreground">
+                  {t('panels:overview.graphLoading')}
+                </span>
+              </div>
+            )}
+            {graphError && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center">
+                <p className="text-sm text-rose-500">
+                  {t('panels:overview.graphError')}: {graphError}
+                </p>
+              </div>
+            )}
+            {!graphLoading && graph && graph.beats.length === 0 && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3">
+                <p className="text-sm text-muted-foreground">
+                  {t('panels:overview.graphEmpty')}
+                </p>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleGenerateGraph}
+                  disabled={false}
+                >
+                  <Wand2 className="h-3.5 w-3.5" />
+                  {t('panels:overview.generateStoryGraph')}
+                </Button>
+              </div>
+            )}
+            {graph && graph.beats.length > 0 && (
+              <ReactFlow
+                nodes={rfNodes}
+                edges={rfEdges}
+                nodeTypes={nodeTypes}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                onNodeClick={onNodeClick}
+                onEdgeClick={(_, edge) => {
+                  const edgeType = edge.id.split(':').pop() ?? '';
+                  const style = EDGE_STYLES[edgeType];
+                  if (style) {
+                    setPromptNotice(`${style.label}：${style.description}`);
+                  }
+                }}
+                onEdgeMouseEnter={(_, edge) => {
+                  const edgeType = edge.id.split(':').pop() ?? '';
+                  const style = EDGE_STYLES[edgeType];
+                  if (style) {
+                    setPromptNotice(`${style.label}：${style.description}`);
+                  }
+                }}
+                onEdgeMouseLeave={() => {
+                  setPromptNotice(null);
+                }}
+                fitView
+                fitViewOptions={{ padding: 0.2 }}
+                proOptions={{ hideAttribution: true }}
+                minZoom={0.05}
+                maxZoom={4}
+                defaultEdgeOptions={{ type: 'smoothstep' }}
+                nodesDraggable
+                nodesConnectable
+                elementsSelectable
+              >
+                <Background
+                  variant={BackgroundVariant.Dots}
+                  gap={20}
+                  size={1}
+                />
+                <Controls showInteractive={false} />
+                <MiniMap pannable zoomable nodeColor={minimapNodeColor} />
+              </ReactFlow>
+            )}
+          </div>
+
+          {/* Side panel: beat details + agent actions */}
+          {selectedBeat && (
+            <div className="w-72 shrink-0 overflow-y-auto border-l p-3 space-y-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {BEAT_TYPE_LABELS[selectedBeat.beat_type] ??
+                    selectedBeat.beat_type}
+                </div>
+                <h3 className="text-sm font-semibold leading-snug">
+                  {selectedBeat.title}
+                </h3>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {t('panels:overview.beatStatus')}: {selectedBeat.status}
+                </div>
+              </div>
+
+              {selectedBeat.description && (
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {selectedBeat.description}
+                </p>
+              )}
+
+              {selectedBeat.chapter_hint != null && (
+                <div className="text-xs">
+                  <span className="text-muted-foreground">
+                    {t('panels:overview.beatChapter')}:{' '}
+                  </span>
+                  <span>第 {Number(selectedBeat.chapter_hint)} 章</span>
+                </div>
+              )}
+
+              {beatContext ? (
+                <div className="space-y-2 text-xs">
+                  {beatContext.predecessors.length > 0 && (
+                    <div>
+                      <div className="text-muted-foreground mb-0.5">
+                        {t('panels:overview.beatPredecessors')}
+                      </div>
+                      <ul className="list-disc pl-4 space-y-0.5">
+                        {beatContext.predecessors.map((p) => (
+                          <li
+                            key={p.id}
+                            className="cursor-pointer hover:text-blue-500"
+                            onClick={() => setSelectedBeatId(p.id)}
+                          >
+                            {p.title}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {beatContext.successors.length > 0 && (
+                    <div>
+                      <div className="text-muted-foreground mb-0.5">
+                        {t('panels:overview.beatSuccessors')}
+                      </div>
+                      <ul className="list-disc pl-4 space-y-0.5">
+                        {beatContext.successors.map((s) => (
+                          <li
+                            key={s.id}
+                            className="cursor-pointer hover:text-blue-500"
+                            onClick={() => setSelectedBeatId(s.id)}
+                          >
+                            {s.title}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {beatContext.characters.length > 0 && (
+                    <div>
+                      <div className="text-muted-foreground mb-0.5">
+                        {t('panels:overview.beatCharacters')}
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {beatContext.characters.map((c) => (
+                          <span
+                            key={c}
+                            className="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5"
+                          >
+                            {c}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {beatContext.related_hooks.length > 0 && (
+                    <div>
+                      <div className="text-muted-foreground mb-0.5">
+                        {t('panels:overview.beatHooks')}
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {beatContext.related_hooks.map((h) => (
+                          <span
+                            key={h}
+                            className="rounded bg-rose-50 dark:bg-rose-950/40 px-1.5 py-0.5 text-rose-600"
+                          >
+                            {h}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {/* Agent actions — primary */}
+              <div className="flex flex-col gap-1.5 pt-2 border-t">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleInferBeat}
+                  disabled={!beatContext}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />{' '}
+                  {t('panels:overview.inferBeat')}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleWriteBeat}
+                  disabled={!beatContext}
+                >
+                  <PenLine className="h-3.5 w-3.5" />{' '}
+                  {t('panels:overview.writeBeat')}
+                </Button>
+              </div>
+
+              {/* Quick status actions */}
+              <div className="flex flex-col gap-1.5 pt-2 border-t">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => updateStatus(selectedBeat.id, 'current')}
+                >
+                  <CircleDot className="h-3.5 w-3.5" />{' '}
+                  {t('panels:overview.markCurrent')}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => updateStatus(selectedBeat.id, 'completed')}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />{' '}
+                  {t('panels:overview.markCompleted')}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => updateStatus(selectedBeat.id, 'planned')}
+                >
+                  <Circle className="h-3.5 w-3.5" />{' '}
+                  {t('panels:overview.markPlanned')}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => deleteBeat(selectedBeat.id)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />{' '}
+                  {t('panels:overview.deleteBeat')}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Full-height conversation session on the right */}
+      <OverviewSessionSlot visible={true} />
     </div>
   );
 }
