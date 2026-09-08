@@ -11,7 +11,7 @@
 import '@xyflow/react/dist/style.css';
 
 import dagre from 'dagre';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ReactFlow,
@@ -243,7 +243,7 @@ const BEAT_TYPE_ACCENT: Record<string, string> = {
   turning_point: '#f43f5e',
 };
 
-function BeatNodeComponent({ data }: NodeProps) {
+const BeatNodeComponent = memo(function BeatNodeComponent({ data }: NodeProps) {
   const nodeData = data as unknown as BeatNodeData;
   const { beat, isSelected } = nodeData;
   const style = STATUS_STYLES[beat.status] ?? STATUS_STYLES.planned;
@@ -272,7 +272,7 @@ function BeatNodeComponent({ data }: NodeProps) {
             {BEAT_TYPE_LABELS[beat.beat_type] ?? beat.beat_type}
           </span>
           {beat.status === 'current' && (
-            <span className="ml-auto text-[9px] rounded-full bg-blue-500 text-white px-1.5 py-0.5 animate-pulse">
+            <span className="ml-auto text-[9px] rounded-full bg-blue-500 text-white px-1.5 py-0.5">
               当前
             </span>
           )}
@@ -305,9 +305,7 @@ function BeatNodeComponent({ data }: NodeProps) {
       <Handle type="source" position={Position.Bottom} className="!bg-slate-400 !w-2 !h-2" />
     </div>
   );
-}
-
-const nodeTypes = { beatNode: BeatNodeComponent, arcNode: ArcNodeComponent };
+});
 
 // ---------------------------------------------------------------------------
 // Progressive Disclosure: Arc-level macro node
@@ -322,7 +320,7 @@ type ArcNodeData = {
   onToggle: (arc: string) => void;
 };
 
-function ArcNodeComponent({ data }: NodeProps) {
+const ArcNodeComponent = memo(function ArcNodeComponent({ data }: NodeProps) {
   const nodeData = data as unknown as ArcNodeData;
   const { arc, beatCount, statusCounts, characters, isExpanded, onToggle } = nodeData;
   const completed = statusCounts.completed ?? 0;
@@ -379,7 +377,7 @@ function ArcNodeComponent({ data }: NodeProps) {
           </span>
         )}
         {current > 0 && (
-          <span className="text-[9px] rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 animate-pulse">
+          <span className="text-[9px] rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-1.5 py-0.5">
             ● 当前 {current}
           </span>
         )}
@@ -415,7 +413,23 @@ function ArcNodeComponent({ data }: NodeProps) {
       <Handle type="source" position={Position.Bottom} className="!bg-slate-500 !w-2.5 !h-2.5" />
     </div>
   );
-}
+});
+
+const nodeTypes = { beatNode: BeatNodeComponent, arcNode: ArcNodeComponent };
+
+// Stable minimap color function — avoids re-creating on every render
+const minimapNodeColor = (n: Node): string => {
+  if (n.id.startsWith('arc:')) return '#6366f1';
+  const beat = (n.data as unknown as BeatNodeData)?.beat;
+  if (!beat) return '#94a3b8';
+  switch (beat.status) {
+    case 'completed': return '#10b981';
+    case 'current': return '#3b82f6';
+    case 'skipped': return '#f43f5e';
+    case 'revised': return '#f59e0b';
+    default: return '#94a3b8';
+  }
+};
 
 // ---------------------------------------------------------------------------
 // Edge styling — each edge type has a distinct visual identity
@@ -691,6 +705,16 @@ export function NovelOverviewPanel() {
     [graph, expandedArcs]
   );
 
+  // Stable toggle callback — doesn't change reference between renders
+  const toggleArc = useCallback((arc: string) => {
+    setExpandedArcs((prev) => {
+      const next = new Set(prev);
+      if (next.has(arc)) next.delete(arc);
+      else next.add(arc);
+      return next;
+    });
+  }, []);
+
   // Arc-level data for macro nodes
   const arcData = useMemo(() => {
     if (!graph) return new Map<string, ArcNodeData>();
@@ -714,17 +738,11 @@ export function NovelOverviewPanel() {
         statusCounts,
         characters: [...charSet],
         isExpanded: expandedArcs.has(arc),
-        onToggle: (a: string) =>
-          setExpandedArcs((prev) => {
-            const next = new Set(prev);
-            if (next.has(a)) next.delete(a);
-            else next.add(a);
-            return next;
-          }),
+        onToggle: toggleArc,
       });
     }
     return result;
-  }, [graph, expandedArcs]);
+  }, [graph, expandedArcs, toggleArc]);
 
   // Build the node list: arc macro nodes + beat nodes (only for expanded arcs)
   const nodes = useMemo<Node[]>(() => {
@@ -791,7 +809,6 @@ export function NovelOverviewPanel() {
           id: `${edge.from_beat}->${edge.to_beat}:${edge.edge_type}`,
           source: edge.from_beat,
           target: edge.to_beat,
-          label: style.label,
           type: isCrossEdge ? 'default' : 'smoothstep',
           animated: style.animated,
           style: {
@@ -799,8 +816,6 @@ export function NovelOverviewPanel() {
             strokeWidth: style.width,
             strokeDasharray: style.dashed ? '6 4' : undefined,
           },
-          labelStyle: { fill: style.stroke, fontSize: 10, fontWeight: 600 },
-          labelBgStyle: { fill: 'rgba(255,255,255,0.85)' },
         });
         continue;
       }
@@ -815,7 +830,6 @@ export function NovelOverviewPanel() {
         id: arcEdgeKey,
         source: `arc:${fromArc}`,
         target: `arc:${toArc}`,
-        label: style.label,
         type: 'smoothstep',
         animated: style.animated,
         style: {
@@ -823,8 +837,6 @@ export function NovelOverviewPanel() {
           strokeWidth: style.width,
           strokeDasharray: style.dashed ? '6 4' : undefined,
         },
-        labelStyle: { fill: style.stroke, fontSize: 11, fontWeight: 600 },
-        labelBgStyle: { fill: 'rgba(255,255,255,0.85)' },
       });
     }
 
@@ -840,7 +852,6 @@ export function NovelOverviewPanel() {
         id: `${edge.from_beat}->${edge.to_beat}:${edge.edge_type}`,
         source: edge.from_beat,
         target: edge.to_beat,
-        label: style.label,
         type: 'smoothstep',
         animated: style.animated,
         style: {
@@ -848,19 +859,25 @@ export function NovelOverviewPanel() {
           strokeWidth: style.width,
           strokeDasharray: style.dashed ? '6 4' : undefined,
         },
-        labelStyle: { fill: style.stroke, fontSize: 10, fontWeight: 600 },
-        labelBgStyle: { fill: 'rgba(255,255,255,0.85)' },
       });
     }
 
     return result;
   }, [graph, expandedArcs]);
 
+  // ----- React Flow state: use controlled nodes/edges directly -----
+  // We keep internal state for drag/position changes, but sync from props
+  // only when the computed nodes/edges actually change (by reference).
   const [rfNodes, setRfNodes] = useState<Node[]>(nodes);
   const [rfEdges, setRfEdges] = useState<Edge[]>(edges);
 
-  useEffect(() => setRfNodes(nodes), [nodes]);
-  useEffect(() => setRfEdges(edges), [edges]);
+  // Sync only when the memoized arrays change reference
+  useEffect(() => {
+    setRfNodes(nodes);
+  }, [nodes]);
+  useEffect(() => {
+    setRfEdges(edges);
+  }, [edges]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => setRfNodes((nds) => applyNodeChanges(changes, nds)),
@@ -1084,8 +1101,8 @@ export function NovelOverviewPanel() {
         </span>
       </div>
 
-      {/* Filter bar */}
-      <div className="flex items-center gap-1.5 border-b px-4 py-1.5">
+      {/* Filter bar + edge legend */}
+      <div className="flex items-center gap-1.5 border-b px-4 py-1.5 flex-wrap">
         {['all', 'planned', 'current', 'completed', 'skipped'].map((s) => (
           <Button
             key={s}
@@ -1097,6 +1114,19 @@ export function NovelOverviewPanel() {
             {t(`panels:overview.filter${s.charAt(0).toUpperCase() + s.slice(1)}`)}
           </Button>
         ))}
+        <div className="ml-auto flex items-center gap-2 text-[10px] text-muted-foreground">
+          {Object.entries(EDGE_STYLES).map(([type, s]) => (
+            <span key={type} className="flex items-center gap-1">
+              <span
+                className="inline-block w-4 h-0"
+                style={{
+                  borderTop: `${s.width}px ${s.dashed ? 'dashed' : 'solid'} ${s.stroke}`,
+                }}
+              />
+              {s.label}
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* Main content: graph + side panel */}
@@ -1136,24 +1166,19 @@ export function NovelOverviewPanel() {
               fitView
               fitViewOptions={{ padding: 0.2 }}
               proOptions={{ hideAttribution: true }}
+              // Performance: skip expensive default features
+              nodesDraggable
+              nodesConnectable
+              elementsSelectable
+              // Only re-fit on first mount and when expandedArcs changes
+              defaultEdgeOptions={{ type: 'smoothstep' }}
             >
               <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
               <Controls showInteractive={false} />
               <MiniMap
                 pannable
                 zoomable
-                nodeColor={(n) => {
-                  if (n.id.startsWith('arc:')) return '#6366f1';
-                  const beat = (n.data as unknown as BeatNodeData)?.beat;
-                  if (!beat) return '#94a3b8';
-                  switch (beat.status) {
-                    case 'completed': return '#10b981';
-                    case 'current': return '#3b82f6';
-                    case 'skipped': return '#f43f5e';
-                    case 'revised': return '#f59e0b';
-                    default: return '#94a3b8';
-                  }
-                }}
+                nodeColor={minimapNodeColor}
               />
             </ReactFlow>
           )}
