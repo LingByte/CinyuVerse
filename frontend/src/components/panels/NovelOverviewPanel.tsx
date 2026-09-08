@@ -515,15 +515,15 @@ const minimapNodeColor = (n: Node): string => {
 
 const EDGE_STYLES: Record<
   string,
-  { stroke: string; dashed: boolean; label: string; animated: boolean; width: number }
+  { stroke: string; dashed: boolean; label: string; description: string; animated: boolean; width: number }
 > = {
-  sequential: { stroke: '#94a3b8', dashed: false, label: '顺序', animated: false, width: 1.5 },
-  causal: { stroke: '#f97316', dashed: false, label: '因果', animated: true, width: 2 },
-  foreshadow: { stroke: '#ef4444', dashed: true, label: '伏笔', animated: true, width: 2 },
-  parallel: { stroke: '#3b82f6', dashed: false, label: '并行', animated: false, width: 1.5 },
-  alternative: { stroke: '#a855f7', dashed: true, label: '备选', animated: false, width: 1.5 },
-  character_arc: { stroke: '#8b5cf6', dashed: true, label: '角色弧', animated: true, width: 2 },
-  item_flow: { stroke: '#14b8a6', dashed: false, label: '物品流', animated: false, width: 1.5 },
+  sequential: { stroke: '#94a3b8', dashed: false, label: '顺序', description: 'A 完成后 B 自然发生，主线推进', animated: false, width: 1.5 },
+  causal: { stroke: '#f97316', dashed: false, label: '因果', description: 'A 导致 B 发生，B 是 A 的直接后果', animated: true, width: 2 },
+  foreshadow: { stroke: '#ef4444', dashed: true, label: '伏笔', description: 'A 埋下的伏笔在 B 处回收或推进', animated: true, width: 2 },
+  parallel: { stroke: '#3b82f6', dashed: false, label: '并行', description: 'A 和 B 在同一时间线并行发生', animated: false, width: 1.5 },
+  alternative: { stroke: '#a855f7', dashed: true, label: '备选', description: 'B 是 A 的替代走向，非确定路径', animated: false, width: 1.5 },
+  character_arc: { stroke: '#8b5cf6', dashed: true, label: '角色弧', description: '同一角色的成长轨迹串联', animated: true, width: 2 },
+  item_flow: { stroke: '#14b8a6', dashed: false, label: '物品流', description: '某物品或关键信息从 A 流转到 B', animated: false, width: 1.5 },
 };
 
 // ---------------------------------------------------------------------------
@@ -1216,12 +1216,12 @@ export function NovelOverviewPanel() {
         </div>
       </div>
 
-      {/* Prompt action notice (e.g. "no session" warning) */}
+      {/* Prompt action notice / edge tooltip */}
       {promptNotice && (
-        <div className="flex items-center justify-between gap-2 border-b bg-amber-50 dark:bg-amber-950/30 px-4 py-1.5 text-xs text-amber-700 dark:text-amber-400">
+        <div className="flex items-center justify-between gap-2 border-b bg-slate-100 dark:bg-slate-800/60 px-4 py-1.5 text-xs text-slate-600 dark:text-slate-300">
           <span>{promptNotice}</span>
           <button
-            className="text-amber-500 hover:text-amber-700"
+            className="text-slate-400 hover:text-slate-600"
             onClick={() => setPromptNotice(null)}
           >
             ×
@@ -1263,7 +1263,11 @@ export function NovelOverviewPanel() {
         ))}
         <div className="ml-auto flex items-center gap-2 text-[10px] text-muted-foreground">
           {Object.entries(EDGE_STYLES).map(([type, s]) => (
-            <span key={type} className="flex items-center gap-1">
+            <span
+              key={type}
+              className="flex items-center gap-1 cursor-help"
+              title={`${s.label}：${s.description}`}
+            >
               <span
                 className="inline-block w-4 h-0"
                 style={{
@@ -1310,15 +1314,32 @@ export function NovelOverviewPanel() {
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               onNodeClick={onNodeClick}
+              onEdgeClick={(_, edge) => {
+                const edgeType = edge.id.split(':').pop() ?? '';
+                const style = EDGE_STYLES[edgeType];
+                if (style) {
+                  setPromptNotice(`${style.label}：${style.description}`);
+                }
+              }}
+              onEdgeMouseEnter={(_, edge) => {
+                const edgeType = edge.id.split(':').pop() ?? '';
+                const style = EDGE_STYLES[edgeType];
+                if (style) {
+                  setPromptNotice(`${style.label}：${style.description}`);
+                }
+              }}
+              onEdgeMouseLeave={() => {
+                setPromptNotice(null);
+              }}
               fitView
               fitViewOptions={{ padding: 0.2 }}
               proOptions={{ hideAttribution: true }}
-              // Performance: skip expensive default features
+              minZoom={0.05}
+              maxZoom={4}
+              defaultEdgeOptions={{ type: 'smoothstep' }}
               nodesDraggable
               nodesConnectable
               elementsSelectable
-              // Only re-fit on first mount and when expandedArcs changes
-              defaultEdgeOptions={{ type: 'smoothstep' }}
             >
               <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
               <Controls showInteractive={false} />
