@@ -16,6 +16,8 @@ import {
   FileText,
   ChevronRight,
   Settings,
+  List,
+  ArrowLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,6 +69,11 @@ export function NovelLibraryPanel() {
   const [selectedItem, setSelectedItem] = useState<LibraryItem | null>(null);
   const [previewContent, setPreviewContent] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [chapters, setChapters] = useState<string[]>([]);
+  const [chaptersLoading, setChaptersLoading] = useState(false);
+  const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
+  const [chapterContent, setChapterContent] = useState<string | null>(null);
+  const [chapterLoading, setChapterLoading] = useState(false);
   const [config, setConfig] = useState<QiniuConfig | null>(null);
   const [showConfig, setShowConfig] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -116,23 +123,55 @@ export function NovelLibraryPanel() {
     );
   }, [items, search]);
 
-  // ----- Preview a novel -----
+  // ----- Preview a novel: load metadata + chapter list -----
   const handlePreview = useCallback(async (item: LibraryItem) => {
     setSelectedItem(item);
-    setPreviewLoading(true);
     setPreviewContent(null);
+    setSelectedChapter(null);
+    setChapterContent(null);
+    setChapters([]);
+    setChaptersLoading(true);
+    setPreviewLoading(true);
     try {
-      const content = await invoke<string>('qiniu_download_text', {
-        key: item.key,
-        maxChars: 5000,
+      // Load book overview (first 3000 chars for the header preview)
+      const content = await invoke<string>('qiniu_download_book', {
+        bookKey: item.key,
+        maxChars: 3000,
       });
       setPreviewContent(content);
+      // Load chapter list
+      const chList = await invoke<string[]>('qiniu_list_chapters', {
+        bookKey: item.key,
+      });
+      setChapters(chList);
     } catch (err) {
       setPreviewContent(`加载失败: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
+      setChaptersLoading(false);
       setPreviewLoading(false);
     }
   }, []);
+
+  // ----- Load a single chapter -----
+  const handleSelectChapter = useCallback(
+    async (chapterKey: string) => {
+      setSelectedChapter(chapterKey);
+      setChapterContent(null);
+      setChapterLoading(true);
+      try {
+        const content = await invoke<string>('qiniu_download_text', {
+          key: chapterKey,
+          maxChars: 0,
+        });
+        setChapterContent(content);
+      } catch (err) {
+        setChapterContent(`加载失败: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setChapterLoading(false);
+      }
+    },
+    []
+  );
 
   // ----- Import novel into current project's references -----
   const handleImport = useCallback(
@@ -141,8 +180,8 @@ export function NovelLibraryPanel() {
       setImporting(true);
       setImportNotice(null);
       try {
-        const content = await invoke<string>('qiniu_download_text', {
-          key: item.key,
+        const content = await invoke<string>('qiniu_download_book', {
+          bookKey: item.key,
           maxChars: 0,
         });
         // Write to .cinyuverse/references/
@@ -260,7 +299,7 @@ export function NovelLibraryPanel() {
               <BookOpen className="h-8 w-8 text-muted-foreground/40 mb-2" />
               <p className="text-xs text-muted-foreground">
                 {items.length === 0
-                  ? '词库为空，请先爬取参考小说并上传'
+                  ? '书库为空，请先爬取参考小说并上传'
                   : '没有匹配的结果'}
               </p>
             </div>
@@ -304,7 +343,7 @@ export function NovelLibraryPanel() {
         </div>
 
         {/* Preview panel */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 flex flex-col overflow-hidden">
           {!selectedItem && (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <Library className="h-12 w-12 text-muted-foreground/30 mb-3" />
@@ -314,9 +353,9 @@ export function NovelLibraryPanel() {
             </div>
           )}
           {selectedItem && (
-            <div className="p-4">
+            <div className="flex flex-col h-full overflow-hidden">
               {/* Book header */}
-              <div className="mb-4 pb-3 border-b">
+              <div className="p-4 pb-3 border-b shrink-0">
                 <h3 className="text-lg font-semibold">{selectedItem.title}</h3>
                 <div className="text-xs text-muted-foreground mt-1 flex items-center gap-3">
                   <span>作者: {selectedItem.author}</span>
@@ -347,22 +386,90 @@ export function NovelLibraryPanel() {
                 </div>
               </div>
 
-              {/* Preview content */}
-              {previewLoading && (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    加载预览...
-                  </span>
+              {/* Body: chapter list + content reader */}
+              <div className="flex-1 flex overflow-hidden">
+                {/* Chapter list sidebar */}
+                <div className="w-56 shrink-0 border-r overflow-y-auto">
+                  <div className="px-3 py-2 text-xs font-medium text-muted-foreground sticky top-0 bg-background/80 backdrop-blur border-b">
+                    <List className="h-3 w-3 inline mr-1" />
+                    章节目录 ({chapters.length})
+                  </div>
+                  {chaptersLoading && (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                  {!chaptersLoading && chapters.length === 0 && (
+                    <div className="px-3 py-2 text-xs text-muted-foreground/50">
+                      无章节
+                    </div>
+                  )}
+                  {chapters.map((chKey) => {
+                    const chName = chKey.split('/').pop() || chKey;
+                    const chIdx = chName.replace('.md', '');
+                    const isActive = selectedChapter === chKey;
+                    return (
+                      <button
+                        key={chKey}
+                        onClick={() => void handleSelectChapter(chKey)}
+                        className={`w-full text-left px-3 py-1.5 text-xs border-b border-border/30 transition-colors ${
+                          isActive
+                            ? 'bg-primary/10 text-primary font-medium'
+                            : 'hover:bg-muted/50 text-foreground/70'
+                        }`}
+                      >
+                        第 {chIdx} 章
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
-              {previewContent && !previewLoading && (
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans text-foreground/80">
-                    {previewContent}
-                  </pre>
+
+                {/* Content reader */}
+                <div className="flex-1 overflow-y-auto p-4">
+                  {previewLoading && !selectedChapter && (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        加载预览...
+                      </span>
+                    </div>
+                  )}
+                  {!selectedChapter && previewContent && !previewLoading && (
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans text-foreground/80">
+                        {previewContent}
+                      </pre>
+                    </div>
+                  )}
+                  {selectedChapter && (
+                    <div>
+                      <button
+                        onClick={() => {
+                          setSelectedChapter(null);
+                          setChapterContent(null);
+                        }}
+                        className="text-xs text-muted-foreground hover:text-foreground mb-3 flex items-center gap-1"
+                      >
+                        <ArrowLeft className="h-3 w-3" />
+                        返回概览
+                      </button>
+                      {chapterLoading && (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            加载章节...
+                          </span>
+                        </div>
+                      )}
+                      {chapterContent && !chapterLoading && (
+                        <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans text-foreground/80">
+                          {chapterContent}
+                        </pre>
+                      )}
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           )}
         </div>
