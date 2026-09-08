@@ -28,6 +28,7 @@ pub mod local_usage;
 pub mod logs;
 pub mod plugin_control;
 pub mod projects;
+pub mod qiniu;
 pub(crate) mod release_download;
 pub mod remote_desktop;
 pub mod repos;

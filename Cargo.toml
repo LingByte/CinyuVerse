@@ -20,6 +20,7 @@ members = [
     "crates/review",
     "crates/plugins",
     "crates/plugin-sdk",
+    "crates/qiniu-storage",
     "crates/tool-runtime",
     "crates/artifacts",
     "crates/automation",

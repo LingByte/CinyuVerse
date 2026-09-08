@@ -150,6 +150,12 @@ const LazyNovelOverview = lazy(() =>
   }))
 );
 
+const LazyNovelLibrary = lazy(() =>
+  import('@/components/panels/NovelLibraryPanel').then((module) => ({
+    default: module.NovelLibraryPanel,
+  }))
+);
+
 function getLeftGroup(api: DockviewApi): DockviewGroup | undefined {
   return (
     api.getGroup(GROUP_IDS.LEFT) ??
@@ -1351,6 +1357,25 @@ export function IDELayout({
                       }
                     >
                       <LazyNovelOverview />
+                    </Suspense>
+                  </ErrorBoundary>
+                </div>
+              )}
+
+              {effectiveActiveTab === 'library' && (
+                <div className="library-overlay absolute inset-0 z-10">
+                  <ErrorBoundary label="Library">
+                    <Suspense
+                      fallback={
+                        <div className="flex h-full w-full items-center justify-center p-6 text-sm">
+                          <div className="workspace-loading-panel flex items-center gap-3 px-4 py-3">
+                            <div className="h-4 w-4 animate-spin rounded-full border border-primary border-t-transparent" />
+                            <span>Loading Library...</span>
+                          </div>
+                        </div>
+                      }
+                    >
+                      <LazyNovelLibrary />
                     </Suspense>
                   </ErrorBoundary>
                 </div>

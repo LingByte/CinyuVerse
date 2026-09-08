@@ -72,6 +72,7 @@ workflows = { path = "../crates/workflows" }
 application = { path = "../crates/application" }
 remote-protocol = { path = "../crates/remote-protocol" }
 plugins = { path = "../crates/plugins" }
+qiniu-storage = { path = "../crates/qiniu-storage" }
 server = { path = "../crates/server" }
 tool-runtime = { path = "../crates/tool-runtime" }
 db = { path = "../crates/db" }

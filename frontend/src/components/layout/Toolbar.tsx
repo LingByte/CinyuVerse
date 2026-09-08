@@ -30,6 +30,7 @@ import {
   Monitor,
   Puzzle,
   BookOpen,
+  Library,
 } from 'lucide-react';
 import {
   Tooltip,
@@ -371,6 +372,7 @@ function WorkspaceTabSwitcher() {
     { key: 'kanban', label: t('toolbar.kanban'), icon: LayoutDashboard },
     { key: 'workspace', label: t('toolbar.workspace'), icon: Monitor },
     { key: 'overview', label: t('toolbar.overview'), icon: BookOpen },
+    { key: 'library', label: t('toolbar.library'), icon: Library },
   ];
 
   const handleTabSelect = useCallback(
@@ -385,6 +387,11 @@ function WorkspaceTabSwitcher() {
 
       if (tab === 'overview') {
         // Overview is a standalone panel — no navigation needed.
+        return;
+      }
+
+      if (tab === 'library') {
+        // Library is a standalone panel — no navigation needed.
         return;
       }
 

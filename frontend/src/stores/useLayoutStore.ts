@@ -42,7 +42,7 @@ export type GroupId = (typeof GROUP_IDS)[keyof typeof GROUP_IDS];
 export const EDITOR_GROUP_PREFIX = 'group-editor-';
 export const MAX_EDITOR_GROUPS = 4;
 
-export type WorkspaceTab = 'workspace' | 'kanban' | 'overview';
+export type WorkspaceTab = 'workspace' | 'kanban' | 'overview' | 'library';
 
 interface LayoutState {
   /** Current project scope key */

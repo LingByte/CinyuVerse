@@ -124,6 +124,7 @@
     "kanban": "Kanban",
     "workspace": "Volume",
     "overview": "Overview",
+    "library": "Library",
     "toggleSessionList": "Toggle writing session list",
     "toggleSessionMonitor": "Toggle writing session monitor",
     "toggleSessionExecution": "Toggle writing session execution",

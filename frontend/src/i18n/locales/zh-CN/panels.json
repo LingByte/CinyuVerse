@@ -124,6 +124,7 @@
     "kanban": "看板",
     "workspace": "草稿",
     "overview": "概览",
+    "library": "词库",
     "toggleSessionList": "显示/隐藏创作会话列表",
     "toggleSessionMonitor": "显示/隐藏创作会话监控区",
     "toggleSessionExecution": "显示/隐藏创作会话执行区",
