@@ -632,85 +632,36 @@ export function NovelOverviewPanel() {
   }, [fillPromptIntoSession]);
 
   const handleInferBeat = useCallback(() => {
-    if (!selectedBeat || !beatContext) return;
+    if (!selectedBeat || !beatContext || !graph) return;
     const tpl = getWritingPrompt('infer-beat');
     if (!tpl) return;
+    const fullGraphJson = JSON.stringify(graph, null, 2);
     const prompt = tpl.build({
       beatId: selectedBeat.id,
       beatTitle: selectedBeat.title,
       beatDescription: selectedBeat.description ?? '',
-      beatContext: JSON.stringify(
-        {
-          beat: {
-            id: beatContext.beat.id,
-            title: beatContext.beat.title,
-            description: beatContext.beat.description,
-            beat_type: beatContext.beat.beat_type,
-            status: beatContext.beat.status,
-            chapter_hint: beatContext.beat.chapter_hint,
-          },
-          predecessors: beatContext.predecessors.map((p) => ({
-            id: p.id,
-            title: p.title,
-            status: p.status,
-          })),
-          successors: beatContext.successors.map((s) => ({
-            id: s.id,
-            title: s.title,
-            status: s.status,
-          })),
-          characters: beatContext.characters,
-          related_hooks: beatContext.related_hooks,
-        },
-        null,
-        2
-      ),
+      fullGraph: fullGraphJson,
     });
     void fillPromptIntoSession(prompt);
-  }, [selectedBeat, beatContext, fillPromptIntoSession]);
+  }, [selectedBeat, beatContext, graph, fillPromptIntoSession]);
 
   const handleWriteBeat = useCallback(() => {
-    if (!selectedBeat || !beatContext) return;
+    if (!selectedBeat || !beatContext || !graph) return;
     const tpl = getWritingPrompt('write-beat');
     if (!tpl) return;
     const chapterNum = selectedBeat.chapter_hint
       ? Number(selectedBeat.chapter_hint)
       : undefined;
+    const fullGraphJson = JSON.stringify(graph, null, 2);
     const prompt = tpl.build({
       beatId: selectedBeat.id,
       beatTitle: selectedBeat.title,
       beatDescription: selectedBeat.description ?? '',
       chapterNumber: chapterNum,
-      beatContext: JSON.stringify(
-        {
-          beat: {
-            id: beatContext.beat.id,
-            title: beatContext.beat.title,
-            description: beatContext.beat.description,
-            beat_type: beatContext.beat.beat_type,
-            status: beatContext.beat.status,
-            chapter_hint: beatContext.beat.chapter_hint,
-            completion_criteria: beatContext.beat.completion_criteria,
-          },
-          predecessors: beatContext.predecessors.map((p) => ({
-            id: p.id,
-            title: p.title,
-            status: p.status,
-          })),
-          successors: beatContext.successors.map((s) => ({
-            id: s.id,
-            title: s.title,
-            status: s.status,
-          })),
-          characters: beatContext.characters,
-          related_hooks: beatContext.related_hooks,
-        },
-        null,
-        2
-      ),
+      fullGraph: fullGraphJson,
     });
     void fillPromptIntoSession(prompt);
-  }, [selectedBeat, beatContext, fillPromptIntoSession]);
+  }, [selectedBeat, beatContext, graph, fillPromptIntoSession]);
 
   // ----- status update (modify local graph, save to JSON) -----
   const updateStatus = useCallback(
