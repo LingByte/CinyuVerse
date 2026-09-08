@@ -43,6 +43,11 @@ import {
   XCircle,
   Trash2,
   Wand2,
+  ChevronDown,
+  ChevronRight,
+  Layers,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectRepos } from '@/hooks/useProjectRepos';
@@ -302,7 +307,115 @@ function BeatNodeComponent({ data }: NodeProps) {
   );
 }
 
-const nodeTypes = { beatNode: BeatNodeComponent };
+const nodeTypes = { beatNode: BeatNodeComponent, arcNode: ArcNodeComponent };
+
+// ---------------------------------------------------------------------------
+// Progressive Disclosure: Arc-level macro node
+// ---------------------------------------------------------------------------
+
+type ArcNodeData = {
+  arc: string;
+  beatCount: number;
+  statusCounts: Record<string, number>;
+  characters: string[];
+  isExpanded: boolean;
+  onToggle: (arc: string) => void;
+};
+
+function ArcNodeComponent({ data }: NodeProps) {
+  const nodeData = data as unknown as ArcNodeData;
+  const { arc, beatCount, statusCounts, characters, isExpanded, onToggle } = nodeData;
+  const completed = statusCounts.completed ?? 0;
+  const current = statusCounts.current ?? 0;
+  const planned = statusCounts.planned ?? 0;
+  const skipped = statusCounts.skipped ?? 0;
+  const progress = beatCount > 0 ? Math.round((completed / beatCount) * 100) : 0;
+
+  return (
+    <div
+      className={cn(
+        'rounded-xl border-2 shadow-md transition-all overflow-hidden',
+        'min-w-[240px] max-w-[300px]',
+        current > 0
+          ? 'border-blue-500 bg-blue-50/80 dark:bg-blue-950/30'
+          : 'border-slate-400/60 bg-slate-50/90 dark:bg-slate-800/70'
+      )}
+    >
+      <Handle type="target" position={Position.Top} className="!bg-slate-500 !w-2.5 !h-2.5" />
+
+      {/* Header — clickable to expand/collapse */}
+      <div
+        className="flex items-center gap-2 px-3 py-2 cursor-pointer select-none hover:bg-slate-200/40 dark:hover:bg-slate-700/40 transition-colors"
+        onClick={() => onToggle(arc)}
+      >
+        {isExpanded ? (
+          <ChevronDown className="h-4 w-4 text-slate-500 shrink-0" />
+        ) : (
+          <ChevronRight className="h-4 w-4 text-slate-500 shrink-0" />
+        )}
+        <Layers className="h-4 w-4 text-indigo-500 shrink-0" />
+        <span className="text-sm font-semibold text-foreground flex-1">{arc}</span>
+        <span className="text-[10px] text-slate-400">{beatCount} 节拍</span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="px-3 pb-1.5">
+        <div className="flex items-center gap-1.5">
+          <div className="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 rounded-full transition-all"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <span className="text-[9px] text-slate-400">{progress}%</span>
+        </div>
+      </div>
+
+      {/* Status summary pills */}
+      <div className="flex flex-wrap gap-1 px-3 pb-2">
+        {completed > 0 && (
+          <span className="text-[9px] rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5">
+            ✓ {completed}
+          </span>
+        )}
+        {current > 0 && (
+          <span className="text-[9px] rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 animate-pulse">
+            ● 当前 {current}
+          </span>
+        )}
+        {planned > 0 && (
+          <span className="text-[9px] rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5">
+            ○ {planned}
+          </span>
+        )}
+        {skipped > 0 && (
+          <span className="text-[9px] rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 px-1.5 py-0.5">
+            ✗ {skipped}
+          </span>
+        )}
+      </div>
+
+      {/* Key characters */}
+      {characters.length > 0 && (
+        <div className="flex flex-wrap gap-0.5 px-3 pb-2">
+          {characters.slice(0, 5).map((c) => (
+            <span
+              key={c}
+              className="text-[9px] rounded bg-indigo-50 dark:bg-indigo-950/40 px-1 py-0.5 text-indigo-600 dark:text-indigo-400"
+            >
+              {c}
+            </span>
+          ))}
+          {characters.length > 5 && (
+            <span className="text-[9px] text-slate-400">+{characters.length - 5}</span>
+          )}
+        </div>
+      )}
+
+      <Handle type="source" position={Position.Bottom} className="!bg-slate-500 !w-2.5 !h-2.5" />
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Edge styling — each edge type has a distinct visual identity
@@ -322,59 +435,135 @@ const EDGE_STYLES: Record<
 };
 
 // ---------------------------------------------------------------------------
-// Layout — dagre auto-layout for a proper DAG with visible cross-edges
+// Layout — Progressive Disclosure with dagre
+//
+// Two-level layout:
+// 1. Arc-level macro nodes are laid out as a vertical DAG
+// 2. When an arc is expanded, its beats are laid out in a sub-cluster
+//    and positioned within the arc's allocated space
 // ---------------------------------------------------------------------------
 
-function layoutGraph(
+function layoutProgressive(
   beats: JsonBeat[],
-  edges: Array<{ from_beat: string; to_beat: string; edge_type: string }>
-): Map<string, { x: number; y: number }> {
+  edges: Array<{ from_beat: string; to_beat: string; edge_type: string }>,
+  expandedArcs: Set<string>
+): { positions: Map<string, { x: number; y: number }>; arcPositions: Map<string, { x: number; y: number }> } {
   const positions = new Map<string, { x: number; y: number }>();
-  if (beats.length === 0) return positions;
+  const arcPositions = new Map<string, { x: number; y: number }>();
+  if (beats.length === 0) return { positions, arcPositions };
 
-  const NODE_W = 200;
-  const NODE_H = 100;
+  // Group beats by arc
+  const arcGroups = new Map<string, JsonBeat[]>();
+  for (const beat of beats) {
+    const arc = beat.arc ?? '未分类';
+    if (!arcGroups.has(arc)) arcGroups.set(arc, []);
+    arcGroups.get(arc)!.push(beat);
+  }
+
+  const arcs = [...arcGroups.keys()];
+
+  // Build arc-level edges (edges where from and to are in different arcs)
+  const arcEdges: Array<{ from: string; to: string; weight: number }> = [];
+  const beatToArc = new Map<string, string>();
+  for (const beat of beats) {
+    beatToArc.set(beat.id, beat.arc ?? '未分类');
+  }
+  for (const edge of edges) {
+    const fromArc = beatToArc.get(edge.from_beat);
+    const toArc = beatToArc.get(edge.to_beat);
+    if (fromArc && toArc && fromArc !== toArc) {
+      const isMainline = edge.edge_type === 'sequential' || edge.edge_type === 'causal';
+      arcEdges.push({ from: fromArc, to: toArc, weight: isMainline ? 10 : 1 });
+    }
+  }
+
+  // Layout arc-level graph
+  const ARC_W = 280;
+  const ARC_H_COLLAPSED = 120;
+  const ARC_H_EXPANDED = 400;
 
   const g = new dagre.graphlib.Graph();
   g.setGraph({
     rankdir: 'TB',
-    nodesep: 60,
-    edgesep: 30,
-    ranksep: 80,
-    marginx: 20,
-    marginy: 20,
+    nodesep: 80,
+    edgesep: 40,
+    ranksep: 100,
+    marginx: 30,
+    marginy: 30,
   });
   g.setDefaultEdgeLabel(() => ({}));
 
-  // Add nodes
-  for (const beat of beats) {
-    g.setNode(beat.id, { width: NODE_W, height: NODE_H });
+  for (const arc of arcs) {
+    const isExpanded = expandedArcs.has(arc);
+    g.setNode(arc, {
+      width: ARC_W,
+      height: isExpanded ? ARC_H_EXPANDED : ARC_H_COLLAPSED,
+    });
   }
 
-  // Add edges — use sort_order as weight for sequential edges so the main
-  // storyline flows top-to-bottom, while foreshadow/character_arc cross-edges
-  // get lower weight and spread out naturally.
-  for (const edge of edges) {
-    const isMainline =
-      edge.edge_type === 'sequential' || edge.edge_type === 'causal';
-    g.setEdge(edge.from_beat, edge.to_beat, {
-      weight: isMainline ? 10 : 1,
-      minlen: isMainline ? 1 : 2,
-    });
+  for (const edge of arcEdges) {
+    g.setEdge(edge.from, edge.to, { weight: edge.weight, minlen: 1 });
   }
 
   dagre.layout(g);
 
-  for (const beat of beats) {
-    const node = g.node(beat.id);
+  for (const arc of arcs) {
+    const node = g.node(arc);
     if (node) {
-      positions.set(beat.id, {
-        x: node.x - NODE_W / 2,
-        y: node.y - NODE_H / 2,
+      arcPositions.set(arc, {
+        x: node.x - ARC_W / 2,
+        y: node.y - (expandedArcs.has(arc) ? ARC_H_EXPANDED : ARC_H_COLLAPSED) / 2,
       });
     }
   }
-  return positions;
+
+  // Layout beats within expanded arcs
+  const BEAT_W = 200;
+  const BEAT_H = 100;
+  for (const arc of arcs) {
+    if (!expandedArcs.has(arc)) continue;
+    const arcBeats = arcGroups.get(arc)!;
+    const arcPos = arcPositions.get(arc);
+    if (!arcPos) continue;
+
+    // Sub-layout for beats within this arc
+    const subEdges = edges.filter(
+      (e) => beatToArc.get(e.from_beat) === arc && beatToArc.get(e.to_beat) === arc
+    );
+
+    const subG = new dagre.graphlib.Graph();
+    subG.setGraph({
+      rankdir: 'TB',
+      nodesep: 40,
+      edgesep: 20,
+      ranksep: 50,
+      marginx: 10,
+      marginy: 10,
+    });
+    subG.setDefaultEdgeLabel(() => ({}));
+
+    for (const beat of arcBeats) {
+      subG.setNode(beat.id, { width: BEAT_W, height: BEAT_H });
+    }
+    for (const edge of subEdges) {
+      subG.setEdge(edge.from_beat, edge.to_beat, { weight: 5, minlen: 1 });
+    }
+
+    dagre.layout(subG);
+
+    // Offset beat positions by arc position
+    for (const beat of arcBeats) {
+      const subNode = subG.node(beat.id);
+      if (subNode) {
+        positions.set(beat.id, {
+          x: arcPos.x + (subNode.x - BEAT_W / 2) + 40,
+          y: arcPos.y + (subNode.y - BEAT_H / 2) + 80,
+        });
+      }
+    }
+  }
+
+  return { positions, arcPositions };
 }
 
 // ---------------------------------------------------------------------------
@@ -395,6 +584,7 @@ export function NovelOverviewPanel() {
 
   const [selectedBeatId, setSelectedBeatId] = useState<string | null>(null);
   const [beatContext, setJsonBeatContext] = useState<JsonBeatContext | null>(null);
+  const [expandedArcs, setExpandedArcs] = useState<Set<string>>(new Set());
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
@@ -492,51 +682,116 @@ export function NovelOverviewPanel() {
     });
   }, [selectedBeatId, graph]);
 
-  // ----- React Flow nodes/edges -----
-  const positions = useMemo(
+  // ----- Progressive Disclosure: layout + nodes/edges -----
+  const { positions, arcPositions } = useMemo(
     () =>
       graph
-        ? layoutGraph(graph.beats, graph.edges)
-        : new Map<string, { x: number; y: number }>(),
-    [graph]
+        ? layoutProgressive(graph.beats, graph.edges, expandedArcs)
+        : { positions: new Map<string, { x: number; y: number }>(), arcPositions: new Map<string, { x: number; y: number }>() },
+    [graph, expandedArcs]
   );
 
+  // Arc-level data for macro nodes
+  const arcData = useMemo(() => {
+    if (!graph) return new Map<string, ArcNodeData>();
+    const groups = new Map<string, JsonBeat[]>();
+    for (const beat of graph.beats) {
+      const arc = beat.arc ?? '未分类';
+      if (!groups.has(arc)) groups.set(arc, []);
+      groups.get(arc)!.push(beat);
+    }
+    const result = new Map<string, ArcNodeData>();
+    for (const [arc, beats] of groups) {
+      const statusCounts: Record<string, number> = {};
+      const charSet = new Set<string>();
+      for (const b of beats) {
+        statusCounts[b.status] = (statusCounts[b.status] ?? 0) + 1;
+        for (const c of b.characters ?? []) charSet.add(c);
+      }
+      result.set(arc, {
+        arc,
+        beatCount: beats.length,
+        statusCounts,
+        characters: [...charSet],
+        isExpanded: expandedArcs.has(arc),
+        onToggle: (a: string) =>
+          setExpandedArcs((prev) => {
+            const next = new Set(prev);
+            if (next.has(a)) next.delete(a);
+            else next.add(a);
+            return next;
+          }),
+      });
+    }
+    return result;
+  }, [graph, expandedArcs]);
+
+  // Build the node list: arc macro nodes + beat nodes (only for expanded arcs)
   const nodes = useMemo<Node[]>(() => {
     if (!graph) return [];
-    return graph.beats
-      .filter((b) => statusFilter === 'all' || b.status === statusFilter)
-      .map((beat) => ({
+    const result: Node[] = [];
+
+    // Arc macro nodes
+    for (const [arc, data] of arcData) {
+      const pos = arcPositions.get(arc) ?? { x: 0, y: 0 };
+      result.push({
+        id: `arc:${arc}`,
+        type: 'arcNode',
+        position: pos,
+        data: data as unknown as Record<string, unknown>,
+        draggable: true,
+      });
+    }
+
+    // Beat nodes — only for expanded arcs
+    for (const beat of graph.beats) {
+      const arc = beat.arc ?? '未分类';
+      if (!expandedArcs.has(arc)) continue;
+      if (statusFilter !== 'all' && beat.status !== statusFilter) continue;
+      const pos = positions.get(beat.id);
+      if (!pos) continue;
+      result.push({
         id: beat.id,
         type: 'beatNode',
-        position: positions.get(beat.id) ?? { x: 0, y: 0 },
+        position: pos,
         data: { beat, isSelected: beat.id === selectedBeatId } as unknown as Record<string, unknown>,
         selected: beat.id === selectedBeatId,
-      }));
-  }, [graph, positions, selectedBeatId, statusFilter]);
+      });
+    }
 
+    return result;
+  }, [graph, arcData, arcPositions, positions, expandedArcs, selectedBeatId, statusFilter]);
+
+  // Build edges: cross-arc edges (always visible, between arc nodes) +
+  // within-arc edges (only when arc is expanded, between beat nodes)
   const edges = useMemo<Edge[]>(() => {
     if (!graph) return [];
-    const visibleIds = new Set(
-      graph.beats
-        .filter((b) => statusFilter === 'all' || b.status === statusFilter)
-        .map((b) => b.id)
-    );
-    return graph.edges
-      .filter((e) => visibleIds.has(e.from_beat) && visibleIds.has(e.to_beat))
-      .map((edge) => {
+    const result: Edge[] = [];
+    const beatToArc = new Map<string, string>();
+    for (const beat of graph.beats) {
+      beatToArc.set(beat.id, beat.arc ?? '未分类');
+    }
+
+    // Cross-arc edges: connect arc macro nodes
+    const seenArcEdges = new Set<string>();
+    for (const edge of graph.edges) {
+      const fromArc = beatToArc.get(edge.from_beat);
+      const toArc = beatToArc.get(edge.to_beat);
+      if (!fromArc || !toArc || fromArc === toArc) continue;
+
+      // If both arcs are expanded, draw beat-to-beat
+      if (expandedArcs.has(fromArc) && expandedArcs.has(toArc)) {
         const style = EDGE_STYLES[edge.edge_type] ?? EDGE_STYLES.sequential;
         const isCrossEdge =
           edge.edge_type === 'foreshadow' ||
           edge.edge_type === 'character_arc' ||
           edge.edge_type === 'item_flow' ||
           edge.edge_type === 'alternative';
-        return {
+        result.push({
           id: `${edge.from_beat}->${edge.to_beat}:${edge.edge_type}`,
           source: edge.from_beat,
           target: edge.to_beat,
           label: style.label,
-          // Cross-edges use bezier curves so they arc over/under the main
-          // flow; mainline edges use smoothstep for clean vertical routing.
           type: isCrossEdge ? 'default' : 'smoothstep',
           animated: style.animated,
           style: {
@@ -544,17 +799,62 @@ export function NovelOverviewPanel() {
             strokeWidth: style.width,
             strokeDasharray: style.dashed ? '6 4' : undefined,
           },
-          labelStyle: {
-            fill: style.stroke,
-            fontSize: 10,
-            fontWeight: 600,
-          },
-          labelBgStyle: {
-            fill: 'rgba(255,255,255,0.85)',
-          },
-        };
+          labelStyle: { fill: style.stroke, fontSize: 10, fontWeight: 600 },
+          labelBgStyle: { fill: 'rgba(255,255,255,0.85)' },
+        });
+        continue;
+      }
+
+      // Otherwise, aggregate as arc-to-arc edge
+      const arcEdgeKey = `${fromArc}->${toArc}:${edge.edge_type}`;
+      if (seenArcEdges.has(arcEdgeKey)) continue;
+      seenArcEdges.add(arcEdgeKey);
+
+      const style = EDGE_STYLES[edge.edge_type] ?? EDGE_STYLES.sequential;
+      result.push({
+        id: arcEdgeKey,
+        source: `arc:${fromArc}`,
+        target: `arc:${toArc}`,
+        label: style.label,
+        type: 'smoothstep',
+        animated: style.animated,
+        style: {
+          stroke: style.stroke,
+          strokeWidth: style.width,
+          strokeDasharray: style.dashed ? '6 4' : undefined,
+        },
+        labelStyle: { fill: style.stroke, fontSize: 11, fontWeight: 600 },
+        labelBgStyle: { fill: 'rgba(255,255,255,0.85)' },
       });
-  }, [graph, statusFilter]);
+    }
+
+    // Within-arc edges: only for expanded arcs
+    for (const edge of graph.edges) {
+      const fromArc = beatToArc.get(edge.from_beat);
+      const toArc = beatToArc.get(edge.to_beat);
+      if (!fromArc || !toArc || fromArc !== toArc) continue;
+      if (!expandedArcs.has(fromArc)) continue;
+
+      const style = EDGE_STYLES[edge.edge_type] ?? EDGE_STYLES.sequential;
+      result.push({
+        id: `${edge.from_beat}->${edge.to_beat}:${edge.edge_type}`,
+        source: edge.from_beat,
+        target: edge.to_beat,
+        label: style.label,
+        type: 'smoothstep',
+        animated: style.animated,
+        style: {
+          stroke: style.stroke,
+          strokeWidth: style.width,
+          strokeDasharray: style.dashed ? '6 4' : undefined,
+        },
+        labelStyle: { fill: style.stroke, fontSize: 10, fontWeight: 600 },
+        labelBgStyle: { fill: 'rgba(255,255,255,0.85)' },
+      });
+    }
+
+    return result;
+  }, [graph, expandedArcs]);
 
   const [rfNodes, setRfNodes] = useState<Node[]>(nodes);
   const [rfEdges, setRfEdges] = useState<Edge[]>(edges);
@@ -589,6 +889,8 @@ export function NovelOverviewPanel() {
   );
 
   const onNodeClick = useCallback((_: unknown, node: Node) => {
+    // Arc nodes handle their own click via the toggle in data
+    if (node.id.startsWith('arc:')) return;
     setSelectedBeatId(node.id);
   }, []);
 
@@ -724,6 +1026,26 @@ export function NovelOverviewPanel() {
             <Wand2 className="h-3.5 w-3.5" />
             {t('panels:overview.generateStoryGraph')}
           </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              const allArcs = new Set<string>();
+              for (const b of graph?.beats ?? []) allArcs.add(b.arc ?? '未分类');
+              setExpandedArcs(allArcs);
+            }}
+            title="展开全部"
+          >
+            <Maximize2 className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setExpandedArcs(new Set())}
+            title="折叠全部"
+          >
+            <Minimize2 className="h-3.5 w-3.5" />
+          </Button>
           <Button size="sm" variant="ghost" onClick={() => { refreshGraph(); refreshStats(); }}>
             <RefreshCw className={cn('h-3.5 w-3.5', graphLoading && 'animate-spin')} />
           </Button>
@@ -821,6 +1143,7 @@ export function NovelOverviewPanel() {
                 pannable
                 zoomable
                 nodeColor={(n) => {
+                  if (n.id.startsWith('arc:')) return '#6366f1';
                   const beat = (n.data as unknown as BeatNodeData)?.beat;
                   if (!beat) return '#94a3b8';
                   switch (beat.status) {
