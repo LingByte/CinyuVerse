@@ -700,6 +700,8 @@ pub fn run(cef_bootstrap: Result<CefBootstrap, String>) {
         commands::qiniu::qiniu_get_config,
         commands::qiniu::qiniu_set_config,
         commands::qiniu::qiniu_list_novels,
+        commands::qiniu::qiniu_list_chapters,
+        commands::qiniu::qiniu_download_book,
         commands::qiniu::qiniu_download_text,
         commands::qiniu::qiniu_upload_text,
         commands::qiniu::qiniu_delete,

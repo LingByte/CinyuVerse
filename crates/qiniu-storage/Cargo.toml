@@ -10,10 +10,8 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-reqwest = { workspace = true }
-base64 = "0.22"
-hmac = "0.12"
-sha1 = "0.10"
-hex = "0.4"
-url = "2"
 dirs = "6"
+reqwest = { workspace = true }
+tempfile = "3"
+futures = "0.3"
+qiniu-sdk = { version = "0.2", features = ["upload", "objects", "download", "reqwest", "async"] }

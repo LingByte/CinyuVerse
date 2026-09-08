@@ -1,10 +1,18 @@
-//! Qiniu HTTP client — upload, list, download, delete operations.
+//! Qiniu client — uses the official `qiniu-sdk` for all operations.
+//!
+//! All signing logic is handled by the SDK; we no longer hand-roll
+//! HMAC-SHA1 tokens.
 
-use anyhow::{Context, Result};
+use std::time::Duration;
+
+use anyhow::{Context, Result, anyhow};
+use futures::stream::TryStreamExt;
+use qiniu_sdk::objects::apis::credential::Credential;
+use qiniu_sdk::objects::{ObjectsManager, OperationProvider};
+use qiniu_sdk::upload::{ObjectParams, UploadManager, UploadTokenSigner};
+use qiniu_sdk::prelude::SinglePartUploader;
 use serde::{Deserialize, Serialize};
-use tracing::debug;
 
-use crate::auth::QiniuAuth;
 use crate::config::QiniuConfig;
 
 /// Metadata for a stored novel.
@@ -22,161 +30,156 @@ pub struct NovelInfo {
     pub size: u64,
 }
 
-/// List response from Qiniu list API.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Raw JSON structure of `_meta.json` stored in the bucket.
+#[derive(Debug, Clone, Deserialize)]
+struct NovelMetaJson {
+    title: String,
+    author: String,
+    category: String,
+    word_count: u64,
+    chapter_count: u32,
+    uploaded_chapters: u32,
+    status: String,
+    source: String,
+}
+
+/// Result of a list operation.
+#[derive(Debug, Clone, Serialize)]
 pub struct ListResult {
     pub items: Vec<NovelInfo>,
     pub total: usize,
 }
 
-/// Qiniu API response for list operations.
-#[derive(Debug, Deserialize)]
-struct QiniuListResponse {
-    items: Vec<QiniuListItem>,
-    marker: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct QiniuListItem {
-    key: String,
-    fsize: u64,
-    #[serde(rename = "putTime")]
-    put_time: u64,
-    #[serde(default)]
-    mimeType: Option<String>,
-}
-
-/// Qiniu client wrapping HTTP calls with auth.
+/// Qiniu client wrapping the official SDK.
 #[derive(Clone)]
 pub struct QiniuClient {
     config: QiniuConfig,
-    auth: QiniuAuth,
-    http: reqwest::Client,
+    credential: Credential,
 }
 
 impl QiniuClient {
-    pub fn new(config: QiniuConfig) -> Self {
-        let auth = QiniuAuth::from_config(&config);
-        let http = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-            .expect("Failed to build HTTP client");
-        Self { config, auth, http }
+    /// Create a new client from a loaded config.
+    pub fn new(config: QiniuConfig) -> Result<Self> {
+        if config.access_key.is_empty() || config.secret_key.is_empty() {
+            return Err(anyhow!("Qiniu access_key or secret_key is empty"));
+        }
+        let credential = Credential::new(&config.access_key, &config.secret_key);
+        Ok(Self { config, credential })
     }
 
-    /// Upload text content to a key in the bucket.
-    ///
-    /// Uses the Qiniu upload API with a simple form-encoded POST (no multipart
-    /// feature needed — we base64-encode the file content).
+    /// Upload text content to the bucket under the given key.
     pub async fn upload_text(&self, key: &str, content: &str) -> Result<()> {
-        let token = self.auth.upload_token(&self.config.bucket, Some(key), 3600);
-        let url = "https://upload.qiniup.com/putb64";
+        // Write content to a temp file, then use the SDK's path-based upload.
+        let tmp = tempfile::NamedTempFile::new().context("Create temp file for upload")?;
+        std::fs::write(tmp.path(), content.as_bytes())
+            .context("Write content to temp file")?;
 
-        // Qiniu's base64 upload endpoint: POST /putb64/<fsize>/key/<encoded-key>
-        let encoded_key = url_safe_base64(key);
-        let fsize = content.len();
-        let upload_url = format!("{url}/{fsize}/key/{encoded_key}");
+        let upload_manager = UploadManager::builder(UploadTokenSigner::new_credential_provider(
+            self.credential.to_owned(),
+            &self.config.bucket,
+            Duration::from_secs(3600),
+        ))
+        .build();
 
-        let b64_content = {
-            use base64::Engine;
-            base64::engine::general_purpose::STANDARD.encode(content.as_bytes())
-        };
+        let params = ObjectParams::builder()
+            .object_name(key)
+            .file_name(key)
+            .build();
 
-        let resp = self
-            .http
-            .post(&upload_url)
-            .header("Authorization", format!("UpToken {token}"))
-            .header("Content-Type", "application/octet-stream")
-            .body(b64_content)
-            .send()
+        let uploader = upload_manager.form_uploader();
+        uploader
+            .async_upload_path(tmp.path(), params)
             .await
-            .context("Upload request failed")?;
+            .map_err(|e| anyhow!("Upload failed: {e}"))?;
 
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("Upload failed: {status} — {body}");
-        }
-        debug!("Uploaded {} ({} bytes)", key, content.len());
+        tracing::debug!("Uploaded {} ({} bytes)", key, content.len());
         Ok(())
     }
 
-    /// List items in the bucket with a given prefix.
-    pub async fn list(&self, prefix: &str, limit: u32) -> Result<ListResult> {
-        // Qiniu list API: GET https://rs.qiniuapi.com/list?bucket=<bucket>&prefix=<prefix>&limit=<limit>
-        // Simpler approach: use the management API at https://<rs>.qbox.me/list
-        // The standard endpoint is: https://rs.qiniuapi.com/v2/list?bucket=<bucket>&prefix=<prefix>&limit=<limit>
-        let path = format!(
-            "/v2/list?bucket={}&prefix={}&limit={}",
-            self.config.bucket, prefix, limit
-        );
-        let url = format!("https://rs.qiniuapi.com{}", path);
-        let signed = self.auth.sign_download_url(&url, 60);
+    /// List novels in the bucket. Scans for `_meta.json` files under the
+    /// given prefix, downloads each one, and returns parsed book metadata.
+    pub async fn list(&self, prefix: &str, _limit: u32) -> Result<ListResult> {
+        let object_manager = ObjectsManager::new(self.credential.to_owned());
+        let bucket = object_manager.bucket(&self.config.bucket);
 
-        let resp = self
-            .http
-            .get(&signed)
-            .send()
-            .await
-            .context("List request failed")?;
+        // List all objects with the given prefix
+        let mut list_builder = bucket.list();
+        list_builder.prefix(prefix).limit(1000);
+        let mut stream = list_builder.stream();
 
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("List failed: {status} — {body}");
+        let mut meta_keys: Vec<String> = Vec::new();
+        while let Some(object) = stream.try_next().await.map_err(|e| anyhow!("List failed: {e}"))? {
+            let key = object.get_key_as_str().to_string();
+            if key.ends_with("_meta.json") {
+                meta_keys.push(key);
+            }
         }
 
-        let qiniu_resp: QiniuListResponse = resp.json().await.context("Parse list response")?;
-        let items: Vec<NovelInfo> = qiniu_resp
-            .items
-            .into_iter()
-            .filter(|i| i.key.ends_with(".md") || i.key.ends_with(".txt"))
-            .map(|i| {
-                // Parse metadata from the key path: novels/<category>/<title>.md
-                let title = i
-                    .key
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or(&i.key)
-                    .trim_end_matches(".md")
-                    .trim_end_matches(".txt")
-                    .to_string();
-                let category = i
-                    .key
-                    .split('/')
-                    .nth(1)
-                    .unwrap_or("未分类")
-                    .to_string();
-                NovelInfo {
-                    key: i.key.clone(),
-                    title,
-                    author: String::new(),
-                    category,
-                    word_count: 0,
-                    chapter_count: 0,
-                    status: String::new(),
-                    source_url: String::new(),
-                    uploaded_at: format!("{}", i.put_time / 10_000_000), // Qiniu putTime is in 100ns units
-                    size: i.fsize,
+        // Download each meta.json and parse it
+        let mut items = Vec::new();
+        for key in meta_keys {
+            match self.download_text(&key, 0).await {
+                Ok(json_str) => {
+                    if let Ok(meta) = serde_json::from_str::<NovelMetaJson>(&json_str) {
+                        let book_key = key.trim_end_matches("/_meta.json").to_string();
+                        items.push(NovelInfo {
+                            key: book_key,
+                            title: meta.title,
+                            author: meta.author,
+                            category: meta.category,
+                            word_count: meta.word_count,
+                            chapter_count: meta.chapter_count,
+                            status: meta.status,
+                            source_url: meta.source,
+                            uploaded_at: String::new(),
+                            size: meta.uploaded_chapters as u64,
+                        });
+                    }
                 }
-            })
-            .collect();
+                Err(e) => {
+                    tracing::warn!("Failed to download meta {}: {}", key, e);
+                }
+            }
+        }
 
         let total = items.len();
         Ok(ListResult { items, total })
+    }
+
+    /// List chapter files (NNNN.md) within a book directory.
+    pub async fn list_chapters(&self, book_key: &str) -> Result<Vec<String>> {
+        let prefix = format!("{}/", book_key);
+        let object_manager = ObjectsManager::new(self.credential.to_owned());
+        let bucket = object_manager.bucket(&self.config.bucket);
+
+        let mut list_builder = bucket.list();
+        list_builder.prefix(&prefix).limit(1000);
+        let mut stream = list_builder.stream();
+
+        let mut chapters: Vec<String> = Vec::new();
+        while let Some(object) = stream.try_next().await.map_err(|e| anyhow!("List chapters failed: {e}"))? {
+            let key = object.get_key_as_str().to_string();
+            let name = key.rsplit('/').next().unwrap_or("");
+            if name.ends_with(".md") && name != "_meta.json" {
+                chapters.push(key);
+            }
+        }
+        chapters.sort();
+        Ok(chapters)
     }
 
     /// Download text content from a key. If `max_chars > 0`, only the first
     /// `max_chars` characters are returned (for preview).
     pub async fn download_text(&self, key: &str, max_chars: usize) -> Result<String> {
         let domain = self.config.domain_host();
-        let download_url = format!("https://{domain}/{key}");
-        let signed = self.auth.sign_download_url(&download_url, 3600);
+        // Append a cache-busting timestamp to the URL
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let download_url = format!("https://{domain}/{key}?_t={ts}");
 
-        let resp = self
-            .http
-            .get(&signed)
-            .send()
+        let resp = reqwest::get(&download_url)
             .await
             .context("Download request failed")?;
 
@@ -186,7 +189,8 @@ impl QiniuClient {
             anyhow::bail!("Download failed: {status} — {body}");
         }
 
-        let text = resp.text().await.context("Read download body")?;
+        let text = resp.text().await.context("Read download response")?;
+
         if max_chars > 0 && text.len() > max_chars {
             Ok(text.chars().take(max_chars).collect())
         } else {
@@ -196,29 +200,16 @@ impl QiniuClient {
 
     /// Delete a key from the bucket.
     pub async fn delete(&self, key: &str) -> Result<()> {
-        let encoded_key = url_safe_base64(key);
-        let path = format!("/delete/{}/{}", self.config.bucket, encoded_key);
-        let url = format!("https://rs.qiniuapi.com{}", path);
-        let signed = self.auth.sign_download_url(&url, 60);
+        let object_manager = ObjectsManager::new(self.credential.to_owned());
+        let bucket = object_manager.bucket(&self.config.bucket);
 
-        let resp = self
-            .http
-            .post(&signed)
-            .send()
+        bucket
+            .delete_object(key)
+            .async_call()
             .await
-            .context("Delete request failed")?;
+            .map_err(|e| anyhow!("Delete failed: {e}"))?;
 
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("Delete failed: {status} — {body}");
-        }
+        tracing::debug!("Deleted {}", key);
         Ok(())
     }
-}
-
-/// URL-safe base64 encoding (with padding) for Qiniu entry encoding.
-fn url_safe_base64(data: &str) -> String {
-    use base64::Engine;
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(data.as_bytes())
 }

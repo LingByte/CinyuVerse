@@ -33,23 +33,40 @@ pub struct QiniuConfigManager;
 
 impl QiniuConfigManager {
     /// Return the path to the config file.
+    /// On macOS this is `~/Library/Application Support/cinyuverse/qiniu.json`.
+    /// Also checks `~/.config/cinyuverse/qiniu.json` as a fallback (XDG).
     fn config_path() -> Result<PathBuf> {
         let base = dirs::config_dir()
             .context("Cannot determine config directory")?;
         Ok(base.join("cinyuverse").join("qiniu.json"))
     }
 
+    /// Fallback path for XDG-style config (~/.config/cinyuverse/qiniu.json).
+    fn config_path_fallback() -> Option<PathBuf> {
+        let home = dirs::home_dir()?;
+        Some(home.join(".config").join("cinyuverse").join("qiniu.json"))
+    }
+
     /// Load config from disk; returns an empty (unconfigured) config if the
-    /// file does not exist.
+    /// file does not exist. Tries the platform config dir first, then the
+    /// XDG fallback.
     pub fn load() -> Result<QiniuConfig> {
         let path = Self::config_path()?;
-        if !path.exists() {
+        let actual_path = if path.exists() {
+            path
+        } else if let Some(fallback) = Self::config_path_fallback() {
+            if fallback.exists() {
+                fallback
+            } else {
+                return Ok(QiniuConfig::default());
+            }
+        } else {
             return Ok(QiniuConfig::default());
-        }
-        let data = std::fs::read_to_string(&path)
-            .with_context(|| format!("Failed to read {}", path.display()))?;
+        };
+        let data = std::fs::read_to_string(&actual_path)
+            .with_context(|| format!("Failed to read {}", actual_path.display()))?;
         let cfg: QiniuConfig = serde_json::from_str(&data)
-            .with_context(|| format!("Failed to parse {}", path.display()))?;
+            .with_context(|| format!("Failed to parse {}", actual_path.display()))?;
         Ok(cfg)
     }
 

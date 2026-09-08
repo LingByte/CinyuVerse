@@ -41,9 +41,9 @@ async fn get_or_build_client(state: &QiniuState) -> Result<QiniuClient, String> 
     }
     let cfg = QiniuConfigManager::load().map_err(|e| e.to_string())?;
     if !cfg.is_configured() {
-        return Err("七牛云未配置，请先在词库页面设置 Access Key / Secret Key / Bucket".into());
+        return Err("七牛云未配置，请先在书库页面设置 Access Key / Secret Key / Bucket".into());
     }
-    let client = QiniuClient::new(cfg);
+    let client = QiniuClient::new(cfg).map_err(|e| e.to_string())?;
     *guard = Some(client.clone());
     Ok(client)
 }
@@ -102,6 +102,82 @@ pub async fn qiniu_upload_text(
 ) -> Result<(), String> {
     let client = get_or_build_client(&state).await?;
     client.upload_text(&key, &content).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn qiniu_list_chapters(
+    book_key: String,
+    state: State<'_, QiniuState>,
+) -> Result<Vec<String>, String> {
+    let client = get_or_build_client(&state).await?;
+    client
+        .list_chapters(&book_key)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Download an entire book: fetches _meta.json + all chapter files,
+/// concatenates them into a single Markdown string.
+#[tauri::command]
+pub async fn qiniu_download_book(
+    book_key: String,
+    max_chars: usize,
+    state: State<'_, QiniuState>,
+) -> Result<String, String> {
+    let client = get_or_build_client(&state).await?;
+
+    // 1. Download metadata
+    let meta_key = format!("{}/_meta.json", book_key);
+    let meta_json = client.download_text(&meta_key, 0).await.map_err(|e| e.to_string())?;
+    let meta: serde_json::Value =
+        serde_json::from_str(&meta_json).map_err(|e| format!("Parse meta: {e}"))?;
+
+    let title = meta["title"].as_str().unwrap_or("").to_string();
+    let author = meta["author"].as_str().unwrap_or("").to_string();
+    let category = meta["category"].as_str().unwrap_or("").to_string();
+    let description = meta["description"].as_str().unwrap_or("").to_string();
+    let chapter_count = meta["chapter_count"].as_u64().unwrap_or(0);
+
+    // 2. List chapter files
+    let chapters = client
+        .list_chapters(&book_key)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // 3. Build header
+    let mut parts = Vec::new();
+    parts.push(format!(
+        "---\ntitle: \"{title}\"\nauthor: \"{author}\"\ncategory: \"{category}\"\nchapter_count: {chapter_count}\n---\n\n# {title}\n\n**作者**: {author}\n\n**简介**:\n\n{description}\n"
+    ));
+
+    // 4. Download each chapter, append
+    let mut total_len = 0usize;
+    for ch_key in &chapters {
+        if max_chars > 0 && total_len >= max_chars {
+            break;
+        }
+        match client.download_text(ch_key, 0).await {
+            Ok(content) => {
+                let remaining = if max_chars > 0 {
+                    max_chars.saturating_sub(total_len)
+                } else {
+                    usize::MAX
+                };
+                let chunk: String = if content.len() > remaining {
+                    content.chars().take(remaining).collect()
+                } else {
+                    content
+                };
+                total_len += chunk.len();
+                parts.push(chunk);
+            }
+            Err(e) => {
+                tracing::warn!("Failed to download chapter {ch_key}: {e}");
+            }
+        }
+    }
+
+    Ok(parts.join("\n\n---\n\n"))
 }
 
 #[tauri::command]
