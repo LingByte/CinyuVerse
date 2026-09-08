@@ -309,6 +309,10 @@ const BeatNodeComponent = memo(function BeatNodeComponent({ data }: NodeProps) {
 
 // ---------------------------------------------------------------------------
 // Progressive Disclosure: Arc-level macro node
+//
+// When collapsed: a compact card with summary info.
+// When expanded: a large container with a header bar; beat nodes are
+// rendered as children (parentNode) inside it.
 // ---------------------------------------------------------------------------
 
 type ArcNodeData = {
@@ -320,7 +324,7 @@ type ArcNodeData = {
   onToggle: (arc: string) => void;
 };
 
-const ArcNodeComponent = memo(function ArcNodeComponent({ data }: NodeProps) {
+const ArcNodeComponent = memo(function ArcNodeComponent({ data, selected }: NodeProps) {
   const nodeData = data as unknown as ArcNodeData;
   const { arc, beatCount, statusCounts, characters, isExpanded, onToggle } = nodeData;
   const completed = statusCounts.completed ?? 0;
@@ -329,6 +333,88 @@ const ArcNodeComponent = memo(function ArcNodeComponent({ data }: NodeProps) {
   const skipped = statusCounts.skipped ?? 0;
   const progress = beatCount > 0 ? Math.round((completed / beatCount) * 100) : 0;
 
+  if (isExpanded) {
+    // Expanded: render as a large container with just a header bar.
+    // Beat nodes are children positioned inside via parentNode.
+    return (
+      <div
+        className={cn(
+          'rounded-xl border-2 transition-all overflow-hidden h-full',
+          current > 0
+            ? 'border-blue-400/70 bg-blue-50/40 dark:bg-blue-950/20'
+            : 'border-slate-300/60 bg-slate-50/50 dark:bg-slate-800/40',
+          selected && 'ring-2 ring-indigo-400'
+        )}
+      >
+        <Handle type="target" position={Position.Top} className="!bg-slate-500 !w-2.5 !h-2.5" />
+
+        {/* Header bar — fixed height, clickable to collapse */}
+        <div
+          className="flex items-center gap-2 px-3 py-2 cursor-pointer select-none hover:bg-slate-200/40 dark:hover:bg-slate-700/40 transition-colors border-b border-slate-200/60 dark:border-slate-700/60 bg-slate-100/50 dark:bg-slate-800/60"
+          onClick={() => onToggle(arc)}
+        >
+          <ChevronDown className="h-4 w-4 text-slate-500 shrink-0" />
+          <Layers className="h-4 w-4 text-indigo-500 shrink-0" />
+          <span className="text-sm font-semibold text-foreground flex-1">{arc}</span>
+          <span className="text-[10px] text-slate-400">{beatCount} 节拍</span>
+          {/* Progress bar inline */}
+          <div className="w-16 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 rounded-full"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <span className="text-[9px] text-slate-400 w-8 text-right">{progress}%</span>
+        </div>
+
+        {/* Status pills row */}
+        <div className="flex flex-wrap gap-1 px-3 py-1.5 border-b border-slate-200/40 dark:border-slate-700/40">
+          {completed > 0 && (
+            <span className="text-[9px] rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5">
+              ✓ {completed}
+            </span>
+          )}
+          {current > 0 && (
+            <span className="text-[9px] rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-1.5 py-0.5">
+              ● 当前 {current}
+            </span>
+          )}
+          {planned > 0 && (
+            <span className="text-[9px] rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5">
+              ○ {planned}
+            </span>
+          )}
+          {skipped > 0 && (
+            <span className="text-[9px] rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 px-1.5 py-0.5">
+              ✗ {skipped}
+            </span>
+          )}
+          {characters.length > 0 && (
+            <div className="flex flex-wrap gap-0.5 ml-auto">
+              {characters.slice(0, 4).map((c) => (
+                <span
+                  key={c}
+                  className="text-[9px] rounded bg-indigo-50 dark:bg-indigo-950/40 px-1 py-0.5 text-indigo-600 dark:text-indigo-400"
+                >
+                  {c}
+                </span>
+              ))}
+              {characters.length > 4 && (
+                <span className="text-[9px] text-slate-400">+{characters.length - 4}</span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Body is transparent — beat nodes render on top via parentNode */}
+        <div className="flex-1" />
+
+        <Handle type="source" position={Position.Bottom} className="!bg-slate-500 !w-2.5 !h-2.5" />
+      </div>
+    );
+  }
+
+  // Collapsed: compact card
   return (
     <div
       className={cn(
@@ -341,27 +427,21 @@ const ArcNodeComponent = memo(function ArcNodeComponent({ data }: NodeProps) {
     >
       <Handle type="target" position={Position.Top} className="!bg-slate-500 !w-2.5 !h-2.5" />
 
-      {/* Header — clickable to expand/collapse */}
       <div
         className="flex items-center gap-2 px-3 py-2 cursor-pointer select-none hover:bg-slate-200/40 dark:hover:bg-slate-700/40 transition-colors"
         onClick={() => onToggle(arc)}
       >
-        {isExpanded ? (
-          <ChevronDown className="h-4 w-4 text-slate-500 shrink-0" />
-        ) : (
-          <ChevronRight className="h-4 w-4 text-slate-500 shrink-0" />
-        )}
+        <ChevronRight className="h-4 w-4 text-slate-500 shrink-0" />
         <Layers className="h-4 w-4 text-indigo-500 shrink-0" />
         <span className="text-sm font-semibold text-foreground flex-1">{arc}</span>
         <span className="text-[10px] text-slate-400">{beatCount} 节拍</span>
       </div>
 
-      {/* Progress bar */}
       <div className="px-3 pb-1.5">
         <div className="flex items-center gap-1.5">
           <div className="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
             <div
-              className="h-full bg-emerald-500 rounded-full transition-all"
+              className="h-full bg-emerald-500 rounded-full"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -369,7 +449,6 @@ const ArcNodeComponent = memo(function ArcNodeComponent({ data }: NodeProps) {
         </div>
       </div>
 
-      {/* Status summary pills */}
       <div className="flex flex-wrap gap-1 px-3 pb-2">
         {completed > 0 && (
           <span className="text-[9px] rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5">
@@ -393,7 +472,6 @@ const ArcNodeComponent = memo(function ArcNodeComponent({ data }: NodeProps) {
         )}
       </div>
 
-      {/* Key characters */}
       {characters.length > 0 && (
         <div className="flex flex-wrap gap-0.5 px-3 pb-2">
           {characters.slice(0, 5).map((c) => (
@@ -461,10 +539,15 @@ function layoutProgressive(
   beats: JsonBeat[],
   edges: Array<{ from_beat: string; to_beat: string; edge_type: string }>,
   expandedArcs: Set<string>
-): { positions: Map<string, { x: number; y: number }>; arcPositions: Map<string, { x: number; y: number }> } {
+): {
+  positions: Map<string, { x: number; y: number }>;
+  arcPositions: Map<string, { x: number; y: number }>;
+  arcSizes: Map<string, { width: number; height: number }>;
+} {
   const positions = new Map<string, { x: number; y: number }>();
   const arcPositions = new Map<string, { x: number; y: number }>();
-  if (beats.length === 0) return { positions, arcPositions };
+  const arcSizes = new Map<string, { width: number; height: number }>();
+  if (beats.length === 0) return { positions, arcPositions, arcSizes };
 
   // Group beats by arc
   const arcGroups = new Map<string, JsonBeat[]>();
@@ -475,13 +558,13 @@ function layoutProgressive(
   }
 
   const arcs = [...arcGroups.keys()];
-
-  // Build arc-level edges (edges where from and to are in different arcs)
-  const arcEdges: Array<{ from: string; to: string; weight: number }> = [];
   const beatToArc = new Map<string, string>();
   for (const beat of beats) {
     beatToArc.set(beat.id, beat.arc ?? '未分类');
   }
+
+  // Build arc-level edges
+  const arcEdges: Array<{ from: string; to: string; weight: number }> = [];
   for (const edge of edges) {
     const fromArc = beatToArc.get(edge.from_beat);
     const toArc = beatToArc.get(edge.to_beat);
@@ -491,56 +574,20 @@ function layoutProgressive(
     }
   }
 
-  // Layout arc-level graph
-  const ARC_W = 280;
-  const ARC_H_COLLAPSED = 120;
-  const ARC_H_EXPANDED = 400;
-
-  const g = new dagre.graphlib.Graph();
-  g.setGraph({
-    rankdir: 'TB',
-    nodesep: 80,
-    edgesep: 40,
-    ranksep: 100,
-    marginx: 30,
-    marginy: 30,
-  });
-  g.setDefaultEdgeLabel(() => ({}));
-
-  for (const arc of arcs) {
-    const isExpanded = expandedArcs.has(arc);
-    g.setNode(arc, {
-      width: ARC_W,
-      height: isExpanded ? ARC_H_EXPANDED : ARC_H_COLLAPSED,
-    });
-  }
-
-  for (const edge of arcEdges) {
-    g.setEdge(edge.from, edge.to, { weight: edge.weight, minlen: 1 });
-  }
-
-  dagre.layout(g);
-
-  for (const arc of arcs) {
-    const node = g.node(arc);
-    if (node) {
-      arcPositions.set(arc, {
-        x: node.x - ARC_W / 2,
-        y: node.y - (expandedArcs.has(arc) ? ARC_H_EXPANDED : ARC_H_COLLAPSED) / 2,
-      });
-    }
-  }
-
-  // Layout beats within expanded arcs
+  // --- Step 1: Sub-layout beats within each expanded arc to determine size ---
   const BEAT_W = 200;
   const BEAT_H = 100;
+  const HEADER_H = 70; // header + status pills row
+  const PADDING = 16;
+
+  const subLayouts = new Map<
+    string,
+    { positions: Map<string, { x: number; y: number }>; width: number; height: number }
+  >();
+
   for (const arc of arcs) {
     if (!expandedArcs.has(arc)) continue;
     const arcBeats = arcGroups.get(arc)!;
-    const arcPos = arcPositions.get(arc);
-    if (!arcPos) continue;
-
-    // Sub-layout for beats within this arc
     const subEdges = edges.filter(
       (e) => beatToArc.get(e.from_beat) === arc && beatToArc.get(e.to_beat) === arc
     );
@@ -548,11 +595,11 @@ function layoutProgressive(
     const subG = new dagre.graphlib.Graph();
     subG.setGraph({
       rankdir: 'TB',
-      nodesep: 40,
-      edgesep: 20,
-      ranksep: 50,
-      marginx: 10,
-      marginy: 10,
+      nodesep: 50,
+      edgesep: 25,
+      ranksep: 60,
+      marginx: PADDING,
+      marginy: PADDING,
     });
     subG.setDefaultEdgeLabel(() => ({}));
 
@@ -565,19 +612,106 @@ function layoutProgressive(
 
     dagre.layout(subG);
 
-    // Offset beat positions by arc position
+    // Calculate bounding box of sub-layout
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    const subPositions = new Map<string, { x: number; y: number }>();
     for (const beat of arcBeats) {
       const subNode = subG.node(beat.id);
       if (subNode) {
-        positions.set(beat.id, {
-          x: arcPos.x + (subNode.x - BEAT_W / 2) + 40,
-          y: arcPos.y + (subNode.y - BEAT_H / 2) + 80,
-        });
+        const x = subNode.x - BEAT_W / 2;
+        const y = subNode.y - BEAT_H / 2;
+        subPositions.set(beat.id, { x, y });
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x + BEAT_W);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y + BEAT_H);
       }
+    }
+    if (minX === Infinity) { minX = 0; maxX = BEAT_W; minY = 0; maxY = BEAT_H; }
+
+    const contentW = maxX - minX;
+    const contentH = maxY - minY;
+    const arcWidth = Math.max(contentW + PADDING * 2, 280);
+    const arcHeight = contentH + HEADER_H + PADDING;
+
+    // Normalize sub-positions to start at (PADDING, HEADER_H)
+    for (const [beatId, pos] of subPositions) {
+      positions.set(beatId, {
+        x: pos.x - minX + PADDING,
+        y: pos.y - minY + HEADER_H,
+      });
+    }
+
+    subLayouts.set(arc, {
+      positions: new Map(positions),
+      width: arcWidth,
+      height: arcHeight,
+    });
+    // Temporarily clear positions — will re-offset after arc layout
+    for (const beat of arcBeats) positions.delete(beat.id);
+
+    arcSizes.set(arc, { width: arcWidth, height: arcHeight });
+  }
+
+  // --- Step 2: Layout arc-level graph with computed sizes ---
+  const ARC_W_COLLAPSED = 280;
+  const ARC_H_COLLAPSED = 120;
+
+  const g = new dagre.graphlib.Graph();
+  g.setGraph({
+    rankdir: 'TB',
+    nodesep: 60,
+    edgesep: 40,
+    ranksep: 80,
+    marginx: 30,
+    marginy: 30,
+  });
+  g.setDefaultEdgeLabel(() => ({}));
+
+  for (const arc of arcs) {
+    const isExpanded = expandedArcs.has(arc);
+    const size = arcSizes.get(arc);
+    g.setNode(arc, {
+      width: isExpanded ? (size?.width ?? 400) : ARC_W_COLLAPSED,
+      height: isExpanded ? (size?.height ?? 400) : ARC_H_COLLAPSED,
+    });
+  }
+
+  for (const edge of arcEdges) {
+    g.setEdge(edge.from, edge.to, { weight: edge.weight, minlen: 1 });
+  }
+
+  dagre.layout(g);
+
+  for (const arc of arcs) {
+    const node = g.node(arc);
+    if (node) {
+      const isExpanded = expandedArcs.has(arc);
+      const size = arcSizes.get(arc);
+      const w = isExpanded ? (size?.width ?? 400) : ARC_W_COLLAPSED;
+      const h = isExpanded ? (size?.height ?? 400) : ARC_H_COLLAPSED;
+      arcPositions.set(arc, {
+        x: node.x - w / 2,
+        y: node.y - h / 2,
+      });
     }
   }
 
-  return { positions, arcPositions };
+  // --- Step 3: Offset beat positions by arc position ---
+  for (const arc of arcs) {
+    if (!expandedArcs.has(arc)) continue;
+    const sub = subLayouts.get(arc);
+    const arcPos = arcPositions.get(arc);
+    if (!sub || !arcPos) continue;
+    for (const [beatId, pos] of sub.positions) {
+      positions.set(beatId, {
+        x: pos.x,
+        y: pos.y,
+      });
+    }
+  }
+
+  return { positions, arcPositions, arcSizes };
 }
 
 // ---------------------------------------------------------------------------
@@ -697,11 +831,15 @@ export function NovelOverviewPanel() {
   }, [selectedBeatId, graph]);
 
   // ----- Progressive Disclosure: layout + nodes/edges -----
-  const { positions, arcPositions } = useMemo(
+  const { positions, arcPositions, arcSizes } = useMemo(
     () =>
       graph
         ? layoutProgressive(graph.beats, graph.edges, expandedArcs)
-        : { positions: new Map<string, { x: number; y: number }>(), arcPositions: new Map<string, { x: number; y: number }>() },
+        : {
+            positions: new Map<string, { x: number; y: number }>(),
+            arcPositions: new Map<string, { x: number; y: number }>(),
+            arcSizes: new Map<string, { width: number; height: number }>(),
+          },
     [graph, expandedArcs]
   );
 
@@ -752,16 +890,21 @@ export function NovelOverviewPanel() {
     // Arc macro nodes
     for (const [arc, data] of arcData) {
       const pos = arcPositions.get(arc) ?? { x: 0, y: 0 };
+      const size = arcSizes.get(arc);
+      const isExpanded = expandedArcs.has(arc);
       result.push({
         id: `arc:${arc}`,
         type: 'arcNode',
         position: pos,
         data: data as unknown as Record<string, unknown>,
         draggable: true,
+        style: isExpanded
+          ? { width: size?.width ?? 400, height: size?.height ?? 400 }
+          : undefined,
       });
     }
 
-    // Beat nodes — only for expanded arcs
+    // Beat nodes — only for expanded arcs, as children of the arc node
     for (const beat of graph.beats) {
       const arc = beat.arc ?? '未分类';
       if (!expandedArcs.has(arc)) continue;
@@ -774,11 +917,15 @@ export function NovelOverviewPanel() {
         position: pos,
         data: { beat, isSelected: beat.id === selectedBeatId } as unknown as Record<string, unknown>,
         selected: beat.id === selectedBeatId,
+        // Nest inside the arc container — positions are relative to parent
+        parentId: `arc:${arc}`,
+        extent: 'parent',
+        draggable: true,
       });
     }
 
     return result;
-  }, [graph, arcData, arcPositions, positions, expandedArcs, selectedBeatId, statusFilter]);
+  }, [graph, arcData, arcPositions, arcSizes, positions, expandedArcs, selectedBeatId, statusFilter]);
 
   // Build edges: cross-arc edges (always visible, between arc nodes) +
   // within-arc edges (only when arc is expanded, between beat nodes)
