@@ -87,6 +87,7 @@ src-tauri/binaries/
 .dev-ports.json
 .omx/
 .ua/
+.zcode/
 **/.harn/
 dev_assets
 build-npm-package-codesign.sh
