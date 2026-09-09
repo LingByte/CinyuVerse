@@ -59,6 +59,64 @@ export interface WritingPromptInput {
 }
 
 // ---------------------------------------------------------------------------
+// Style rhythm baseline
+//
+// Write prompts, the audit checklist, and the .cinyuverse/writing-rules.md
+// scaffold all project from this single table so the thresholds never drift.
+// The rules target the statistical fingerprints AI detectors key on: uniform
+// cadence, dense similes, frequent one-line paragraphs, punchy section ends.
+// ---------------------------------------------------------------------------
+
+export interface StyleRhythmRule {
+  /** Constraint line injected into write prompts and the rules scaffold. */
+  constraint: string;
+  /** Counting item injected into the audit checklist. */
+  audit: string;
+}
+
+export const STYLE_RHYTHM_RULES: StyleRhythmRule[] = [
+  {
+    constraint:
+      '单句成段（短句独立成段）全章不超过 6 处；开头 500 字内与悬念揭示、反转段落中一处也不许有',
+    audit:
+      '单句成段总处数及位置分布，重点核对开头 500 字和揭示/反转段落（阈值：全章 6 处，开头与揭示/反转段为 0）',
+  },
+  {
+    constraint: '「不X，不Y，不Z」式三项排比每章不超过 2 处',
+    audit: '三项排比（如「不X，不Y，不Z」）处数（阈值：每章 2 处）',
+  },
+  {
+    constraint:
+      '明喻（像/仿佛/如同/宛如/好似）每千字不超过 3 个，能用白描就不用比喻，揭示、反转节点一律白描',
+    audit: '明喻词（像/仿佛/如同/宛如/好似）出现次数（阈值：每千字 3 个）',
+  },
+  {
+    constraint: '段落长度要有起伏，长段与短段并存，不要全文段落长度雷同',
+    audit: '段落长度分布：最短/最长/中位段长，相邻段落是否高度雷同',
+  },
+  {
+    constraint: '各节结尾不刻意压短句「金句」，允许平实收尾',
+    audit: '逐节结尾模式：各节末句是否都收在短句金句上',
+  },
+  {
+    constraint: '章节开头 500 字内禁用一切比喻和排比，用平实叙述开场',
+    audit: '开头 500 字内明喻词与排比结构的数量（阈值：0）',
+  },
+  {
+    constraint: '悬念揭示、反转等关键节点必须用连贯长句叙述，禁止单句成段堆叠',
+    audit: '揭示/反转段落中的单句成段堆叠处数（阈值：0）',
+  },
+];
+
+// 从复测报告中提炼的真实超标句式，写作 prompt 原样列出让模型避开。
+export const STYLE_RHYTHM_FORBIDDEN_PATTERNS: string[] = [
+  '「像X」「仿佛X」式明喻串讲',
+  '「一呼。一应。」「一呼。一吸。」式对仗断行',
+  '「不X，不Y，不Z」三项排比',
+  '「他愣住了。」「人呢。」「喂。」式单句悬念独立成段',
+];
+
+// ---------------------------------------------------------------------------
 // Foundation templates — initialize the book's core metadata
 // ---------------------------------------------------------------------------
 
@@ -77,7 +135,7 @@ const initFoundation: WritingPromptTemplate = {
       `2. 根据题材「${input.genre ?? '未指定'}」生成以下内容：`,
       '   - **故事圣经**：核心设定、力量体系、世界观框架，写入 `.cinyuverse/world-view.md`',
       '   - **卷大纲**：第一卷的章节结构（至少 10 章），每章用三句话描述主要事件，写入 `.cinyuverse/outline.md`',
-      '   - **写作规则**：叙事基调、视角、禁词表，写入 `.cinyuverse/writing-rules.md`',
+      '   - **写作规则**：叙事基调、视角、禁词表，以及「文风节奏」一节（单句成段、三项排比、明喻密度、段落起伏、结尾模式、开头与揭示节点约束的量化阈值，可按题材微调但必须有），写入 `.cinyuverse/writing-rules.md`',
       '   - **初始伏笔**：至少 3 个伏笔条目，写入 `.cinyuverse/hooks.md`（保持表格格式）',
       '   - **当前状态**：故事开篇的世界状态事实，写入 `.cinyuverse/current-state.md`',
       '',
@@ -147,7 +205,9 @@ const planChapter: WritingPromptTemplate = {
       '- **节奏设计**（开篇、发展、高潮、收尾的节奏安排）',
       '- **字数目标**：' + (input.wordCount ?? 3000) + ' 字',
       '',
-      '将备忘录写入 `chapters/chapter-' + String(ch).padStart(2, '0') + '-memo.md`',
+      '将备忘录写入 `chapters/chapter-' +
+        String(ch).padStart(2, '0') +
+        '-memo.md`',
       input.guidance ? `\n## 作者指导\n\n${input.guidance}` : '',
     ]
       .filter(Boolean)
@@ -173,6 +233,7 @@ const writeChapter: WritingPromptTemplate = {
       '3. 读取 `.cinyuverse/writing-rules.md` 遵循写作规则和禁词表',
       '4. 读取 `.cinyuverse/style-sample.md` 参考文风',
       '5. 读取 `.cinyuverse/chapter-summaries.md` 中最近 3 章的摘要保持连贯',
+      `6. 若 \`chapters/chapter-${padded}.md\` 已有旧稿，本次为重写：只依据备忘录与设定从零撰写并覆盖，不参照、不修补旧稿（微调旧文无法消除文风问题）`,
       '',
       '## 要求',
       '',
@@ -182,6 +243,18 @@ const writeChapter: WritingPromptTemplate = {
       '- 推进备忘录中规划的伏笔',
       '- 避免使用禁词表中的词汇',
       '- 文风贴近 style-sample.md 的样本',
+      '',
+      '## 文风节奏约束',
+      '',
+      '以下阈值与审校模板的计数审计一致，超标会被要求修订；写到后半段也不许松懈：',
+      '',
+      ...STYLE_RHYTHM_RULES.map((rule) => `- ${rule.constraint}`),
+      '',
+      '禁止句式示例（原样避开，也不要换汤不换药地复刻）：',
+      '',
+      ...STYLE_RHYTHM_FORBIDDEN_PATTERNS.map((pattern) => `- ${pattern}`),
+      '',
+      '写入文件前逐项自查（单句成段处数、排比处数、明喻数、开头 500 字内容），超标先自行修订再交付。',
       '',
       `将正文写入 \`chapters/chapter-${padded}.md\``,
       input.guidance ? `\n## 作者指导\n\n${input.guidance}` : '',
@@ -219,7 +292,8 @@ const auditChapter: WritingPromptTemplate = {
       '- **冲突设计**：冲突是否充分，是否有张力',
       '- **文风一致性**：是否符合写作规则和文风样本',
       '- **禁词检查**：是否使用了禁词表中的词汇',
-      '- **AI 痕迹**：是否有明显的 AI 生成痕迹（重复句式、空洞描写等）',
+      '- **AI 痕迹（计数式审计）**：逐项统计下列文风节奏指标，实测值填入「文风节奏统计」表，任何一项超阈值即列入问题列表：',
+      ...STYLE_RHYTHM_RULES.map((rule) => `  - ${rule.audit}`),
       '',
       '## 输出格式',
       '',
@@ -227,6 +301,11 @@ const auditChapter: WritingPromptTemplate = {
       '',
       '### 总评',
       '（总体评价，1-2 段）',
+      '',
+      '### 文风节奏统计',
+      '| 指标 | 实测值 | 阈值 | 是否超标 |',
+      '| --- | --- | --- | --- |',
+      '（每项指标一行，实测值必须是从正文中数出来的数字，不许凭印象写「未见明显问题」）',
       '',
       '### 问题列表',
       '| # | 维度 | 严重程度 | 问题描述 | 建议修改 |',
@@ -265,7 +344,8 @@ const reviseChapter: WritingPromptTemplate = {
       '## 修订原则',
       '',
       '- 优先修复严重程度高的问题',
-      '- 修订时保持章节整体结构稳定',
+      '- 「文风节奏」超标属于结构性问题：禁止逐句微调修补，必须依据备忘录/节拍信息整段重写受影响的章节内容（微调旧文无法降低 AI 痕迹）',
+      '- 其余问题修订时保持章节整体结构稳定',
       '- 如果问题涉及伏笔或时间线，同步更新 `.cinyuverse/hooks.md` 和 `.cinyuverse/current-state.md`',
       '',
       `将修订后的正文写回 \`chapters/chapter-${padded}.md\``,
@@ -290,7 +370,9 @@ const updateState: WritingPromptTemplate = {
       '## 任务',
       '',
       `1. 读取 \`chapters/chapter-${padded}.md\` 提取本章关键事实`,
-      '2. 在 `.cinyuverse/chapter-summaries.md` 追加本章摘要（格式：## 第' + ch + '章 — 标题）',
+      '2. 在 `.cinyuverse/chapter-summaries.md` 追加本章摘要（格式：## 第' +
+        ch +
+        '章 — 标题）',
       '   - 摘要应包含：主要事件、角色变化、伏笔推进',
       '   - 保持在 200 字以内',
       '3. 更新 `.cinyuverse/hooks.md`：',
@@ -519,6 +601,109 @@ const exportPrep: WritingPromptTemplate = {
 };
 
 // ---------------------------------------------------------------------------
+// Humanize template — guided by the vendored humanizer-chinese skill
+// (frontend/src/lib/humanizer-chinese.SKILL.md, MIT, scaffolding into
+// `.cinyuverse/skills/humanizer-chinese/` on project creation). The skill
+// supplies the rewriting methodology; STYLE_RHYTHM_RULES supply the
+// measurable pass/fail targets.
+// ---------------------------------------------------------------------------
+
+const humanizeChapter: WritingPromptTemplate = {
+  id: 'humanize-chapter',
+  category: 'review',
+  label: '去AI化润稿',
+  description: '按 humanizer-chinese 模式清单整章重写，压低 AI 文风指纹',
+  build: (input) => {
+    const ch = input.chapterNumber ?? 1;
+    const padded = String(ch).padStart(2, '0');
+    return [
+      `请对第 ${ch} 章正文做「去 AI 化」润稿重写。`,
+      '',
+      '## 任务',
+      '',
+      `1. 读取 \`chapters/chapter-${padded}.md\` 获取正文`,
+      '2. 读取 `.cinyuverse/skills/humanizer-chinese/SKILL.md`——这是中文去 AI 味的完整方法论。',
+      '   若该文件不存在，向用户说明需先把 humanizer-chinese 的 SKILL.md 放入',
+      '   `.cinyuverse/skills/humanizer-chinese/`（新建项目会自动生成），不要凭印象改写。',
+      '3. 按 SKILL.md 的「通用要点」与小说最相关的模式执行，重点是「节奏三件套」',
+      '   （SKILL.md §12 排比对仗堆砌、§20 均匀节奏、§23 单句断句造势——检测权重最高的',
+      '   特征组）以及 §29-31 标点模式',
+      `4. 若存在 \`.cinyuverse/aigc/chapter-${padded}.json\` 检测报告，优先整段重写其中`,
+      '   label≠0（AI / 疑似 AI）的段落——那是检测器实测的高危段，改写时按序号与引文定位；',
+      '   报告对应旧稿，只用于定位，不据此删改情节',
+      '5. 读取 `.cinyuverse/writing-rules.md` 的「文风节奏」阈值，改写结果必须全部达标：',
+      ...STYLE_RHYTHM_RULES.map((rule) => `   - ${rule.constraint}`),
+      '',
+      '## 改写原则（来自 SKILL.md，必须遵守）',
+      '',
+      '- 改的是节奏和信息密度，不是词汇：逐词替换无效，要拆并重组句子、合并拆分段落',
+      '- 保信息不保形状：情节事实、人设、对白的实际内容、伏笔全部保留；句式结构放开重写',
+      '- 信息密度不均匀：核心场景铺开写，过渡一笔带过，不要每段均匀发力',
+      '- 句长锯齿化：连续中长句后插短句，或把长句掰开；段落长短错落',
+      '- 防过度纠偏：紧张、动作段落本就该短句密集，不为拉句长硬塞长句；不编造新情节',
+      '- 禁止句式示例（原样避开，也不要换汤不换药地复刻）：',
+      ...STYLE_RHYTHM_FORBIDDEN_PATTERNS.map((pattern) => `  - ${pattern}`),
+      '',
+      '## 交付',
+      '',
+      `- 改写后的正文写回 \`chapters/chapter-${padded}.md\``,
+      '- 写回前按「文风节奏」阈值逐项计数自查，超标先修订再交付',
+      `- 提示用户重新运行「AIGC 检测」复检：\`.cinyuverse/aigc/chapter-${padded}.json\` 对应的是旧稿`,
+      input.guidance ? `\n## 作者补充\n\n${input.guidance}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+  },
+};
+
+// ---------------------------------------------------------------------------
+// AIGC detection template — guided by the scaffolded aigc-check skill
+// (frontend/src/lib/aigc-check.SKILL.md, written into
+// `.cinyuverse/skills/aigc-check/` on project creation). The skill owns the
+// API contract (endpoint, .env key, report schema); this template only
+// sequences the task.
+// ---------------------------------------------------------------------------
+
+const checkAigc: WritingPromptTemplate = {
+  id: 'check-aigc',
+  category: 'review',
+  label: 'AIGC 检测',
+  description: '调用朱雀模型检测章节 AI 生成占比，逐段标注并落盘报告',
+  build: (input) => {
+    const ch = input.chapterNumber ?? 1;
+    const padded = String(ch).padStart(2, '0');
+    return [
+      `请检测第 ${ch} 章正文的 AIGC（AI 生成）占比。`,
+      '',
+      '## 任务',
+      '',
+      `1. 读取 \`chapters/chapter-${padded}.md\` 获取正文`,
+      '2. 读取 `.cinyuverse/skills/aigc-check/SKILL.md`——这是检测的完整调用契约',
+      '   （密钥、接口、报告格式），严格按它执行。若该文件不存在，向用户说明需把',
+      '   aigc-check 的 SKILL.md 放入 `.cinyuverse/skills/aigc-check/`（新建项目会自动生成），',
+      '   不要凭印象调用',
+      `3. 先检查 \`.cinyuverse/aigc/chapter-${padded}.json\` 旧报告：按 SKILL.md 的省额度规则，`,
+      '   正文未变则直接引用旧报告输出摘要，不再调用接口',
+      '4. 确认密钥可用：项目根 `.env` 或 `~/.cinyuverse/.env` 中存在 `ZHUQUE_API_KEY`；',
+      '   缺失则按 SKILL.md 指导用户配置后停止，不要编造密钥',
+      '5. 去掉章标题行，正文写入临时 payload 文件，`is_merge: false` 调用检测接口，',
+      '   密钥只通过环境变量引用，绝不回显其值',
+      `6. 按 SKILL.md 的报告契约把结果写入 \`.cinyuverse/aigc/chapter-${padded}.json\``,
+      '',
+      '## 输出',
+      '',
+      '- 整体占比：人工 / AI / 疑似 AI 三类占比与 ai_ratio（= AI + 疑似）',
+      '- AI 与疑似段落清单：段落序号 + 该段开头引文（约 30 字）',
+      '- 本次消耗 token 数；若引用的是旧报告，注明「正文未变，引用旧报告」',
+      '- 结尾提示：可运行「去AI化润稿」针对上述段落定向改写，完成后复检刷新报告',
+      input.guidance ? `\n## 作者补充\n\n${input.guidance}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
 
@@ -743,13 +928,14 @@ const writeBeat: WritingPromptTemplate = {
       '## 撰写要求',
       '',
       '1. 读取 `.cinyuverse/` 下的所有设定文件（世界观、角色卡、写作规则、伏笔池、当前状态）',
-      '2. 读取 `chapters/` 下已有的章节正文，保持文风和人设一致',
+      '2. 读取 `chapters/` 下已有的章节正文，保持人设、设定与情节连贯；句式节奏不要向已有章节看齐——那正是要避免的',
       '3. **对照图结构撰写**：',
       '   - 检查当前节拍的 `completion_criteria`，正文必须满足所有条件',
       '   - 检查 `hooks` 字段，正文中要自然融入对应的伏笔操作（埋设/推进/回收）',
       '   - 检查 `characters` 字段，所有标注角色都应在正文中出场',
       '   - 沿 `foreshadow` 边检查伏笔线的其他节点，确保伏笔处理与图一致',
       '   - 沿 `character_arc` 边检查角色弧线的其他节点，确保角色成长连贯',
+      '   - 若目标章节已有旧稿，只依据节拍图与设定从零撰写并覆盖，不参照、不修补旧稿',
       '4. 将正文写入 `chapters/chapter-NN.md`（NN 为章节号补零）',
       '5. 撰写完成后更新项目状态：',
       '   - 更新 `.cinyuverse/chapter-summaries.md`（追加本章摘要）',
@@ -763,6 +949,11 @@ const writeBeat: WritingPromptTemplate = {
       '- 禁词表见 `.cinyuverse/writing-rules.md`',
       '- 保持角色人设一致',
       '- 自然融入伏笔，不要生硬',
+      '- 节奏基线（与审校模板的计数审计一致，超标会被要求修订；写到后半段也不许松懈）：',
+      ...STYLE_RHYTHM_RULES.map((rule) => `  - ${rule.constraint}`),
+      '- 禁止句式示例（原样避开，也不要换汤不换药地复刻）：',
+      ...STYLE_RHYTHM_FORBIDDEN_PATTERNS.map((pattern) => `  - ${pattern}`),
+      '- 写入文件前按节奏基线逐项自查，超标先自行修订再交付',
       input.guidance ? `\n## 作者补充\n\n${input.guidance}` : '',
     ]
       .filter(Boolean)
@@ -779,6 +970,8 @@ export const WRITING_PROMPT_TEMPLATES: WritingPromptTemplate[] = [
   writeChapter,
   auditChapter,
   reviseChapter,
+  checkAigc,
+  humanizeChapter,
   updateState,
   createCharacter,
   refineCharacter,
@@ -790,7 +983,7 @@ export const WRITING_PROMPT_TEMPLATES: WritingPromptTemplate[] = [
 ];
 
 export const WRITING_PROMPTS_BY_ID = new Map(
-  WRITING_PROMPT_TEMPLATES.map((tpl) => [tpl.id, tpl]),
+  WRITING_PROMPT_TEMPLATES.map((tpl) => [tpl.id, tpl])
 );
 
 export const WRITING_PROMPTS_BY_CATEGORY = WRITING_PROMPT_TEMPLATES.reduce(
@@ -798,16 +991,18 @@ export const WRITING_PROMPTS_BY_CATEGORY = WRITING_PROMPT_TEMPLATES.reduce(
     (acc[tpl.category] ??= []).push(tpl);
     return acc;
   },
-  {} as Record<WritingPromptCategory, WritingPromptTemplate[]>,
+  {} as Record<WritingPromptCategory, WritingPromptTemplate[]>
 );
 
-export function getWritingPrompt(id: string): WritingPromptTemplate | undefined {
+export function getWritingPrompt(
+  id: string
+): WritingPromptTemplate | undefined {
   return WRITING_PROMPTS_BY_ID.get(id);
 }
 
 export function buildWritingPrompt(
   id: string,
-  input: WritingPromptInput,
+  input: WritingPromptInput
 ): string | null {
   const tpl = getWritingPrompt(id);
   return tpl ? tpl.build(input) : null;

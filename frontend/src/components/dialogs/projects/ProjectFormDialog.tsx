@@ -4,6 +4,8 @@ import NiceModal, { useModal } from '@ebay/nice-modal-react';
 import { TextArea } from '@astryxdesign/core/TextArea';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
+import aigcCheckSkillMd from '@/lib/aigc-check.SKILL.md?raw';
+import humanizerSkillMd from '@/lib/humanizer-chinese.SKILL.md?raw';
 import { pickHostDirectory } from '@/lib/hostFs';
 import { AlertCircle, FolderOpen, GitBranch, Loader2 } from 'lucide-react';
 import type { CreateProject, Project } from 'shared/types';
@@ -22,6 +24,7 @@ import { Label } from '@/components/ui/label';
 import { useProjectMutations } from '@/hooks/useProjectMutations';
 import { fileTreeApi, repoApi } from '@/lib/api';
 import { defineModal } from '@/lib/modals';
+import { STYLE_RHYTHM_RULES } from '@/lib/writingPrompts';
 import { normalizeDisplayPath } from '@/utils/displayPath';
 
 export interface ProjectFormDialogProps {
@@ -131,6 +134,15 @@ const GITIGNORE_TEMPLATE = [
   '',
 ].join('\n');
 
+// ZHUQUE_API_KEY 是朱雀 AIGC 检测的密钥；`.env` 本身永不生成、永不覆写。
+export const CINYUVERSE_ENV_EXAMPLE = [
+  '# 复制为 .env 并填入真实密钥（.env 已被 .gitignore 忽略）',
+  '# 创建入口：https://console.cloud.tencent.com/edgeone/makers → API Key 管理',
+  '# 用途见 .cinyuverse/skills/aigc-check/SKILL.md',
+  'ZHUQUE_API_KEY=',
+  '',
+].join('\n');
+
 const MIT_LICENSE_TEMPLATE = [
   'MIT License',
   '',
@@ -181,6 +193,8 @@ function cinyuverseClaudeMd(projectName: string): string {
     '- `.cinyuverse/chapter-summaries.md` — 章节摘要滚动窗口',
     '- `.cinyuverse/characters/` — 角色卡（一个角色一个 .md 文件）',
     '- `.cinyuverse/story-graph.json` — 故事节拍图（节点=故事事件，边=依赖关系）',
+    '- `.cinyuverse/aigc/` — AIGC 检测报告（chapter-NN.json，整章与逐段 AI 占比）',
+    '- `.cinyuverse/skills/` — 写作辅助 Skill（humanizer-chinese：中文去 AI 味改写方法论，「去AI化润稿」模板依赖它；aigc-check：朱雀 AIGC 检测调用契约，「AIGC 检测」模板依赖它，密钥在项目根 `.env` 的 `ZHUQUE_API_KEY`）',
     '',
     '## 创作流程',
     '',
@@ -222,7 +236,7 @@ function cinyuverseProjectJson(projectName: string): string {
       updatedAt: new Date().toISOString(),
     },
     null,
-    2,
+    2
   );
 }
 
@@ -244,7 +258,7 @@ const CINYUVERSE_WORLD_VIEW_MD = [
   '',
 ].join('\n');
 
-const CINYUVERSE_WRITING_RULES_MD = [
+export const CINYUVERSE_WRITING_RULES_MD = [
   '# 写作规则',
   '',
   '## 叙事基调',
@@ -255,6 +269,12 @@ const CINYUVERSE_WRITING_RULES_MD = [
   '',
   '## 禁词表',
   '（列出需要避免的词汇，每行一个）',
+  '',
+  '## 文风节奏',
+  '',
+  '以下量化阈值用于压低 AI 生成痕迹，撰写与审校都会按此计数，可按题材微调：',
+  '',
+  ...STYLE_RHYTHM_RULES.map((rule) => `- ${rule.constraint}`),
   '',
 ].join('\n');
 
@@ -308,7 +328,7 @@ const CINYUVERSE_STORY_GRAPH_JSON = JSON.stringify(
     edges: [],
   },
   null,
-  2,
+  2
 );
 
 /**
@@ -316,15 +336,22 @@ const CINYUVERSE_STORY_GRAPH_JSON = JSON.stringify(
  * Safe to call when the directory already exists — existing files are
  * never overwritten.
  */
-async function ensureCinyuverseScaffold(repoPath: string, projectName: string): Promise<void> {
+async function ensureCinyuverseScaffold(
+  repoPath: string,
+  projectName: string
+): Promise<void> {
   const metaDir = joinLocalPath(repoPath, CINYUVERSE_DIR);
   const charactersDir = joinLocalPath(metaDir, 'characters');
+  const humanizerDir = joinLocalPath(metaDir, 'skills/humanizer-chinese');
+  const aigcCheckDir = joinLocalPath(metaDir, 'skills/aigc-check');
   const chaptersDir = joinLocalPath(repoPath, 'chapters');
 
   // Create directories (createDirectory is idempotent on the backend).
   await Promise.all([
     fileTreeApi.createDirectory(metaDir),
     fileTreeApi.createDirectory(charactersDir),
+    fileTreeApi.createDirectory(humanizerDir),
+    fileTreeApi.createDirectory(aigcCheckDir),
     fileTreeApi.createDirectory(chaptersDir),
   ]);
 
@@ -332,21 +359,45 @@ async function ensureCinyuverseScaffold(repoPath: string, projectName: string): 
   // writeTextFile overwrites, so we guard with a simple "best effort" approach:
   // these are only called during project creation, so overwriting is acceptable.
   const writes: Array<Promise<void>> = [
-    writeTextFile(joinLocalPath(metaDir, 'CLAUDE.md'), cinyuverseClaudeMd(projectName)),
-    writeTextFile(joinLocalPath(metaDir, 'project.json'), cinyuverseProjectJson(projectName)),
+    writeTextFile(
+      joinLocalPath(metaDir, 'CLAUDE.md'),
+      cinyuverseClaudeMd(projectName)
+    ),
+    writeTextFile(
+      joinLocalPath(metaDir, 'project.json'),
+      cinyuverseProjectJson(projectName)
+    ),
     writeTextFile(joinLocalPath(metaDir, 'outline.md'), CINYUVERSE_OUTLINE_MD),
-    writeTextFile(joinLocalPath(metaDir, 'world-view.md'), CINYUVERSE_WORLD_VIEW_MD),
-    writeTextFile(joinLocalPath(metaDir, 'writing-rules.md'), CINYUVERSE_WRITING_RULES_MD),
+    writeTextFile(
+      joinLocalPath(metaDir, 'world-view.md'),
+      CINYUVERSE_WORLD_VIEW_MD
+    ),
+    writeTextFile(
+      joinLocalPath(metaDir, 'writing-rules.md'),
+      CINYUVERSE_WRITING_RULES_MD
+    ),
     writeTextFile(joinLocalPath(metaDir, 'hooks.md'), CINYUVERSE_HOOKS_MD),
-    writeTextFile(joinLocalPath(metaDir, 'current-state.md'), CINYUVERSE_CURRENT_STATE_MD),
+    writeTextFile(
+      joinLocalPath(metaDir, 'current-state.md'),
+      CINYUVERSE_CURRENT_STATE_MD
+    ),
     writeTextFile(
       joinLocalPath(metaDir, 'chapter-summaries.md'),
-      CINYUVERSE_CHAPTER_SUMMARIES_MD,
+      CINYUVERSE_CHAPTER_SUMMARIES_MD
     ),
-    writeTextFile(joinLocalPath(metaDir, 'style-sample.md'), CINYUVERSE_STYLE_SAMPLE_MD),
+    writeTextFile(
+      joinLocalPath(metaDir, 'style-sample.md'),
+      CINYUVERSE_STYLE_SAMPLE_MD
+    ),
     writeTextFile(
       joinLocalPath(metaDir, 'story-graph.json'),
-      CINYUVERSE_STORY_GRAPH_JSON,
+      CINYUVERSE_STORY_GRAPH_JSON
+    ),
+    writeTextFile(joinLocalPath(humanizerDir, 'SKILL.md'), humanizerSkillMd),
+    writeTextFile(joinLocalPath(aigcCheckDir, 'SKILL.md'), aigcCheckSkillMd),
+    writeTextFile(
+      joinLocalPath(repoPath, '.env.example'),
+      CINYUVERSE_ENV_EXAMPLE
     ),
   ];
 

@@ -6,9 +6,12 @@ import { HotkeysProvider } from 'react-hotkeys-hook';
 import { describe, expect, it } from 'vitest';
 
 import {
+  CINYUVERSE_ENV_EXAMPLE,
+  CINYUVERSE_WRITING_RULES_MD,
   ProjectFormDialog,
   type ProjectFormDialogProps,
 } from './ProjectFormDialog';
+import { STYLE_RHYTHM_RULES } from '@/lib/writingPrompts';
 
 const Dialog = ProjectFormDialog as ComponentType<
   ProjectFormDialogProps & NiceModalHocProps
@@ -102,5 +105,19 @@ describe('ProjectFormDialog', () => {
       'text-xs',
       'bg-[var(--surface-control-hover)]'
     );
+  });
+
+  it('scaffolds writing-rules.md with every style rhythm constraint', () => {
+    expect(CINYUVERSE_WRITING_RULES_MD).toContain('## 文风节奏');
+    for (const rule of STYLE_RHYTHM_RULES) {
+      expect(CINYUVERSE_WRITING_RULES_MD).toContain(rule.constraint);
+    }
+  });
+
+  it('scaffolds .env.example for the AIGC detection key without a value', () => {
+    expect(CINYUVERSE_ENV_EXAMPLE).toContain('ZHUQUE_API_KEY=');
+    expect(CINYUVERSE_ENV_EXAMPLE).toContain('.gitignore');
+    expect(CINYUVERSE_ENV_EXAMPLE).toContain('aigc-check');
+    expect(CINYUVERSE_ENV_EXAMPLE).not.toMatch(/ZHUQUE_API_KEY=\S/);
   });
 });

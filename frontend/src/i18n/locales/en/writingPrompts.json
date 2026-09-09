@@ -32,6 +32,14 @@
       "label": "Revise Chapter",
       "description": "Revise chapter prose from audit report"
     },
+    "check-aigc": {
+      "label": "AIGC Detection",
+      "description": "Detect the AI-generated ratio of a chapter via the Zhuque model, paragraph by paragraph, and save a report"
+    },
+    "humanize-chapter": {
+      "label": "Humanize Chapter",
+      "description": "Rewrite the chapter with the humanizer-chinese patterns to reduce AI fingerprints"
+    },
     "update-state": {
       "label": "Update Chapter State",
       "description": "Update summaries, hooks, and current state after chapter completion"

@@ -1,0 +1,7 @@
+# Vendored verbatim from https://github.com/jiji262/humanizer-chinese (MIT).
+# Keep byte-identical to upstream; do not reformat.
+src/lib/humanizer-chinese.SKILL.md
+
+# Authored agent-skill contract with long Chinese lines and shell examples;
+# reflowing would churn the scaffolded copies in every novel project.
+src/lib/aigc-check.SKILL.md

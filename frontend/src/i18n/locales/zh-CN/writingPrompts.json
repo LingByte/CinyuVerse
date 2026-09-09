@@ -32,6 +32,14 @@
       "label": "修订章节",
       "description": "根据审校报告修订章节正文"
     },
+    "check-aigc": {
+      "label": "AIGC 检测",
+      "description": "调用朱雀模型检测章节 AI 生成占比，逐段标注并落盘报告"
+    },
+    "humanize-chapter": {
+      "label": "去AI化润稿",
+      "description": "按 humanizer-chinese 模式清单整章重写，压低 AI 文风指纹"
+    },
     "update-state": {
       "label": "更新章节状态",
       "description": "章节完成后更新摘要、伏笔池和当前状态"
