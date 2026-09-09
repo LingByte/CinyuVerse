@@ -8,7 +8,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow};
 use futures::stream::TryStreamExt;
 use qiniu_sdk::objects::apis::credential::Credential;
-use qiniu_sdk::objects::{ObjectsManager, OperationProvider};
+use qiniu_sdk::objects::ObjectsManager;
 use qiniu_sdk::upload::{ObjectParams, UploadManager, UploadTokenSigner};
 use qiniu_sdk::prelude::SinglePartUploader;
 use serde::{Deserialize, Serialize};
@@ -102,9 +102,10 @@ impl QiniuClient {
         let object_manager = ObjectsManager::new(self.credential.to_owned());
         let bucket = object_manager.bucket(&self.config.bucket);
 
-        // List all objects with the given prefix
+        // No total limit — let the stream paginate through all objects.
+        // (Setting `.limit(N)` caps the TOTAL count, not the page size.)
         let mut list_builder = bucket.list();
-        list_builder.prefix(prefix).limit(1000);
+        list_builder.prefix(prefix);
         let mut stream = list_builder.stream();
 
         let mut meta_keys: Vec<String> = Vec::new();
@@ -153,7 +154,7 @@ impl QiniuClient {
         let bucket = object_manager.bucket(&self.config.bucket);
 
         let mut list_builder = bucket.list();
-        list_builder.prefix(&prefix).limit(1000);
+        list_builder.prefix(&prefix);
         let mut stream = list_builder.stream();
 
         let mut chapters: Vec<String> = Vec::new();

@@ -8,11 +8,13 @@ Strategy (optimized):
   3. For each chapter, extract the pre-signed JSONP API URL from the static
      HTML and call it directly (no browser needed — ~10x faster)
   4. Assemble into Markdown with frontmatter
-  5. Upload to Qiniu bucket under novels/<category>/<title>.md
+  5. Upload to Qiniu bucket under novels/<category>/<title>/<NNNN>.md
 
 Usage:
   python3 scrape_sbyuedu.py [--max-books N] [--max-chapters N] [--dry-run]
   python3 scrape_sbyuedu.py --category 2 --max-books 5   # only 总裁豪门, 5 books
+  python3 scrape_sbyuedu.py --delay 5                    # 5s between chapters (default)
+  python3 scrape_sbyuedu.py --no-skip                    # don't skip already-uploaded
 """
 
 import json
@@ -25,7 +27,7 @@ from pathlib import Path
 
 import requests
 from scrapling.fetchers import Fetcher, DynamicFetcher
-from qiniu import Auth, put_data
+from qiniu import Auth, put_data, BucketManager
 
 BASE_URL = "https://www.sbyuedu.com"
 API_BASE = "https://api.ixshuo.com"
@@ -68,6 +70,29 @@ def upload_to_qiniu(config: dict, key: str, content: str) -> tuple[bool, str]:
     if info.status_code == 200:
         return True, ""
     return False, f"{info.status_code} {info.text_body[:200] if info.text_body else ''}"
+
+
+def list_existing_keys(config: dict, prefix: str = "novels/") -> set[str]:
+    """List all existing object keys in the bucket under the given prefix.
+    Used to skip already-uploaded chapters on restart."""
+    q = Auth(config["access_key"], config["secret_key"])
+    bucket = BucketManager(q)
+    existing: set[str] = set()
+    marker = None
+    while True:
+        ret, eof, info = bucket.list(config["bucket"], prefix, marker, limit=1000)
+        if info.status_code != 200 or ret is None:
+            sys.stderr.write(
+                f"  ⚠ list existing keys failed: {info.status_code} "
+                f"{info.text_body[:200] if info.text_body else ''}\n"
+            )
+            break
+        for item in ret.get("items", []):
+            existing.add(item["key"])
+        if eof or not ret.get("marker"):
+            break
+        marker = ret["marker"]
+    return existing
 
 
 # ---------------------------------------------------------------------------
@@ -158,53 +183,79 @@ def get_book_info(book_id: int) -> dict:
 
 def get_chapter_content_fast(chapter_url: str) -> str:
     """Fetch chapter content by extracting the pre-signed JSONP API URL
-    from the static HTML and calling it directly. ~10x faster than browser."""
-    try:
-        # 1. Fast static fetch — retry on 429
-        for attempt in range(3):
-            resp = HTTP.get(chapter_url, timeout=10)
-            if resp.status_code == 429:
-                time.sleep(5 * (attempt + 1))
+    from the static HTML and calling it directly. ~10x faster than browser.
+
+    Retry policy:
+      - 429 (rate limit): exponential backoff, up to 3 retries
+      - 403 (content restriction): no retry — skip immediately
+      - DNS/timeout/conn errors: retry after 5s (transient)
+    """
+    # 1. Fast static fetch — retry on 429 + transient conn errors
+    resp = None
+    for attempt in range(4):
+        try:
+            resp = HTTP.get(chapter_url, timeout=15)
+        except Exception as e:
+            if attempt < 3:
+                sys.stderr.write(f"  [fast] {chapter_url}: conn error ({e}), retry in 5s...\n")
+                time.sleep(5)
                 continue
-            break
-        if resp.status_code != 200:
-            sys.stderr.write(f"  [fast] {chapter_url}: HTTP {resp.status_code}\n")
+            sys.stderr.write(f"  [fast] {chapter_url}: EXCEPTION {e}\n")
             return ""
-        html = resp.text
-
-        # 2. Extract signed API URL (match until whitespace/quotes/angle-brackets)
-        m = re.search(r'(//api\.ixshuo\.com/api/novels/read\?[^\s"\'<>]+)', html)
-        if not m:
-            sys.stderr.write(f"  [fast] {chapter_url}: no API URL in HTML (len={len(html)})\n")
-            return ""
-        api_url = "https:" + m.group(1).replace("&amp;", "&")
-
-        # 3. Call API — retry on 429 with exponential backoff
-        for attempt in range(3):
-            api_resp = HTTP.get(api_url, timeout=10)
-            if api_resp.status_code == 429:
-                wait = 5 * (attempt + 1)
-                sys.stderr.write(f"  [fast] {chapter_url}: API 429, waiting {wait}s...\n")
-                time.sleep(wait)
-                continue
-            break
-        if api_resp.status_code != 200:
-            sys.stderr.write(f"  [fast] {chapter_url}: API {api_resp.status_code}\n")
-            return ""
-
-        # 4. Parse JSONP: novel_read({...})
-        text = api_resp.text.strip()
-        m = re.match(r"novel_read\((.+)\)", text, re.DOTALL)
-        if not m:
-            sys.stderr.write(f"  [fast] {chapter_url}: JSONP parse fail (len={len(text)})\n")
-            return ""
-        data = json.loads(m.group(1))
-        content = data.get("data", {}).get("content", "")
-        return content.strip()
-
-    except Exception as e:
-        sys.stderr.write(f"  [fast] {chapter_url}: EXCEPTION {e}\n")
+        if resp.status_code == 429 and attempt < 3:
+            wait = 5 * (attempt + 1)
+            sys.stderr.write(f"  [fast] {chapter_url}: HTTP 429, waiting {wait}s...\n")
+            time.sleep(wait)
+            continue
+        break
+    if resp is None or resp.status_code != 200:
+        code = resp.status_code if resp else "no response"
+        sys.stderr.write(f"  [fast] {chapter_url}: HTTP {code}\n")
         return ""
+    html = resp.text
+
+    # 2. Extract signed API URL (match until whitespace/quotes/angle-brackets)
+    m = re.search(r'(//api\.ixshuo\.com/api/novels/read\?[^\s"\'<>]+)', html)
+    if not m:
+        sys.stderr.write(f"  [fast] {chapter_url}: no API URL in HTML (len={len(html)})\n")
+        return ""
+    api_url = "https:" + m.group(1).replace("&amp;", "&")
+
+    # 3. Call API — retry on 429 with exponential backoff; 403 = skip (content restriction)
+    api_resp = None
+    for attempt in range(4):
+        try:
+            api_resp = HTTP.get(api_url, timeout=15)
+        except Exception as e:
+            if attempt < 3:
+                sys.stderr.write(f"  [fast] {chapter_url}: API conn error ({e}), retry in 5s...\n")
+                time.sleep(5)
+                continue
+            sys.stderr.write(f"  [fast] {chapter_url}: API EXCEPTION {e}\n")
+            return ""
+        if api_resp.status_code == 429 and attempt < 3:
+            wait = 5 * (attempt + 1)
+            sys.stderr.write(f"  [fast] {chapter_url}: API 429, waiting {wait}s...\n")
+            time.sleep(wait)
+            continue
+        break
+    if api_resp is None or api_resp.status_code != 200:
+        code = api_resp.status_code if api_resp else "no response"
+        if code == 403:
+            sys.stderr.write(f"  [fast] {chapter_url}: API 403 (content restricted), skipping\n")
+        else:
+            sys.stderr.write(f"  [fast] {chapter_url}: API {code}\n")
+        return ""
+
+    # 4. Parse JSONP: novel_read({...})
+    text = api_resp.text.strip()
+    m = re.match(r"novel_read\((.+)\)", text, re.DOTALL)
+    if not m:
+        sys.stderr.write(f"  [fast] {chapter_url}: JSONP parse fail (len={len(text)})\n")
+        return ""
+    data = json.loads(m.group(1))
+    content = data.get("data", {}).get("content", "")
+    return content.strip()
 
 
 def book_meta_json(info: dict, total_chapters: int, uploaded: int) -> str:
@@ -254,6 +305,10 @@ def main():
     parser.add_argument("--max-chapters", type=int, default=0)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--category", type=int, default=0, help="Only this category ID")
+    parser.add_argument("--delay", type=float, default=5.0,
+                        help="Seconds to wait between chapters (default: 5)")
+    parser.add_argument("--no-skip", action="store_true",
+                        help="Don't skip already-uploaded chapters")
     args = parser.parse_args()
 
     config = load_qiniu_config()
@@ -265,6 +320,17 @@ def main():
     print("神笔阅读 → 七牛云 (fast mode)")
     print("=" * 60)
     print(f"Bucket: {config['bucket']} | Domain: {config['domain']}")
+    print(f"Delay: {args.delay}s between chapters")
+
+    # List existing keys so we can skip already-uploaded chapters
+    existing_keys: set[str] = set()
+    if not args.no_skip and not args.dry_run:
+        print("Listing existing bucket keys for skip-duplicate...", end=" ", flush=True)
+        existing_keys = list_existing_keys(config)
+        print(f"{len(existing_keys)} keys found")
+    else:
+        print("Skip-duplicate: disabled")
+
     print()
 
     # Step 1: Collect book IDs
@@ -291,6 +357,7 @@ def main():
 
     # Step 2-4: Scrape + upload
     ok, fail = 0, 0
+    skipped = 0
     for idx, book in enumerate(unique, 1):
         print(f"\n[{idx}/{len(unique)}] 📕 {book['title']} (ID:{book['id']})")
         try:
@@ -318,23 +385,33 @@ def main():
 
             uploaded = 0
             for ci, ch in enumerate(chapters, 1):
+                ch_key = f"{book_prefix}/{ci:04d}.md"
+
+                # Skip if already uploaded
+                if ch_key in existing_keys:
+                    skipped += 1
+                    uploaded += 1  # count as done for meta accuracy
+                    if ci % 50 == 0:
+                        print(f"  进度: {ci}/{len(chapters)} (跳过已上传 {skipped})", flush=True)
+                    continue
+
                 if ci % 20 == 0:
                     print(f"  进度: {ci}/{len(chapters)} (已上传 {uploaded})", flush=True)
                 content = get_chapter_content_fast(ch["url"])
                 if content:
                     ch_md = chapter_to_markdown(info, ch, ci, content)
-                    ch_key = f"{book_prefix}/{ci:04d}.md"
                     if args.dry_run:
                         print(f"  [DRY RUN] → {ch_key} ({len(ch_md)} 字符)")
                     else:
                         success, err = upload_to_qiniu(config, ch_key, ch_md)
                         if success:
                             uploaded += 1
+                            existing_keys.add(ch_key)
                         else:
                             sys.stderr.write(f"  ⚠ upload fail ch {ci}: {err}\n")
                 else:
                     sys.stderr.write(f"  ⚠ ch {ci} content empty, skipping\n")
-                time.sleep(2.0)
+                time.sleep(args.delay)
 
             # Upload book metadata
             if uploaded > 0:
@@ -359,7 +436,7 @@ def main():
             fail += 1
 
     print(f"\n{'='*60}")
-    print(f"完成! 成功:{ok} 失败:{fail}")
+    print(f"完成! 成功:{ok} 失败:{fail} 跳过:{skipped}")
     print(f"{'='*60}")
 
 

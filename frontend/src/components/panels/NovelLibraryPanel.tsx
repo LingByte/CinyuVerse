@@ -15,6 +15,7 @@ import {
   Download,
   FileText,
   ChevronRight,
+  ChevronLeft,
   Settings,
   List,
   ArrowLeft,
@@ -71,6 +72,8 @@ export function NovelLibraryPanel() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [chapters, setChapters] = useState<string[]>([]);
   const [chaptersLoading, setChaptersLoading] = useState(false);
+  const [chapterPage, setChapterPage] = useState(0);
+  const CHAPTERS_PER_PAGE = 50;
   const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
   const [chapterContent, setChapterContent] = useState<string | null>(null);
   const [chapterLoading, setChapterLoading] = useState(false);
@@ -130,6 +133,7 @@ export function NovelLibraryPanel() {
     setSelectedChapter(null);
     setChapterContent(null);
     setChapters([]);
+    setChapterPage(0);
     setChaptersLoading(true);
     setPreviewLoading(true);
     try {
@@ -389,8 +393,8 @@ export function NovelLibraryPanel() {
               {/* Body: chapter list + content reader */}
               <div className="flex-1 flex overflow-hidden">
                 {/* Chapter list sidebar */}
-                <div className="w-56 shrink-0 border-r overflow-y-auto">
-                  <div className="px-3 py-2 text-xs font-medium text-muted-foreground sticky top-0 bg-background/80 backdrop-blur border-b">
+                <div className="w-56 shrink-0 border-r flex flex-col overflow-hidden">
+                  <div className="px-3 py-2 text-xs font-medium text-muted-foreground shrink-0 border-b">
                     <List className="h-3 w-3 inline mr-1" />
                     章节目录 ({chapters.length})
                   </div>
@@ -404,24 +408,61 @@ export function NovelLibraryPanel() {
                       无章节
                     </div>
                   )}
-                  {chapters.map((chKey) => {
-                    const chName = chKey.split('/').pop() || chKey;
-                    const chIdx = chName.replace('.md', '');
-                    const isActive = selectedChapter === chKey;
-                    return (
-                      <button
-                        key={chKey}
-                        onClick={() => void handleSelectChapter(chKey)}
-                        className={`w-full text-left px-3 py-1.5 text-xs border-b border-border/30 transition-colors ${
-                          isActive
-                            ? 'bg-primary/10 text-primary font-medium'
-                            : 'hover:bg-muted/50 text-foreground/70'
-                        }`}
-                      >
-                        第 {chIdx} 章
-                      </button>
-                    );
-                  })}
+                  {!chaptersLoading && chapters.length > 0 && (
+                    <>
+                      <div className="flex-1 overflow-y-auto">
+                        {chapters
+                          .slice(
+                            chapterPage * CHAPTERS_PER_PAGE,
+                            (chapterPage + 1) * CHAPTERS_PER_PAGE
+                          )
+                          .map((chKey) => {
+                            const chName = chKey.split('/').pop() || chKey;
+                            const chIdx = chName.replace('.md', '');
+                            const isActive = selectedChapter === chKey;
+                            return (
+                              <button
+                                key={chKey}
+                                onClick={() => void handleSelectChapter(chKey)}
+                                className={`w-full text-left px-3 py-1.5 text-xs border-b border-border/30 transition-colors ${
+                                  isActive
+                                    ? 'bg-primary/10 text-primary font-medium'
+                                    : 'hover:bg-muted/50 text-foreground/70'
+                                }`}
+                              >
+                                第 {chIdx} 章
+                              </button>
+                            );
+                          })}
+                      </div>
+                      {/* Pagination */}
+                      {chapters.length > CHAPTERS_PER_PAGE && (
+                        <div className="shrink-0 flex items-center justify-between px-2 py-1.5 border-t text-xs">
+                          <button
+                            disabled={chapterPage === 0}
+                            onClick={() => setChapterPage(chapterPage - 1)}
+                            className="p-1 rounded hover:bg-muted/50 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <ChevronLeft className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="text-muted-foreground">
+                            {chapterPage + 1}/
+                            {Math.ceil(chapters.length / CHAPTERS_PER_PAGE)}
+                          </span>
+                          <button
+                            disabled={
+                              (chapterPage + 1) * CHAPTERS_PER_PAGE >=
+                              chapters.length
+                            }
+                            onClick={() => setChapterPage(chapterPage + 1)}
+                            className="p-1 rounded hover:bg-muted/50 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
 
                 {/* Content reader */}
