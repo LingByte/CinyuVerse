@@ -3448,7 +3448,7 @@
     background: var(--surface-page-solid);
   }
 
-  .kanban-column-surface {
+  .kanban-lane-surface {
     border: 1px solid var(--border-subtle);
     border-radius: var(--radius);
     background: var(--surface-content);
@@ -3457,12 +3457,12 @@
     box-shadow: none;
   }
 
-  .kanban-column-surface.is-over {
+  .kanban-lane-surface.is-over {
     border-color: hsl(var(--primary) / 0.42);
     background: var(--surface-active);
   }
 
-  .kanban-column-header {
+  .kanban-lane-header {
     border-bottom: 1px solid var(--border-subtle);
     background: var(--surface-content);
     background-color: var(--surface-content);

@@ -47,7 +47,7 @@ import {
   type ActiveSessionStatus,
 } from '@/components/kanban/session-hub/utils';
 
-const KANBAN_COLUMNS = [
+const KANBAN_SECTIONS = [
   {
     key: 'todo' as ActiveSessionStatus,
     label: 'TODO',
@@ -197,7 +197,7 @@ export function KanbanBoard() {
   );
 }
 
-function SessionKanbanBoard() {
+export function SessionKanbanBoard() {
   const { t } = useTranslation(['panels', 'common']);
   const { projectId } = useProject();
   const { sessions, isLoading } = useKanbanProjectSessions(projectId);
@@ -388,17 +388,20 @@ function SessionKanbanBoard() {
           onDragEnd={handleDragEnd}
           sensors={sensors}
         >
-          <div className="flex h-full min-w-0 gap-3">
-            {KANBAN_COLUMNS.map((column) => (
-              <SessionKanbanColumn
-                key={column.key}
-                columnKey={column.key}
-                label={column.label}
-                dotColor={column.dotColor}
-                sessions={sessionsByStatus[column.key]}
+          <div
+            className="flex h-full min-w-0 flex-col gap-3"
+            data-testid="kanban-lane-list"
+          >
+            {KANBAN_SECTIONS.map((section) => (
+              <SessionKanbanSection
+                key={section.key}
+                sectionKey={section.key}
+                label={section.label}
+                dotColor={section.dotColor}
+                sessions={sessionsByStatus[section.key]}
                 onSessionClick={handleSessionClick}
                 onDeleteSession={handleDeleteSession}
-                onCreateTask={() => handleCreateSession(column.key)}
+                onCreateTask={() => handleCreateSession(section.key)}
               />
             ))}
           </div>
@@ -422,8 +425,8 @@ function SessionKanbanBoard() {
   );
 }
 
-function SessionKanbanColumn({
-  columnKey,
+function SessionKanbanSection({
+  sectionKey,
   label,
   dotColor,
   sessions,
@@ -431,7 +434,7 @@ function SessionKanbanColumn({
   onDeleteSession,
   onCreateTask,
 }: {
-  columnKey: ActiveSessionStatus;
+  sectionKey: ActiveSessionStatus;
   label: string;
   dotColor: string;
   sessions: KanbanProjectSessionRecord[];
@@ -442,17 +445,19 @@ function SessionKanbanColumn({
   onCreateTask: () => void;
 }) {
   const { t } = useTranslation(['panels', 'common']);
-  const { isOver, setNodeRef } = useDroppable({ id: columnKey });
+  const { isOver, setNodeRef } = useDroppable({ id: sectionKey });
 
   return (
     <div
       ref={setNodeRef}
+      data-testid="kanban-lane"
+      data-status={sectionKey}
       className={cn(
-        'kanban-column-surface flex min-w-[180px] flex-1 flex-col rounded-xl transition-colors',
+        'kanban-lane-surface flex w-full shrink-0 flex-col rounded-xl transition-colors',
         isOver && 'is-over'
       )}
     >
-      <div className="kanban-column-header flex shrink-0 items-center gap-2 px-3 py-2.5">
+      <div className="kanban-lane-header flex shrink-0 items-center gap-2 px-3 py-2.5">
         <span
           className="h-2 w-2 shrink-0 rounded-full"
           style={{ backgroundColor: dotColor }}
@@ -472,13 +477,16 @@ function SessionKanbanColumn({
           <span className="text-sm leading-none">+</span>
         </button>
       </div>
-      <div className="flex-1 space-y-2 overflow-y-auto overflow-x-hidden p-2">
+      <div
+        className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2 p-2"
+        data-testid="kanban-lane-cards"
+      >
         {sessions.map((session, index) => (
           <DraggableSessionCard
             key={session.id}
             session={session}
             index={index}
-            columnKey={columnKey}
+            statusKey={sectionKey}
             onClick={() => onSessionClick(session)}
             onDelete={() => onDeleteSession(session)}
           />
@@ -491,20 +499,20 @@ function SessionKanbanColumn({
 function DraggableSessionCard({
   session,
   index,
-  columnKey,
+  statusKey,
   onClick,
   onDelete,
 }: {
   session: KanbanProjectSessionRecord;
   index: number;
-  columnKey: SessionStatus;
+  statusKey: SessionStatus;
   onClick: () => void;
   onDelete: () => void | Promise<void>;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
       id: session.id,
-      data: { index, parent: columnKey },
+      data: { index, parent: statusKey },
     });
 
   return (
