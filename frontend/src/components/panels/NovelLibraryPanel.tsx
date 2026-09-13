@@ -61,7 +61,7 @@ type QiniuConfig = {
 // ---------------------------------------------------------------------------
 
 export function NovelLibraryPanel() {
-  const { t } = useTranslation();
+  const { t } = useTranslation('panels');
   const { projectId } = useProject();
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(false);
