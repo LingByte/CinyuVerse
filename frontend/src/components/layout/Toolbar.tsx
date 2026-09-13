@@ -385,13 +385,10 @@ function WorkspaceTabSwitcher() {
         return;
       }
 
-      if (tab === 'overview') {
-        // Overview is a standalone panel — no navigation needed.
-        return;
-      }
-
-      if (tab === 'library') {
-        // Library is a standalone panel — no navigation needed.
+      if (tab === 'overview' || tab === 'library') {
+        // Workspace routes pin the active tab via routeTab, so these
+        // overlays must leave the workspace route to become visible.
+        navigate(paths.projectSessions(projectId));
         return;
       }
 
