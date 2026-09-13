@@ -25,6 +25,7 @@ import { Input } from '@/components/ui/input';
 import { invoke } from '@tauri-apps/api/core';
 import { useProject } from '@/contexts/ProjectContext';
 import { fileTreeApi } from '@/lib/api';
+import { useProjectRepos } from '@/hooks';
 
 // ---------------------------------------------------------------------------
 // Types — mirror the Rust QiniuStorage crate structs
@@ -80,7 +81,12 @@ export function NovelLibraryPanel() {
   const [config, setConfig] = useState<QiniuConfig | null>(null);
   const [showConfig, setShowConfig] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [importNotice, setImportNotice] = useState<string | null>(null);
+  const [importNotice, setImportNotice] = useState<{
+    tone: 'success' | 'error';
+    text: string;
+  } | null>(null);
+  const { data: repos } = useProjectRepos(projectId);
+  const rootPath = repos?.[0]?.path ?? '';
 
   // ----- Load config -----
   const loadConfig = useCallback(async () => {
@@ -149,7 +155,9 @@ export function NovelLibraryPanel() {
       });
       setChapters(chList);
     } catch (err) {
-      setPreviewContent(`加载失败: ${err instanceof Error ? err.message : String(err)}`);
+      setPreviewContent(
+        `加载失败: ${err instanceof Error ? err.message : String(err)}`
+      );
     } finally {
       setChaptersLoading(false);
       setPreviewLoading(false);
@@ -157,30 +165,33 @@ export function NovelLibraryPanel() {
   }, []);
 
   // ----- Load a single chapter -----
-  const handleSelectChapter = useCallback(
-    async (chapterKey: string) => {
-      setSelectedChapter(chapterKey);
-      setChapterContent(null);
-      setChapterLoading(true);
-      try {
-        const content = await invoke<string>('qiniu_download_text', {
-          key: chapterKey,
-          maxChars: 0,
-        });
-        setChapterContent(content);
-      } catch (err) {
-        setChapterContent(`加载失败: ${err instanceof Error ? err.message : String(err)}`);
-      } finally {
-        setChapterLoading(false);
-      }
-    },
-    []
-  );
+  const handleSelectChapter = useCallback(async (chapterKey: string) => {
+    setSelectedChapter(chapterKey);
+    setChapterContent(null);
+    setChapterLoading(true);
+    try {
+      const content = await invoke<string>('qiniu_download_text', {
+        key: chapterKey,
+        maxChars: 0,
+      });
+      setChapterContent(content);
+    } catch (err) {
+      setChapterContent(
+        `加载失败: ${err instanceof Error ? err.message : String(err)}`
+      );
+    } finally {
+      setChapterLoading(false);
+    }
+  }, []);
 
   // ----- Import novel into current project's references -----
   const handleImport = useCallback(
     async (item: LibraryItem) => {
       if (!projectId) return;
+      if (!rootPath) {
+        setImportNotice({ tone: 'error', text: '导入失败: 未找到作品目录' });
+        return;
+      }
       setImporting(true);
       setImportNotice(null);
       try {
@@ -188,27 +199,33 @@ export function NovelLibraryPanel() {
           bookKey: item.key,
           maxChars: 0,
         });
-        // Write to .cinyuverse/references/
-        const projectRoot = projectId;
-        const refPath = `${projectRoot}/.cinyuverse/references/${item.title}.md`;
+        const safeName = item.title.replace(/[\\/:*?"<>|]/g, '_');
+        const refPath = `${rootPath}/.cinyuverse/references/${safeName}.md`;
+        await fileTreeApi.createDirectory(`${rootPath}/.cinyuverse/references`);
         await fileTreeApi.saveFile(refPath, content);
-        setImportNotice(`已导入「${item.title}」到 .cinyuverse/references/`);
+        setImportNotice({
+          tone: 'success',
+          text: `已导入「${item.title}」到 .cinyuverse/references/`,
+        });
       } catch (err) {
-        setImportNotice(
-          `导入失败: ${err instanceof Error ? err.message : String(err)}`
-        );
+        setImportNotice({
+          tone: 'error',
+          text: `导入失败: ${describeImportError(err)}`,
+        });
       } finally {
         setImporting(false);
       }
     },
-    [projectId]
+    [projectId, rootPath]
   );
 
   // ----- Render -----
   if (!projectId) {
     return (
       <div className="library-overlay bg-background text-foreground flex h-full w-full items-center justify-center">
-        <p className="text-muted-foreground">{t('panels:overview.noProject')}</p>
+        <p className="text-muted-foreground">
+          {t('panels:overview.noProject')}
+        </p>
       </div>
     );
   }
@@ -234,7 +251,9 @@ export function NovelLibraryPanel() {
             <Settings className="h-3.5 w-3.5" />
           </Button>
           <Button size="sm" variant="ghost" onClick={() => void loadLibrary()}>
-            <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+            <RefreshCw
+              className={cn('h-3.5 w-3.5', loading && 'animate-spin')}
+            />
           </Button>
         </div>
       </div>
@@ -266,10 +285,17 @@ export function NovelLibraryPanel() {
 
       {/* Import notice */}
       {importNotice && (
-        <div className="flex items-center justify-between gap-2 border-b bg-slate-100 dark:bg-slate-800/60 px-4 py-1.5 text-xs text-slate-600 dark:text-slate-300">
-          <span>{importNotice}</span>
+        <div
+          className={cn(
+            'flex items-center justify-between gap-2 border-b px-4 py-1.5 text-xs',
+            importNotice.tone === 'success'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-900/30 dark:text-emerald-300'
+              : 'border-rose-200 bg-rose-50 text-rose-600 dark:border-rose-800/60 dark:bg-rose-900/30 dark:text-rose-300'
+          )}
+        >
+          <span>{importNotice.text}</span>
           <button
-            className="text-slate-400 hover:text-slate-600"
+            className="opacity-60 hover:opacity-100"
             onClick={() => setImportNotice(null)}
           >
             ×
@@ -284,7 +310,9 @@ export function NovelLibraryPanel() {
           {loading && (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-xs text-muted-foreground">加载中...</span>
+              <span className="ml-2 text-xs text-muted-foreground">
+                加载中...
+              </span>
             </div>
           )}
           {error && (
@@ -594,11 +622,14 @@ function QiniuConfigPanel({
           className="h-7 text-xs"
         />
       </div>
-      {error && (
-        <p className="text-xs text-rose-500 mt-1">{error}</p>
-      )}
+      {error && <p className="text-xs text-rose-500 mt-1">{error}</p>}
       <div className="mt-2 flex items-center gap-2">
-        <Button size="sm" variant="secondary" onClick={() => void handleSave()} disabled={saving}>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => void handleSave()}
+          disabled={saving}
+        >
           {saving ? '保存中...' : '保存配置'}
         </Button>
         {config?.is_configured && (
@@ -612,4 +643,20 @@ function QiniuConfigPanel({
 // Utility — cn helper (avoid extra import if not already available)
 function cn(...classes: (string | false | undefined | null)[]): string {
   return classes.filter(Boolean).join(' ');
+}
+
+// Tauri invoke rejects with non-Error values (strings or serialized error
+// objects); stringify them so notices never degrade to "[object Object]".
+function describeImportError(err: unknown): string {
+  if (typeof err === 'string' && err) return err;
+  if (typeof err === 'object' && err !== null) {
+    const message = (err as { message?: unknown }).message;
+    if (typeof message === 'string' && message) return message;
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return String(err);
+    }
+  }
+  return String(err);
 }
