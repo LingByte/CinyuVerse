@@ -414,6 +414,15 @@
     "sending": "Sending",
     "attachmentOnly": "Attachments only"
   },
+  "sessionUsageStats": {
+    "label": "Session usage",
+    "input": "In",
+    "output": "Out",
+    "cacheRead": "Cache read",
+    "cacheWrite": "Cache write",
+    "total": "Total",
+    "cost": "Cost"
+  },
   "usageDashboard": {
     "today": "Today",
     "yesterday": "Yesterday",

@@ -48,6 +48,7 @@ import {
   SessionComposerInput,
 } from './follow-up/SessionComposerInput';
 import { SessionComposerFrame } from './follow-up/SessionComposerFrame';
+import { SessionUsageStatsStrip } from './follow-up/SessionUsageStatsStrip';
 import { DraftConflictBanner } from './follow-up/DraftConflictBanner';
 import { AgentMentionProvider } from './follow-up/AgentMention';
 import { LiveFeedbackNotes } from './follow-up/LiveFeedbackBar';
@@ -1075,6 +1076,7 @@ export function TaskFollowUpSection({
             onAttachImages={handleAttachImages}
           />
         </SessionComposerFrame>
+        <SessionUsageStatsStrip conversationId={sessionId} />
       </div>
     </TooltipProvider>
   );

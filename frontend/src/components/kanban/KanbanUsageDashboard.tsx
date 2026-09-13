@@ -33,6 +33,10 @@ import {
   type ProjectUsageStatistics,
   type ProjectUsageTokenCounts,
 } from '@/lib/api';
+import {
+  formatUsageCost as formatCost,
+  formatUsageNumber as formatNumber,
+} from '@/lib/usageFormat';
 import { cn } from '@/lib/utils';
 import { PlanUsageDashboard } from './PlanUsageDashboard';
 
@@ -368,19 +372,6 @@ function UsageHeatmap({
       ) : null}
     </div>
   );
-}
-
-function formatNumber(value: number): string {
-  const safe = Number.isFinite(value) ? value : 0;
-  if (safe >= 1_000_000_000) return `${(safe / 1_000_000_000).toFixed(1)}B`;
-  if (safe >= 1_000_000) return `${(safe / 1_000_000).toFixed(1)}M`;
-  if (safe >= 1_000) return `${(safe / 1_000).toFixed(1)}K`;
-  return Math.max(0, Math.round(safe)).toString();
-}
-
-function formatCost(value: number): string {
-  const safe = Number.isFinite(value) ? value : 0;
-  return `$${safe.toFixed(4)}`;
 }
 
 function formatShortDate(dateStr: string): string {
