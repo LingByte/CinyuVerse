@@ -15,6 +15,8 @@ function renderUtilityButtons(
       canEnhancePrompt={true}
       onCompactContext={vi.fn()}
       onEnhancePrompt={vi.fn()}
+      onAuditReviseRecheck={vi.fn()}
+      onDistillStyle={vi.fn()}
       {...props}
     />
   );
@@ -78,6 +80,8 @@ describe('ActionBarUtilityButtons', () => {
         canEnhancePrompt={true}
         onCompactContext={vi.fn()}
         onEnhancePrompt={onEnhancePrompt}
+        onAuditReviseRecheck={vi.fn()}
+        onDistillStyle={vi.fn()}
       />
     );
 

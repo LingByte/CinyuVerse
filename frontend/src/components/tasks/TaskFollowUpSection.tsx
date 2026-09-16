@@ -820,6 +820,13 @@ export function TaskFollowUpSection({
     setAuditChainOpen(true);
   }, []);
 
+  const handleDistillStyle = useCallback(() => {
+    const prompt = buildWritingPrompt('distill-style', {});
+    if (!prompt) return;
+    handleEditorChange(prompt);
+    handleComposerSubmit(prompt);
+  }, [handleComposerSubmit, handleEditorChange]);
+
   const handleAuditChainConfirm = useCallback(
     (scope: AuditChainScope, chapterNumber?: number) => {
       const prompt = buildWritingPrompt('audit-revise-recheck', {
@@ -1096,6 +1103,7 @@ export function TaskFollowUpSection({
             onStopExecution={stopExecution}
             onSendFollowUp={onSendFollowUp}
             onAuditReviseRecheck={handleAuditReviseRecheckChain}
+            onDistillStyle={handleDistillStyle}
             onEnhancePrompt={handleEnhancePrompt}
             onClearComments={clearComments}
             onAttachImages={handleAttachImages}

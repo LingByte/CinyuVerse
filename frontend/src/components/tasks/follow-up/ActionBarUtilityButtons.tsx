@@ -1,10 +1,11 @@
-import { Archive, Lightbulb, ListChecks, Loader2 } from 'lucide-react';
+import { Archive, Lightbulb, ListChecks, Loader2, Wand2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
 const COMPACT_CONTEXT_LABEL = '\u538b\u7f29\u4e0a\u4e0b\u6587';
 const ENHANCE_PROMPT_LABEL = '\u63d0\u793a\u8bcd\u4f18\u5316';
 const AUDIT_CHAIN_LABEL = '审校→修订→复检';
+const DISTILL_STYLE_LABEL = '提炼文风';
 
 type ActionBarUtilityButtonsProps = {
   canCompactContext: boolean;
@@ -14,7 +15,8 @@ type ActionBarUtilityButtonsProps = {
   canEnhancePrompt: boolean;
   onCompactContext: () => void;
   onEnhancePrompt: () => void;
-  onAuditReviseRecheck: () => void;
+  onAuditReviseRecheck?: () => void;
+  onDistillStyle?: () => void;
 };
 
 export function ActionBarUtilityButtons({
@@ -26,6 +28,7 @@ export function ActionBarUtilityButtons({
   onCompactContext,
   onEnhancePrompt,
   onAuditReviseRecheck,
+  onDistillStyle,
 }: ActionBarUtilityButtonsProps) {
   return (
     <>
@@ -64,7 +67,7 @@ export function ActionBarUtilityButtons({
       ) : null}
 
       <Button
-        onClick={onAuditReviseRecheck}
+        onClick={() => onAuditReviseRecheck?.()}
         size="sm"
         variant="ghost"
         className="h-7 w-7 p-0"
@@ -72,6 +75,17 @@ export function ActionBarUtilityButtons({
         aria-label={AUDIT_CHAIN_LABEL}
       >
         <ListChecks className="h-3.5 w-3.5" />
+      </Button>
+
+      <Button
+        onClick={() => onDistillStyle?.()}
+        size="sm"
+        variant="ghost"
+        className="h-7 w-7 p-0"
+        title={DISTILL_STYLE_LABEL}
+        aria-label={DISTILL_STYLE_LABEL}
+      >
+        <Wand2 className="h-3.5 w-3.5" />
       </Button>
     </>
   );
