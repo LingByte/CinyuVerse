@@ -119,6 +119,25 @@ export const STYLE_RHYTHM_FORBIDDEN_PATTERNS: string[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Ten-section chapter memo spec — the pre-writing contract. Shared by
+// plan-chapter (generate this chapter's memo) and write-beat's archive
+// chain (generate the NEXT chapter's memo after the chapter lands).
+// ---------------------------------------------------------------------------
+
+export const MEMO_TEN_SECTIONS: string[] = [
+  '第一节 · 章节定位：五幕结构中的位置 / 本章唯一目标（1-2 个核心问题）/ 不写（本章不应出现的元素，含属于后续章节的内容）/ 与前章末段的连续性',
+  '第二节 · 出场角色与戏份：表格（角色 | 戏份 | 在场方式 | 对话配额），控制角色数量与对话预算，防止独白扛信息',
+  '第三节 · 场景分镜：按时间顺序列 A/B/C 场景，每个场景含 时间（精确到小时或时辰）/ 地点（具体到建筑、房间、巷口）/ 画面（镜头感、视觉锚点）/ 必要信息（本场景必须揭示的伏笔或设定）',
+  '第四节 · 核心情绪曲线：表格（节拍 | 情绪），按场景逐段标注；情绪外化优先于情绪宣告',
+  '第五节 · 对话策略（防 AIGC 硬判）：逐场景列必含对话，指定角色必须说出至少 1 句带具体信息的话、做出至少 1 个违反常识的举动——信息由对话承担，不落入独白',
+  '第六节 · 关键物品 / 锚点：表格（物品 | 出现位置 | 处理方式），首次确立的细节描述（材质、纹样、损伤）在后续章节保持一致',
+  '第七节 · 红线与硬指标：把 `writing-rules.md` 与 `SolutionToWrite.md` 的全部硬约束整合为 checkbox（节奏句式 / 对话与面板 / 数字与动词 / 活人感 / 文本执行红线 / 时空防漂移），撰写时逐项满足，不必再回查两个文件',
+  '第八节 · 本章完成判定：把 beat-NN 的 `completion_criteria` 翻译成逐条 checkbox，全部满足才可将节拍标为 completed',
+  '第九节 · 不写清单：主动回避的内容（氛围到了也不许写），并注明每项的信息揭示交给谁承担',
+  '第十节 · 参考片段锚点：写作前可重读的文件与章节（style-sample / world-view 对应小节 / 前章正文）',
+];
+
+// ---------------------------------------------------------------------------
 // Foundation templates — initialize the book's core metadata
 // ---------------------------------------------------------------------------
 
@@ -183,33 +202,29 @@ const planChapter: WritingPromptTemplate = {
   id: 'plan-chapter',
   category: 'chapter',
   label: '规划章节',
-  description: '为目标章节生成备忘录和写作意图',
+  description: '为目标章节生成十节标准化写作备忘录',
   build: (input) => {
     const ch = input.chapterNumber ?? 1;
+    const padded = String(ch).padStart(2, '0');
+    const prevPadded = String(ch - 1).padStart(2, '0');
     return [
-      `请为第 ${ch} 章生成写作备忘录。`,
+      `请为第 ${ch} 章生成十节标准化写作备忘录。`,
       '',
       '## 任务',
       '',
-      '1. 读取 `.cinyuverse/outline.md` 找到第 ' + ch + ' 章的细纲',
-      '2. 读取 `.cinyuverse/chapter-summaries.md` 了解前文摘要',
-      '3. 读取 `.cinyuverse/hooks.md` 查看未回收的伏笔',
-      '4. 读取 `.cinyuverse/current-state.md` 了解当前世界状态',
-      '5. 读取 `.cinyuverse/characters/` 下的角色卡了解出场角色',
+      '1. 读取 `.cinyuverse/story-graph.json`，按 `chapter_hint` 定位本章对应的 beat-NN，',
+      '   摘出其 description / characters / hooks / completion_criteria 及前后依赖边',
+      ch > 1
+        ? `2. 读取 \`chapters/chapter-${prevPadded}.md\` 的结尾段（尾景、人物位置、时间线、未决动作）作为衔接锚点`
+        : '2. 本章为第一章，第一节「与前章的连续性」写「无（开篇）」',
+      '3. 读取 `.cinyuverse/` 下的大纲、章节摘要、伏笔池、当前状态、角色卡、',
+      '   `writing-rules.md` 与 `SolutionToWrite.md`（第七节红线从这里整合）',
       '',
-      '## 输出',
+      '## 输出：十节标准化备忘录',
       '',
-      '生成章节备忘录，包含：',
-      '- **章节标题**（贴合内容）',
-      '- **主要事件**（3-5 个关键情节节点）',
-      '- **出场角色**（列出角色名和在本章的作用）',
-      '- **伏笔推进**（本章需要推进或回收的伏笔）',
-      '- **节奏设计**（开篇、发展、高潮、收尾的节奏安排）',
-      '- **字数目标**：' + (input.wordCount ?? 3000) + ' 字',
+      ...MEMO_TEN_SECTIONS.map((section) => `- ${section}`),
       '',
-      '将备忘录写入 `chapters/chapter-' +
-        String(ch).padStart(2, '0') +
-        '-memo.md`',
+      `将备忘录写入 \`memo/chapter-${padded}-memo.md\`（\`memo/\` 与 \`chapters/\` 同级，不存在则先创建）`,
       input.guidance ? `\n## 作者指导\n\n${input.guidance}` : '',
     ]
       .filter(Boolean)
@@ -225,17 +240,25 @@ const writeChapter: WritingPromptTemplate = {
   build: (input) => {
     const ch = input.chapterNumber ?? 1;
     const padded = String(ch).padStart(2, '0');
+    const prevPadded = String(Math.max(ch - 1, 1)).padStart(2, '0');
     return [
       `请撰写第 ${ch} 章正文。`,
       '',
       '## 任务',
       '',
-      `1. 读取 \`chapters/chapter-${padded}-memo.md\` 获取章节备忘录`,
+      `1. 读取 \`memo/chapter-${padded}-memo.md\` 十节备忘录：按第三/四/五/六节`,
+      '   （场景分镜 / 情绪曲线 / 对话策略 / 关键物品）撰写，第七节红线逐项满足，',
+      '   第八节完成判定逐条核对，第九节不写清单主动回避',
       '2. 读取 `.cinyuverse/characters/` 下本章出场角色的角色卡',
       '3. 读取 `.cinyuverse/writing-rules.md` 遵循写作规则和禁词表',
       '4. 读取 `.cinyuverse/style-sample.md` 参考文风',
-      '5. 读取 `.cinyuverse/chapter-summaries.md` 中最近 3 章的摘要保持连贯',
-      `6. 若 \`chapters/chapter-${padded}.md\` 已有旧稿，本次为重写：只依据备忘录与设定从零撰写并覆盖，不参照、不修补旧稿（微调旧文无法消除文风问题）`,
+      `5. 去 AI 化手法与硬指标参照 \`.cinyuverse/SolutionToWrite.md\`：优先用对话承载信息，`,
+      '   避免「独行 + 数字盘点」开场与规则自问自答独白；文件缺失则按正文语境自然写作',
+      ch > 1
+        ? `6. 读取 \`chapters/chapter-${prevPadded}.md\` 的结尾段（尾景、人物位置、时间线）作为衔接锚点`
+        : '6. 本章为第一章，无需前章锚点',
+      '7. 读取 `.cinyuverse/chapter-summaries.md` 中最近 3 章的摘要保持连贯',
+      `8. 若 \`chapters/chapter-${padded}.md\` 已有旧稿，本次为重写：只依据备忘录与设定从零撰写并覆盖，不参照、不修补旧稿（微调旧文无法消除文风问题）`,
       '',
       '## 要求',
       '',
@@ -1057,8 +1080,12 @@ const writeBeat: WritingPromptTemplate = {
       '## 撰写要求',
       '',
       '1. 读取 `.cinyuverse/` 下的所有设定文件（世界观、大纲、角色卡、写作规则、文风样本、伏笔池、当前状态）',
-      '2. 读取 `chapters/` 下已有的章节正文，保持人设、设定与情节连贯；句式节奏不要向已有章节看齐——那正是要避免的',
+      '2. 衔接前章：读取上一章正文的结尾段（尾景、人物位置、时间线、未决动作），本章开头必须与之连续；',
+      '   其余历史章节按需查证，句式节奏不要向已有章节看齐——那正是要避免的',
       '3. **对照图结构撰写**：',
+      '   - 若存在 `memo/chapter-NN-memo.md`（十节备忘录），按其第三/四/五/六节',
+      '     （场景分镜 / 情绪曲线 / 对话策略 / 关键物品）撰写，第七节红线逐项满足，',
+      '     第八节完成判定逐条核对；没有备忘录则直接依据节拍图',
       '   - 检查当前节拍的 `completion_criteria`，正文必须满足所有条件',
       '   - 检查 `hooks` 字段，正文中要自然融入对应的伏笔操作（埋设/推进/回收）',
       '   - 检查 `characters` 字段，所有标注角色都应在正文中出场',
@@ -1066,11 +1093,21 @@ const writeBeat: WritingPromptTemplate = {
       '   - 沿 `character_arc` 边检查角色弧线的其他节点，确保角色成长连贯',
       '   - 若目标章节已有旧稿，只依据节拍图与设定从零撰写并覆盖，不参照、不修补旧稿',
       '4. 将正文写入 `chapters/chapter-NN.md`（NN 为章节号补零）',
-      '5. 撰写完成后更新项目状态：',
-      '   - 更新 `.cinyuverse/chapter-summaries.md`（追加本章摘要）',
-      '   - 更新 `.cinyuverse/current-state.md`（世界状态变化）',
-      '   - 更新 `.cinyuverse/hooks.md`（伏笔状态变化）',
-      '   - 更新 `.cinyuverse/story-graph.json` 中本节拍的 `status` 为 `completed`',
+      '5. 正文落盘后立即执行五项归档（少一项都会导致后续章节失锚或漂移）：',
+      '   a. 追加 `.cinyuverse/chapter-summaries.md`：`## 第N章 — 标题` + 节拍与字数 +',
+      '      剧情主线（按场景 A/B/C 列时间地点事件）+ 关键人物锚点 + 伏笔埋设/推进进度 +',
+      '      章节标题变更（原计划 → 实际）+ 硬指标核验结果',
+      '   b. 更新 `.cinyuverse/current-state.md`：当前节拍（下一节拍）/ 已完成节拍区间 /',
+      '      当前字数 / 主角所在时间与地点（章末）/ 主角三层心境（表层、中层、深层）/',
+      '      未完成动作（章末悬而未决）/ 场景与物品位置 / 关系变化',
+      '   c. 更新 `.cinyuverse/hooks.md`：本章涉及的每个伏笔按 状态 / 起始章节 / 埋设内容 /',
+      '      本章推进 / 下一步推进 记录；未涉及的伏笔不动',
+      '   d. 更新 `.cinyuverse/story-graph.json`：本节拍 `status` → `completed`；先把图中其他',
+      '      `current` 清为 `planned`，再将下一节拍（`sort_order` 顺延）设为 `current`——',
+      '      全图任何时刻只有一个 `current`',
+      '   e. 生成下一章十节备忘录 `memo/chapter-(NN+1)-memo.md`（章节号补零；若本节拍是',
+      '      当前卷最后一个节拍则跳过本项），结构如下：',
+      ...MEMO_TEN_SECTIONS.map((section) => `      - ${section}`),
       '',
       '## 文风要求',
       '',

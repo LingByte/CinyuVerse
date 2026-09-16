@@ -88,7 +88,37 @@ describe('writingPrompts', () => {
 
   it('plan-chapter includes memo file path with zero-padded number', () => {
     const prompt = buildWritingPrompt('plan-chapter', { chapterNumber: 5 });
-    expect(prompt).toContain('chapter-05-memo.md');
+    expect(prompt).toContain('memo/chapter-05-memo.md');
+  });
+
+  it('plan-chapter scaffolds the ten-section memo from the beat graph', () => {
+    const prompt = buildWritingPrompt('plan-chapter', { chapterNumber: 5 });
+    expect(prompt).toContain('story-graph.json');
+    expect(prompt).toContain('chapter-04.md');
+    expect(prompt).toContain('第一节 · 章节定位');
+    expect(prompt).toContain('第五节 · 对话策略');
+    expect(prompt).toContain('第八节 · 本章完成判定');
+    expect(prompt).toContain('第十节 · 参考片段锚点');
+  });
+
+  it('write-beat carries the five-item archive chain', () => {
+    const prompt = buildWritingPrompt('write-beat', {
+      beatId: 'beat-005',
+      beatTitle: '测试节拍',
+    });
+    expect(prompt).toContain('五项归档');
+    expect(prompt).toContain('chapter-summaries.md');
+    expect(prompt).toContain('current-state.md');
+    expect(prompt).toContain('hooks.md');
+    expect(prompt).toContain('story-graph.json');
+    expect(prompt).toContain('-memo.md');
+    expect(prompt).toContain('只有一个 `current`');
+  });
+
+  it('write-chapter anchors on the previous chapter and SolutionToWrite', () => {
+    const prompt = buildWritingPrompt('write-chapter', { chapterNumber: 12 });
+    expect(prompt).toContain('chapter-11.md');
+    expect(prompt).toContain('SolutionToWrite.md');
   });
 
   it('write-chapter includes chapter file path with zero-padded number', () => {
