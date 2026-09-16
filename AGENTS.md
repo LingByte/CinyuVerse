@@ -46,3 +46,17 @@ Recent history uses Conventional Commit style: `feat:`, `fix(scope):`, `chore(sc
 ## Security & Configuration Tips
 
 Keep secrets in local `.env` files only. `.dev-ports.json` and generated Tauri dev config are local runtime artifacts. When changing database queries, generated types, or agent configuration schemas, run the matching check command so CI catches no stale artifacts.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs are tracked as local Markdown files under `.scratch/`; external pull requests are not a triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The local tracker uses the default five state strings: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repository uses a single context: root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
