@@ -364,6 +364,7 @@
     "jumpBack": "Back to previous user message",
     "statusLabel": "Status",
     "generating": "Generating",
+    "cancelling": "Cancelling",
     "modelLabel": "Model",
     "elapsedLabel": "Elapsed",
     "completedLabel": "Completed",

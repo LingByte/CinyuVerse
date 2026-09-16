@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useAttemptExecution } from './useAttemptExecution';
 
@@ -56,6 +56,10 @@ describe('useAttemptExecution', () => {
     mocks.cancelConversation.mockResolvedValue(undefined);
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('cancels the in-flight conversation through its public turn API', async () => {
     const { result } = renderHook(() =>
       useAttemptExecution(undefined, 'task-1', 'conversation-1')
@@ -70,5 +74,34 @@ describe('useAttemptExecution', () => {
       reason: '用户请求停止',
     });
     expect(mocks.cancelPrompt).not.toHaveBeenCalled();
+  });
+
+  it('releases the stop control when the cancel acknowledgement times out', async () => {
+    vi.useFakeTimers();
+    // Durable settlement never lands — the stop control must come back
+    // on its own so the user can retry.
+    mocks.cancelConversation.mockImplementation(
+      () => new Promise<never>(() => {})
+    );
+    const { result } = renderHook(() =>
+      useAttemptExecution(undefined, 'task-1', 'conversation-1')
+    );
+
+    let stopped: Promise<void> = Promise.resolve();
+    let rejected = false;
+    act(() => {
+      stopped = result.current.stopExecution();
+    });
+    stopped.catch(() => {
+      rejected = true;
+    });
+    expect(mocks.setIsStopping).toHaveBeenLastCalledWith(true);
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    await stopped;
+    // Timeout settles the race (not rejects) and releases the stop control
+    // so the user can retry while settlement continues in the background.
+    expect(rejected).toBe(false);
+    expect(mocks.setIsStopping).toHaveBeenLastCalledWith(false);
   });
 });

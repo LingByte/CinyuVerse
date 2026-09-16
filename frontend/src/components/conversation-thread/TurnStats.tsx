@@ -18,6 +18,8 @@ export type TurnStatsProps = {
   copyText?: string | null;
   onJumpBack?: (() => void) | null;
   live?: boolean;
+  /** The user pressed stop; the durable settlement has not landed yet. */
+  cancelling?: boolean;
   className?: string;
 };
 
@@ -87,6 +89,7 @@ export function TurnStats({
   copyText,
   onJumpBack,
   live = false,
+  cancelling = false,
   className,
 }: TurnStatsProps) {
   const { t } = useTranslation(['conversation', 'common']);
@@ -158,7 +161,9 @@ export function TurnStats({
             <StatItem
               icon={Gauge}
               label={t('turnStats.statusLabel')}
-              value={t('turnStats.generating')}
+              value={t(
+                cancelling ? 'turnStats.cancelling' : 'turnStats.generating'
+              )}
             />
           ) : null}
           {modelText ? (

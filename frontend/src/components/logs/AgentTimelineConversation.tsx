@@ -71,6 +71,10 @@ import {
   type ConversationTimelineTurn,
 } from '@/features/conversation/conversationStore';
 import { useConversationTimeline } from '@/features/conversation/useConversationTimeline';
+import {
+  clearTurnCancelling,
+  useTurnCancelling,
+} from '@/features/conversation/turnCancelIntent';
 import { WorkflowRunCard } from '@/features/workflow/WorkflowRunCard';
 import { useOptionalEntries } from '@/contexts/EntriesContext';
 import { useOptionalConversationStatus } from '@/contexts/ConversationStatusContext';
@@ -418,6 +422,16 @@ const AgentTimelineConversation = forwardRef<
   const setConversationChildrenDock = conversationStatus?.setChildrenDock;
   const usesComposerStatusDock = conversationStatus?.enabled ?? false;
   const timeline = conversation.timeline;
+  const turnCancelling = useTurnCancelling(sessionId);
+  const hasStreamingTurn = useMemo(
+    () => timeline.some((row) => row.phase === 'streaming'),
+    [timeline]
+  );
+  useEffect(() => {
+    if (!hasStreamingTurn && sessionId) {
+      clearTurnCancelling(sessionId);
+    }
+  }, [hasStreamingTurn, sessionId]);
   const isTurnInFlight = useMemo(
     () => isTimelineTurnInFlight(timeline),
     [timeline]
@@ -496,9 +510,7 @@ const AgentTimelineConversation = forwardRef<
     if (!sessionId) return;
     try {
       const snapshot = await agentsApi.snapshot();
-      const session = snapshot.sessions.find(
-        (s) => s.id === sessionId
-      );
+      const session = snapshot.sessions.find((s) => s.id === sessionId);
       if (!session?.connection_id) {
         toast.error(getErrorMessage(new Error('No active agent connection')));
         return;
@@ -986,6 +998,7 @@ const AgentTimelineConversation = forwardRef<
           startedAt={row.turn.timestamp}
           copyText={copyText}
           onJumpBack={onJumpBack}
+          cancelling={turnCancelling}
         />
       ) : (
         <TurnStats
@@ -1000,6 +1013,7 @@ const AgentTimelineConversation = forwardRef<
       liveStats,
       rowVirtualizer,
       scrollBehavior,
+      turnCancelling,
       userMessageIndexes,
     ]
   );

@@ -364,6 +364,7 @@
     "jumpBack": "回到上一条用户消息",
     "statusLabel": "状态",
     "generating": "生成中",
+    "cancelling": "取消中",
     "modelLabel": "模型",
     "elapsedLabel": "耗时",
     "completedLabel": "完成",

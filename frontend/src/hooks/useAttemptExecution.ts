@@ -10,6 +10,17 @@ import type { AttemptData } from '@/lib/types';
 import type { ExecutionProcess } from 'shared/types';
 import { useAgentWorkbench } from '@/features/agents/useAgentWorkbench';
 import { conversationApi } from '@/features/conversation/conversationApi';
+import {
+  clearTurnCancelling,
+  markTurnCancelling,
+} from '@/features/conversation/turnCancelIntent';
+
+// How long to wait for the durable cancel to be acknowledged before
+// releasing the stop control again. Under backend pressure (e.g. the
+// durable store draining slowly) settlement can take far longer than a
+// user is willing to wait; re-enabling the control lets them retry while
+// the in-flight settlement continues in the background.
+const CANCEL_ACK_TIMEOUT_MS = 10_000;
 
 export function useAttemptExecution(
   attemptId?: string,
@@ -70,6 +81,13 @@ export function useAttemptExecution(
   const stopExecution = useCallback(async () => {
     if ((!attemptId && !sessionId) || isStopping) return;
 
+    const releaseStopping = () => {
+      setIsStopping(false);
+      if (attemptId) {
+        clearStopToastSuppression(attemptId);
+      }
+    };
+
     try {
       setIsStopping(true);
       if (attemptId) {
@@ -77,10 +95,33 @@ export function useAttemptExecution(
       }
 
       if (sessionId) {
-        await conversationApi.cancel({
-          conversationId: sessionId,
-          reason: '用户请求停止',
-        });
+        // Show the cancelling state in the timeline immediately instead of
+        // waiting for the durable settlement to land.
+        markTurnCancelling(sessionId);
+        let timedOut = false;
+        try {
+          await Promise.race([
+            conversationApi.cancel({
+              conversationId: sessionId,
+              reason: '用户请求停止',
+            }),
+            // Settle the race on timeout instead of rejecting it — the
+            // settlement is still in flight in the background; a rejection
+            // here would surface as a spurious stop error.
+            new Promise<void>((resolveTimeout) => {
+              window.setTimeout(() => {
+                timedOut = true;
+                resolveTimeout();
+              }, CANCEL_ACK_TIMEOUT_MS);
+            }),
+          ]);
+        } catch (error) {
+          clearTurnCancelling(sessionId);
+          throw error;
+        }
+        if (timedOut) {
+          releaseStopping();
+        }
         return;
       }
 
@@ -88,10 +129,7 @@ export function useAttemptExecution(
         await attemptsApi.stop(attemptId);
       }
     } catch (error) {
-      setIsStopping(false);
-      if (attemptId) {
-        clearStopToastSuppression(attemptId);
-      }
+      releaseStopping();
       console.error('Failed to stop executions:', error);
       throw error;
     }
