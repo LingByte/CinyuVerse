@@ -58,6 +58,15 @@ import { useComposerPrefillStore } from '@/stores/useComposerPrefillStore';
 import { useKanbanSessionContext } from '@/contexts/KanbanSessionContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { OverviewSessionSlot } from '@/components/panels/OverviewSessionSlot';
 // The JSON file format uses arrays for characters/hooks, while the SQLite
 // model uses JSON strings. We use a local type that matches the file format.
@@ -854,9 +863,13 @@ function layoutProgressive(
 
 export function NovelOverviewPanel() {
   const { t } = useTranslation(['panels', 'writingPrompts']);
-  const { projectId } = useProject();
+  const { projectId, project } = useProject();
   const { data: repos } = useProjectRepos(projectId);
   const rootPath = repos?.[0]?.path ?? '';
+
+  const [manualBookName, setManualBookName] = useState<string | null>(null);
+  const [bookNameDialogOpen, setBookNameDialogOpen] = useState(false);
+  const [bookNameInput, setBookNameInput] = useState('');
 
   const [stats, setStats] = useState<OverviewStats>(EMPTY_STATS);
   const [graph, setGraph] = useState<JsonGraph | null>(null);
@@ -1246,15 +1259,42 @@ export function NovelOverviewPanel() {
     [visibleRightSession, requestPrefill, setRightPanelVisible, t]
   );
 
+  const resolvedBookName = manualBookName ?? project?.name ?? '';
+
+  const fillGeneratePrompt = useCallback(
+    (bookName?: string) => {
+      const tpl = getWritingPrompt('generate-story-graph');
+      if (!tpl) return;
+      const prompt = tpl.build({
+        bookName: bookName || undefined,
+        guidance: '',
+      });
+      void fillPromptIntoSession(prompt);
+    },
+    [fillPromptIntoSession]
+  );
+
   const handleGenerateGraph = useCallback(() => {
-    const tpl = getWritingPrompt('generate-story-graph');
-    if (!tpl) return;
-    const prompt = tpl.build({
-      bookName: undefined,
-      guidance: '',
-    });
-    void fillPromptIntoSession(prompt);
-  }, [fillPromptIntoSession]);
+    if (!resolvedBookName.trim()) {
+      setBookNameInput('');
+      setBookNameDialogOpen(true);
+      return;
+    }
+    fillGeneratePrompt(resolvedBookName);
+  }, [resolvedBookName, fillGeneratePrompt]);
+
+  const handleBookNameConfirm = useCallback(() => {
+    const name = bookNameInput.trim();
+    setBookNameDialogOpen(false);
+    if (name) setManualBookName(name);
+    fillGeneratePrompt(name);
+  }, [bookNameInput, fillGeneratePrompt]);
+
+  // 取消或留空也要继续生成：书名回退到模板默认的「未命名作品」。
+  const handleBookNameCancel = useCallback(() => {
+    setBookNameDialogOpen(false);
+    fillGeneratePrompt();
+  }, [fillGeneratePrompt]);
 
   const handleInferBeat = useCallback(() => {
     if (!selectedBeat || !beatContext || !graph) return;
@@ -1727,6 +1767,40 @@ export function NovelOverviewPanel() {
 
       {/* Full-height conversation session on the right */}
       <OverviewSessionSlot visible={true} />
+
+      <Dialog
+        open={bookNameDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) handleBookNameCancel();
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {t('panels:overview.bookNameDialogTitle')}
+            </DialogTitle>
+            <DialogDescription>
+              {t('panels:overview.bookNameDialogDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={bookNameInput}
+            onChange={(e) => setBookNameInput(e.target.value)}
+            placeholder={t('panels:overview.bookNameInputPlaceholder')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleBookNameConfirm();
+            }}
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={handleBookNameCancel}>
+              {t('common:cancel')}
+            </Button>
+            <Button onClick={handleBookNameConfirm}>
+              {t('common:confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,9 +1,10 @@
-import { Archive, Lightbulb, Loader2 } from 'lucide-react';
+import { Archive, Lightbulb, ListChecks, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
 const COMPACT_CONTEXT_LABEL = '\u538b\u7f29\u4e0a\u4e0b\u6587';
 const ENHANCE_PROMPT_LABEL = '\u63d0\u793a\u8bcd\u4f18\u5316';
+const AUDIT_CHAIN_LABEL = '审校→修订→复检';
 
 type ActionBarUtilityButtonsProps = {
   canCompactContext: boolean;
@@ -13,6 +14,7 @@ type ActionBarUtilityButtonsProps = {
   canEnhancePrompt: boolean;
   onCompactContext: () => void;
   onEnhancePrompt: () => void;
+  onAuditReviseRecheck: () => void;
 };
 
 export function ActionBarUtilityButtons({
@@ -23,6 +25,7 @@ export function ActionBarUtilityButtons({
   canEnhancePrompt,
   onCompactContext,
   onEnhancePrompt,
+  onAuditReviseRecheck,
 }: ActionBarUtilityButtonsProps) {
   return (
     <>
@@ -59,6 +62,17 @@ export function ActionBarUtilityButtons({
           )}
         </Button>
       ) : null}
+
+      <Button
+        onClick={onAuditReviseRecheck}
+        size="sm"
+        variant="ghost"
+        className="h-7 w-7 p-0"
+        title={AUDIT_CHAIN_LABEL}
+        aria-label={AUDIT_CHAIN_LABEL}
+      >
+        <ListChecks className="h-3.5 w-3.5" />
+      </Button>
     </>
   );
 }

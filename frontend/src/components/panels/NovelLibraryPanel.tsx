@@ -19,13 +19,18 @@ import {
   Settings,
   List,
   ArrowLeft,
+  Wand2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { invoke } from '@tauri-apps/api/core';
 import { useProject } from '@/contexts/ProjectContext';
+import { useKanbanSessionContext } from '@/contexts/KanbanSessionContext';
 import { fileTreeApi } from '@/lib/api';
 import { useProjectRepos } from '@/hooks';
+import { getWritingPrompt } from '@/lib/writingPrompts';
+import { useComposerPrefillStore } from '@/stores/useComposerPrefillStore';
+import { useLayoutStore } from '@/stores/useLayoutStore';
 
 // ---------------------------------------------------------------------------
 // Types — mirror the Rust QiniuStorage crate structs
@@ -219,6 +224,28 @@ export function NovelLibraryPanel() {
     [projectId, rootPath]
   );
 
+  // ----- style distillation -----
+  const { visibleRightSession } = useKanbanSessionContext();
+  const setRightPanelVisible = useLayoutStore(
+    (state) => state.setRightPanelVisible
+  );
+  const requestPrefill = useComposerPrefillStore((s) => s.requestPrefill);
+
+  const handleDistillStyle = useCallback(() => {
+    if (!visibleRightSession?.sessionId) {
+      setImportNotice({
+        tone: 'error',
+        text: '请先在右侧创建一个创作会话，再提炼文风。',
+      });
+      setRightPanelVisible(true);
+      return;
+    }
+    const tpl = getWritingPrompt('distill-style');
+    if (!tpl) return;
+    requestPrefill(tpl.build({ guidance: '' }));
+    setRightPanelVisible(true);
+  }, [visibleRightSession, requestPrefill, setRightPanelVisible]);
+
   // ----- Render -----
   if (!projectId) {
     return (
@@ -406,6 +433,14 @@ export function NovelLibraryPanel() {
                   >
                     <Download className="h-3.5 w-3.5" />
                     {importing ? '导入中...' : '导入到当前作品参考库'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleDistillStyle}
+                  >
+                    <Wand2 className="h-3.5 w-3.5" />
+                    提炼文风
                   </Button>
                   <a
                     href={selectedItem.source_url}

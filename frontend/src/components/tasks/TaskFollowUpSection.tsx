@@ -8,6 +8,11 @@ import { useBranchStatus } from '@/hooks';
 import { useAttemptRepo } from '@/hooks/useAttemptRepo';
 import { useAttemptExecution } from '@/hooks/useAttemptExecution';
 import { cn } from '@/lib/utils';
+import { buildWritingPrompt } from '@/lib/writingPrompts';
+import {
+  AuditChainDialog,
+  type AuditChainScope,
+} from '@/components/tasks/follow-up/AuditChainDialog';
 import { useReview } from '@/contexts/ReviewProvider';
 import { useEntries } from '@/contexts/EntriesContext';
 import { useConversationStatus } from '@/contexts/ConversationStatusContext';
@@ -809,6 +814,25 @@ export function TaskFollowUpSection({
     setFollowUpMessage,
   });
 
+  const [auditChainOpen, setAuditChainOpen] = useState(false);
+
+  const handleAuditReviseRecheckChain = useCallback(() => {
+    setAuditChainOpen(true);
+  }, []);
+
+  const handleAuditChainConfirm = useCallback(
+    (scope: AuditChainScope, chapterNumber?: number) => {
+      const prompt = buildWritingPrompt('audit-revise-recheck', {
+        auditScope: scope,
+        chapterNumber,
+      });
+      if (!prompt) return;
+      handleEditorChange(prompt);
+      handleComposerSubmit(prompt);
+    },
+    [handleComposerSubmit, handleEditorChange]
+  );
+
   const getPreviewInsertionMessage = useCallback(
     () => localMessage,
     [localMessage]
@@ -1071,12 +1095,18 @@ export function TaskFollowUpSection({
             onSteer={handleSteer}
             onStopExecution={stopExecution}
             onSendFollowUp={onSendFollowUp}
+            onAuditReviseRecheck={handleAuditReviseRecheckChain}
             onEnhancePrompt={handleEnhancePrompt}
             onClearComments={clearComments}
             onAttachImages={handleAttachImages}
           />
         </SessionComposerFrame>
         <SessionUsageStatsStrip conversationId={sessionId} />
+        <AuditChainDialog
+          open={auditChainOpen}
+          onOpenChange={setAuditChainOpen}
+          onConfirm={handleAuditChainConfirm}
+        />
       </div>
     </TooltipProvider>
   );

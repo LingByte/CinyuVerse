@@ -52,6 +52,7 @@ interface ActionBarProps {
   onSteer?: () => void;
   onStopExecution: () => void;
   onSendFollowUp: () => void;
+  onAuditReviseRecheck?: () => void;
   onEnhancePrompt: () => void;
   onClearComments: () => void;
   onAttachImages: (files: File[]) => void;
@@ -93,6 +94,7 @@ export function ActionBar({
   onSteer,
   onStopExecution,
   onSendFollowUp,
+  onAuditReviseRecheck,
   onEnhancePrompt,
   onClearComments,
   onAttachImages,
@@ -148,6 +150,7 @@ export function ActionBar({
         canEnhancePrompt={canEnhancePrompt}
         onCompactContext={onCompactContext}
         onEnhancePrompt={onEnhancePrompt}
+        onAuditReviseRecheck={onAuditReviseRecheck}
       />
 
       {isAttemptRunning ? (

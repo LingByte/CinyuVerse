@@ -37,6 +37,40 @@ describe('writingPrompts', () => {
     expect(buildWritingPrompt('does-not-exist', {})).toBeNull();
   });
 
+  it('distill-style reads references and writes style-sample', () => {
+    const prompt = buildWritingPrompt('distill-style', { guidance: '' });
+    expect(prompt).toContain('.cinyuverse/references/');
+    expect(prompt).toContain('.cinyuverse/style-sample.md');
+    expect(prompt).toContain('不要凭空编造文风');
+  });
+
+  it('distill-style appends author guidance', () => {
+    const prompt = buildWritingPrompt('distill-style', {
+      guidance: '侧重对话',
+    });
+    expect(prompt).toContain('## 作者补充');
+    expect(prompt).toContain('侧重对话');
+  });
+
+  it('audit-revise-recheck chains the three stages', () => {
+    const prompt = buildWritingPrompt('audit-revise-recheck', {
+      auditScope: 'chapter',
+      chapterNumber: 3,
+    });
+    expect(prompt).toContain('阶段一：审校');
+    expect(prompt).toContain('阶段二：修订');
+    expect(prompt).toContain('阶段三：复检');
+    expect(prompt).toContain('chapter-03.md');
+  });
+
+  it('audit-revise-recheck supports whole-book scope', () => {
+    const prompt = buildWritingPrompt('audit-revise-recheck', {
+      auditScope: 'book',
+    });
+    expect(prompt).toContain('全书');
+    expect(prompt).toContain('逐章');
+  });
+
   it('buildWritingPrompt produces non-empty string for known id', () => {
     const input: WritingPromptInput = {
       bookName: '测试书',

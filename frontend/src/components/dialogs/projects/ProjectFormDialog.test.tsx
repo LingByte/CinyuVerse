@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CINYUVERSE_ENV_EXAMPLE,
+  CINYUVERSE_SOLUTION_TO_WRITE_MD,
   CINYUVERSE_WRITING_RULES_MD,
   ProjectFormDialog,
   type ProjectFormDialogProps,
@@ -105,6 +106,14 @@ describe('ProjectFormDialog', () => {
       'text-xs',
       'bg-[var(--surface-control-hover)]'
     );
+  });
+
+  it('scaffolds SolutionToWrite.md with the measured detectability tiers', () => {
+    expect(CINYUVERSE_SOLUTION_TO_WRITE_MD).toContain('## 可检测性五档');
+    expect(CINYUVERSE_SOLUTION_TO_WRITE_MD).toContain('0.290');
+    expect(CINYUVERSE_SOLUTION_TO_WRITE_MD).toContain('送检规范');
+    expect(CINYUVERSE_SOLUTION_TO_WRITE_MD).toContain('文本执行红线');
+    expect(CINYUVERSE_SOLUTION_TO_WRITE_MD).toContain('活人感加法');
   });
 
   it('scaffolds writing-rules.md with every style rhythm constraint', () => {
