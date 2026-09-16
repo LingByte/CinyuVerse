@@ -51,10 +51,15 @@ import {
 } from 'lucide-react';
 import { useProject } from '@/contexts/ProjectContext';
 import { useProjectRepos } from '@/hooks/useProjectRepos';
+import {
+  useWritingPipelineProgress,
+  type WritingGuideStepId,
+} from '@/hooks/useWritingPipelineProgress';
 import { fileTreeApi } from '@/lib/api';
 import { getWritingPrompt } from '@/lib/writingPrompts';
 import { useLayoutStore } from '@/stores/useLayoutStore';
 import { useComposerPrefillStore } from '@/stores/useComposerPrefillStore';
+import { WritingGuideCard } from '@/components/panels/WritingGuideCard';
 import { useKanbanSessionContext } from '@/contexts/KanbanSessionContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -870,6 +875,9 @@ export function NovelOverviewPanel() {
   const [manualBookName, setManualBookName] = useState<string | null>(null);
   const [bookNameDialogOpen, setBookNameDialogOpen] = useState(false);
   const [bookNameInput, setBookNameInput] = useState('');
+  const [bookNameAction, setBookNameAction] = useState<
+    'generate-story-graph' | 'init-foundation' | 'create-character'
+  >('generate-story-graph');
 
   const [stats, setStats] = useState<OverviewStats>(EMPTY_STATS);
   const [graph, setGraph] = useState<JsonGraph | null>(null);
@@ -1261,12 +1269,26 @@ export function NovelOverviewPanel() {
 
   const resolvedBookName = manualBookName ?? project?.name ?? '';
 
-  const fillGeneratePrompt = useCallback(
-    (bookName?: string) => {
-      const tpl = getWritingPrompt('generate-story-graph');
+  // Name-gated actions: book templates fall back to the template default
+  // when the dialog is left empty; a character card requires a real name.
+  type NameAction =
+    | 'generate-story-graph'
+    | 'init-foundation'
+    | 'create-character';
+
+  const fillNameAction = useCallback(
+    (action: NameAction, name?: string) => {
+      const tpl = getWritingPrompt(action);
       if (!tpl) return;
+      if (action === 'create-character') {
+        if (!name?.trim()) return;
+        void fillPromptIntoSession(
+          tpl.build({ characterName: name.trim(), guidance: '' })
+        );
+        return;
+      }
       const prompt = tpl.build({
-        bookName: bookName || undefined,
+        bookName: name || undefined,
         guidance: '',
       });
       void fillPromptIntoSession(prompt);
@@ -1274,27 +1296,47 @@ export function NovelOverviewPanel() {
     [fillPromptIntoSession]
   );
 
+  const runNameAction = useCallback(
+    (action: NameAction) => {
+      if (action === 'create-character') {
+        // A card is named after its file — always ask, never reuse the
+        // book name.
+        setBookNameAction(action);
+        setBookNameInput('');
+        setBookNameDialogOpen(true);
+        return;
+      }
+      if (!resolvedBookName.trim()) {
+        setBookNameAction(action);
+        setBookNameInput('');
+        setBookNameDialogOpen(true);
+        return;
+      }
+      fillNameAction(action, resolvedBookName);
+    },
+    [resolvedBookName, fillNameAction]
+  );
+
   const handleGenerateGraph = useCallback(() => {
-    if (!resolvedBookName.trim()) {
-      setBookNameInput('');
-      setBookNameDialogOpen(true);
-      return;
-    }
-    fillGeneratePrompt(resolvedBookName);
-  }, [resolvedBookName, fillGeneratePrompt]);
+    runNameAction('generate-story-graph');
+  }, [runNameAction]);
 
   const handleBookNameConfirm = useCallback(() => {
     const name = bookNameInput.trim();
     setBookNameDialogOpen(false);
-    if (name) setManualBookName(name);
-    fillGeneratePrompt(name);
-  }, [bookNameInput, fillGeneratePrompt]);
+    if (name && bookNameAction !== 'create-character') {
+      setManualBookName(name);
+    }
+    fillNameAction(bookNameAction, name);
+  }, [bookNameInput, bookNameAction, fillNameAction]);
 
-  // 取消或留空也要继续生成：书名回退到模板默认的「未命名作品」。
+  // 取消或留空：书名类操作回退模板默认「未命名作品」继续；创建角色则中止。
   const handleBookNameCancel = useCallback(() => {
     setBookNameDialogOpen(false);
-    fillGeneratePrompt();
-  }, [fillGeneratePrompt]);
+    if (bookNameAction !== 'create-character') {
+      fillNameAction(bookNameAction);
+    }
+  }, [bookNameAction, fillNameAction]);
 
   const handleInferBeat = useCallback(() => {
     if (!selectedBeat || !beatContext || !graph) return;
@@ -1310,23 +1352,111 @@ export function NovelOverviewPanel() {
     void fillPromptIntoSession(prompt);
   }, [selectedBeat, beatContext, graph, fillPromptIntoSession]);
 
+  const buildWriteBeatPrompt = useCallback(
+    (beat: {
+      id: string;
+      title: string;
+      description?: string | null;
+      chapter_hint?: number | string | null;
+    }) => {
+      const tpl = getWritingPrompt('write-beat');
+      if (!tpl || !graph) return null;
+      const fullGraphJson = JSON.stringify(graph, null, 2);
+      return tpl.build({
+        beatId: beat.id,
+        beatTitle: beat.title,
+        beatDescription: beat.description ?? '',
+        chapterNumber: beat.chapter_hint
+          ? Number(beat.chapter_hint)
+          : undefined,
+        fullGraph: fullGraphJson,
+      });
+    },
+    [graph]
+  );
+
   const handleWriteBeat = useCallback(() => {
     if (!selectedBeat || !beatContext || !graph) return;
-    const tpl = getWritingPrompt('write-beat');
-    if (!tpl) return;
-    const chapterNum = selectedBeat.chapter_hint
-      ? Number(selectedBeat.chapter_hint)
-      : undefined;
-    const fullGraphJson = JSON.stringify(graph, null, 2);
-    const prompt = tpl.build({
-      beatId: selectedBeat.id,
-      beatTitle: selectedBeat.title,
-      beatDescription: selectedBeat.description ?? '',
-      chapterNumber: chapterNum,
-      fullGraph: fullGraphJson,
-    });
-    void fillPromptIntoSession(prompt);
-  }, [selectedBeat, beatContext, graph, fillPromptIntoSession]);
+    const prompt = buildWriteBeatPrompt(selectedBeat);
+    if (prompt) void fillPromptIntoSession(prompt);
+  }, [
+    selectedBeat,
+    beatContext,
+    graph,
+    buildWriteBeatPrompt,
+    fillPromptIntoSession,
+  ]);
+
+  // ----- creation guide (state-driven first-run onboarding) -----
+  const currentBeat = useMemo(
+    () => graph?.beats.find((b) => b.status === 'current') ?? null,
+    [graph]
+  );
+  const { worldViewInitialized, steps: guideSteps } =
+    useWritingPipelineProgress(
+      rootPath,
+      stats.characterCount,
+      Boolean(graph && graph.beats.length > 0),
+      Boolean(currentBeat),
+      stats.chapterCount
+    );
+
+  const handleGuideAction = useCallback(
+    (id: WritingGuideStepId) => {
+      switch (id) {
+        case 'foundation':
+          runNameAction('init-foundation');
+          return;
+        case 'characters':
+          runNameAction('create-character');
+          return;
+        case 'style': {
+          const tpl = getWritingPrompt('distill-style');
+          if (tpl) void fillPromptIntoSession(tpl.build({ guidance: '' }));
+          return;
+        }
+        case 'graph':
+          handleGenerateGraph();
+          return;
+        case 'write': {
+          if (!currentBeat) return;
+          const prompt = buildWriteBeatPrompt(currentBeat);
+          if (prompt) void fillPromptIntoSession(prompt);
+          return;
+        }
+        case 'audit': {
+          const tpl = getWritingPrompt('audit-revise-recheck');
+          if (tpl)
+            void fillPromptIntoSession(tpl.build({ auditScope: 'latest' }));
+          return;
+        }
+        case 'aigc': {
+          const tpl = getWritingPrompt('check-aigc');
+          if (tpl)
+            void fillPromptIntoSession(
+              tpl.build({ chapterNumber: stats.chapterCount || 1 })
+            );
+          return;
+        }
+      }
+    },
+    [
+      runNameAction,
+      handleGenerateGraph,
+      currentBeat,
+      buildWriteBeatPrompt,
+      fillPromptIntoSession,
+      stats.chapterCount,
+    ]
+  );
+
+  const canRunGuideStep = useCallback(
+    (id: WritingGuideStepId) => {
+      if (id === 'write') return Boolean(currentBeat);
+      return true;
+    },
+    [currentBeat]
+  );
 
   // ----- status update (modify local graph, save to JSON) -----
   const updateStatus = useCallback(
@@ -1381,6 +1511,11 @@ export function NovelOverviewPanel() {
     <div className="overview-overlay bg-background text-foreground flex h-full w-full overflow-hidden">
       {/* Left column: story graph chrome + canvas */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <WritingGuideCard
+          steps={guideSteps}
+          canRun={canRunGuideStep}
+          onAction={handleGuideAction}
+        />
         {/* Header */}
         <div className="flex items-center justify-between border-b px-4 py-2">
           <div className="flex items-center gap-2">
@@ -1537,7 +1672,9 @@ export function NovelOverviewPanel() {
             {!graphLoading && graph && graph.beats.length === 0 && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3">
                 <p className="text-sm text-muted-foreground">
-                  {t('panels:overview.graphEmpty')}
+                  {worldViewInitialized
+                    ? t('panels:overview.graphEmpty')
+                    : t('panels:overview.graphNeedsFoundation')}
                 </p>
                 <Button
                   size="sm"
@@ -1777,16 +1914,18 @@ export function NovelOverviewPanel() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>
-              {t('panels:overview.bookNameDialogTitle')}
+              {t(`panels:overview.nameDialog.${bookNameAction}.title`)}
             </DialogTitle>
             <DialogDescription>
-              {t('panels:overview.bookNameDialogDescription')}
+              {t(`panels:overview.nameDialog.${bookNameAction}.description`)}
             </DialogDescription>
           </DialogHeader>
           <Input
             value={bookNameInput}
             onChange={(e) => setBookNameInput(e.target.value)}
-            placeholder={t('panels:overview.bookNameInputPlaceholder')}
+            placeholder={t(
+              `panels:overview.nameDialog.${bookNameAction}.placeholder`
+            )}
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleBookNameConfirm();
             }}

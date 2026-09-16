@@ -412,9 +412,46 @@
     "deleteConfirm": "确认删除该节拍？相关连线也会被移除。",
     "openingSession": "正在唤起创作会话…",
     "noSession": "请先在右侧创建一个创作会话，再使用此功能。",
-    "bookNameDialogTitle": "作品书名",
-    "bookNameDialogDescription": "生成故事图需要书名；留空或取消将使用「未命名作品」。",
-    "bookNameInputPlaceholder": "例如：星河舰队",
+    "nameDialog": {
+      "generate-story-graph": {
+        "title": "作品书名",
+        "description": "此操作需要书名；留空或取消将使用「未命名作品」。",
+        "placeholder": "例如：星河舰队"
+      },
+      "init-foundation": {
+        "title": "作品书名",
+        "description": "此操作需要书名；留空或取消将使用「未命名作品」。",
+        "placeholder": "例如：星河舰队"
+      },
+      "create-character": {
+        "title": "角色名",
+        "description": "输入要创建的角色名（必填）；确认后生成角色卡并写入 .cinyuverse/characters/。",
+        "placeholder": "例如：林渊"
+      }
+    },
+    "guideTitle": "创作向导",
+    "guideOptional": "可选",
+    "guideStart": "开始",
+    "graphNeedsFoundation": "先完成「初始化作品基础」，AI 才有依据生成故事图。",
+    "guideStep": {
+      "foundation": "初始化作品基础",
+      "characters": "创建角色卡",
+      "style": "提炼参考文风",
+      "graph": "生成故事图",
+      "write": "撰写当前节拍",
+      "audit": "审校→修订→复检",
+      "aigc": "AIGC 检测"
+    },
+    "guideStepDesc": {
+      "foundation": "生成故事圣经、卷大纲、写作规则与初始伏笔，写入 .cinyuverse/ 元数据。这是后续所有步骤的输入来源（对应七步中的①③读入项）。",
+      "characters": "为主要角色创建角色卡（身份、性格、对话风格、关系、成长弧线），写入 .cinyuverse/characters/。故事图与备忘录的角色字段都与角色卡文件名对应。",
+      "style": "从书库导入的参考作品中提炼文风画像，生成 style-sample.md，供撰写时参考。未导入参考作品可跳过。",
+      "graph": "按世界观与大纲规划故事节拍图（节点=事件，边=依赖），是每章步骤①「读节拍」的数据源。",
+      "write": "对 current 节拍执行完整流水线①–⑦：读节拍 → 前章锚点 → 规则 → 十节备忘录 → 正文 → 自检 → 五项归档（含下一章备忘录）。",
+      "audit": "每章完成后的独立深检：写后对账（完成条件 / 伏笔逐条核对）+ 文风计数审计，并按问题清单修订、复检。",
+      "aigc": "按送检规范检测章节 AI 占比，≥0.9 的高危段落回写 .cinyuverse/aigc/，供润稿定向改写。"
+    },
+    "guidePipelineHint": "单章七步流程详见 .cinyuverse/pipeline.md，点击步骤查看说明",
     "filterAll": "全部",
     "filterPlanned": "计划",
     "filterCurrent": "当前",

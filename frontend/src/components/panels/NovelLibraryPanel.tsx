@@ -19,18 +19,13 @@ import {
   Settings,
   List,
   ArrowLeft,
-  Wand2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { invoke } from '@tauri-apps/api/core';
 import { useProject } from '@/contexts/ProjectContext';
-import { useKanbanSessionContext } from '@/contexts/KanbanSessionContext';
 import { fileTreeApi } from '@/lib/api';
 import { useProjectRepos } from '@/hooks';
-import { getWritingPrompt } from '@/lib/writingPrompts';
-import { useComposerPrefillStore } from '@/stores/useComposerPrefillStore';
-import { useLayoutStore } from '@/stores/useLayoutStore';
 
 // ---------------------------------------------------------------------------
 // Types — mirror the Rust QiniuStorage crate structs
@@ -190,6 +185,44 @@ export function NovelLibraryPanel() {
   }, []);
 
   // ----- Import novel into current project's references -----
+
+  // Reference files are named after the book title; matching by file name
+  // survives panel remounts, unlike an in-memory key set.
+  const [importedNames, setImportedNames] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!rootPath) {
+      setImportedNames(new Set());
+      return;
+    }
+    fileTreeApi
+      .getTree(`${rootPath}/.cinyuverse/references`, 1)
+      .then((entries) => {
+        if (cancelled) return;
+        setImportedNames(
+          new Set(
+            (entries ?? [])
+              .filter((entry) => !entry.is_dir)
+              .map((entry) => entry.name)
+          )
+        );
+      })
+      .catch(() => {
+        // No references directory yet — nothing is imported.
+        if (!cancelled) setImportedNames(new Set());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [rootPath]);
+
+  const isImported = useCallback(
+    (item: LibraryItem) =>
+      importedNames.has(`${item.title.replace(/[\\/:*?"<>|]/g, '_')}.md`),
+    [importedNames]
+  );
+
   const handleImport = useCallback(
     async (item: LibraryItem) => {
       if (!projectId) return;
@@ -208,6 +241,7 @@ export function NovelLibraryPanel() {
         const refPath = `${rootPath}/.cinyuverse/references/${safeName}.md`;
         await fileTreeApi.createDirectory(`${rootPath}/.cinyuverse/references`);
         await fileTreeApi.saveFile(refPath, content);
+        setImportedNames((prev) => new Set(prev).add(`${safeName}.md`));
         setImportNotice({
           tone: 'success',
           text: `已导入「${item.title}」到 .cinyuverse/references/`,
@@ -223,28 +257,6 @@ export function NovelLibraryPanel() {
     },
     [projectId, rootPath]
   );
-
-  // ----- style distillation -----
-  const { visibleRightSession } = useKanbanSessionContext();
-  const setRightPanelVisible = useLayoutStore(
-    (state) => state.setRightPanelVisible
-  );
-  const requestPrefill = useComposerPrefillStore((s) => s.requestPrefill);
-
-  const handleDistillStyle = useCallback(() => {
-    if (!visibleRightSession?.sessionId) {
-      setImportNotice({
-        tone: 'error',
-        text: '请先在右侧创建一个创作会话，再提炼文风。',
-      });
-      setRightPanelVisible(true);
-      return;
-    }
-    const tpl = getWritingPrompt('distill-style');
-    if (!tpl) return;
-    requestPrefill(tpl.build({ guidance: '' }));
-    setRightPanelVisible(true);
-  }, [visibleRightSession, requestPrefill, setRightPanelVisible]);
 
   // ----- Render -----
   if (!projectId) {
@@ -347,20 +359,46 @@ export function NovelLibraryPanel() {
               <p className="font-medium mb-1">加载失败</p>
               <p className="text-muted-foreground">{error}</p>
               {!config?.is_configured && (
-                <p className="mt-2 text-amber-600">
-                  请先配置七牛云存储（点击右上角齿轮）
-                </p>
+                <div className="mt-2 flex flex-col items-start gap-1.5">
+                  <p className="text-amber-600">尚未配置七牛云存储</p>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setShowConfig(true)}
+                  >
+                    <Settings className="h-3 w-3" />
+                    配置存储
+                  </Button>
+                </div>
               )}
             </div>
           )}
           {!loading && !error && filteredItems.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
               <BookOpen className="h-8 w-8 text-muted-foreground/40 mb-2" />
-              <p className="text-xs text-muted-foreground">
-                {items.length === 0
-                  ? '书库为空，请先爬取参考小说并上传'
-                  : '没有匹配的结果'}
-              </p>
+              {items.length === 0 && !config?.is_configured ? (
+                <div className="flex flex-col items-center gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    尚未配置云存储，完成七牛配置后即可浏览书库
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setShowConfig(true)}
+                  >
+                    <Settings className="h-3 w-3" />
+                    配置存储
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {items.length === 0
+                    ? '书库为空：用爬虫工具把参考小说上传到七牛桶的 novels/ 目录后，在此导入并提炼文风'
+                    : '没有匹配的结果'}
+                </p>
+              )}
             </div>
           )}
           <div className="divide-y">
@@ -429,18 +467,14 @@ export function NovelLibraryPanel() {
                     size="sm"
                     variant="secondary"
                     onClick={() => void handleImport(selectedItem)}
-                    disabled={importing}
+                    disabled={importing || isImported(selectedItem)}
                   >
                     <Download className="h-3.5 w-3.5" />
-                    {importing ? '导入中...' : '导入到当前作品参考库'}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleDistillStyle}
-                  >
-                    <Wand2 className="h-3.5 w-3.5" />
-                    提炼文风
+                    {importing
+                      ? '导入中...'
+                      : isImported(selectedItem)
+                        ? '已导入'
+                        : '导入到当前作品参考库'}
                   </Button>
                   <a
                     href={selectedItem.source_url}

@@ -412,9 +412,46 @@
     "deleteConfirm": "Delete this beat? Related edges will also be removed.",
     "openingSession": "Opening conversation session…",
     "noSession": "Please create a conversation session on the right first.",
-    "bookNameDialogTitle": "Book name",
-    "bookNameDialogDescription": "The story graph prompt needs a book name; leave empty or cancel to use \"Untitled Work\".",
-    "bookNameInputPlaceholder": "e.g. Dune",
+    "nameDialog": {
+      "generate-story-graph": {
+        "title": "Book name",
+        "description": "This action needs a book name; leave empty or cancel to use \"Untitled Work\".",
+        "placeholder": "e.g. Dune"
+      },
+      "init-foundation": {
+        "title": "Book name",
+        "description": "This action needs a book name; leave empty or cancel to use \"Untitled Work\".",
+        "placeholder": "e.g. Dune"
+      },
+      "create-character": {
+        "title": "Character name",
+        "description": "Enter the character's name (required); the card will be written to .cinyuverse/characters/.",
+        "placeholder": "e.g. Lin Yuan"
+      }
+    },
+    "guideTitle": "Creation guide",
+    "guideOptional": "optional",
+    "guideStart": "Start",
+    "graphNeedsFoundation": "Finish \"Initialize story foundation\" first so the AI has material to plan the story graph.",
+    "guideStep": {
+      "foundation": "Initialize story foundation",
+      "characters": "Create character cards",
+      "style": "Distill reference style",
+      "graph": "Generate story graph",
+      "write": "Write current beat",
+      "audit": "Audit → revise → recheck",
+      "aigc": "AIGC check"
+    },
+    "guideStepDesc": {
+      "foundation": "Generates the story bible, volume outline, writing rules and initial hooks into .cinyuverse/. This feeds every later step (pipeline inputs ① ③).",
+      "characters": "Creates cards for the main cast (identity, personality, dialogue style, relationships, arc) under .cinyuverse/characters/. Beat and memo character fields reference card file names.",
+      "style": "Distills a style profile from library reference works into style-sample.md. Skippable if nothing is imported yet.",
+      "graph": "Plans the story beat graph (nodes = events, edges = dependencies) from the world view and outline — the data source for per-chapter step ①.",
+      "write": "Runs the full pipeline ①–⑦ for the current beat: read beat → previous-chapter anchor → rules → ten-section memo → prose → self-check → five archive actions (including the next memo).",
+      "audit": "Post-chapter deep check: reconciliation (completion criteria / hooks) plus rhythm counting, then revision and recheck against the issue list.",
+      "aigc": "Runs the AIGC detection rules on the chapter; segments ≥0.9 are written back to .cinyuverse/aigc/ for targeted rewriting."
+    },
+    "guidePipelineHint": "Full seven-step pipeline in .cinyuverse/pipeline.md — click a step for details",
     "filterAll": "All",
     "filterPlanned": "Planned",
     "filterCurrent": "Current",
