@@ -343,8 +343,10 @@ fn sqlite_connect_options(database_path: &Path) -> SqliteConnectOptions {
         .foreign_keys(true)
         .journal_mode(SqliteJournalMode::Wal)
         .synchronous(SqliteSynchronous::Normal)
-        .busy_timeout(Duration::from_secs(10))
+        .busy_timeout(Duration::from_secs(30))
         .pragma("cache_size", "-65536")
+        .pragma("wal_autocheckpoint", "1000")
+        .pragma("mmap_size", "268435456")
 }
 
 #[derive(Clone)]
@@ -365,8 +367,8 @@ impl DBService {
         std::fs::create_dir_all(data_dir.as_ref()).map_err(Error::Io)?;
         let options = sqlite_connect_options(&data_dir.as_ref().join("db.sqlite"));
         let pool = SqlitePoolOptions::new()
-            .max_connections(8)
-            .min_connections(1)
+            .max_connections(32)
+            .min_connections(2)
             .acquire_timeout(Duration::from_secs(30))
             .connect_with(options)
             .await?;
@@ -421,8 +423,8 @@ impl DBService {
     {
         let options = sqlite_connect_options(&data_dir.as_ref().join("db.sqlite"));
         let pool_options = SqlitePoolOptions::new()
-            .max_connections(8)
-            .min_connections(1)
+            .max_connections(32)
+            .min_connections(2)
             .acquire_timeout(Duration::from_secs(30));
 
         let pool = if let Some(hook) = after_connect {
