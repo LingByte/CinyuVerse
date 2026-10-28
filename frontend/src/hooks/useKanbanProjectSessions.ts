@@ -47,6 +47,7 @@ const SESSION_PLACEHOLDERS = new Set([
   'New session',
   'New Session',
   'New Writing Session',
+  '新会话',
   '新创作会话',
 ]);
 
