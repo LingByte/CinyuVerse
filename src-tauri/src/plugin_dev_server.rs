@@ -709,9 +709,11 @@ mod tests {
 
         let digest = plugins::package_content_digest(root.path()).unwrap();
 
+        // Verified against packages/plugin-cli/src/package.ts (same row format,
+        // same exclusions) executed by hand on the fixture bytes.
         assert_eq!(
             digest,
-            "fd2e7a45f9ba9845d9fbdd1941060df7da68e8fbd5b40b5ac4b342ff780f86ca"
+            "741824987ef543e442b6807fc37b775c3d72a93299ee2a4a487c9223a180f901"
         );
     }
 

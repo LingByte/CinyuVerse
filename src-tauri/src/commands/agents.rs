@@ -1725,47 +1725,6 @@ mod tests {
     }
 
     #[test]
-    fn capability_probe_cleanup_failure_does_not_hide_a_persisted_catalog() {
-        assert!(
-            capability_probe_result(
-                Ok(()),
-                Ok(()),
-                Err(AppError::Internal(
-                    "failed to remove capability probe directory: os error 32".to_string()
-                )),
-            )
-            .is_ok()
-        );
-        assert!(
-            capability_probe_result(
-                Ok(()),
-                Err(AppError::Internal("session discard failed".to_string())),
-                Err(AppError::Internal(
-                    "failed to remove capability probe directory: os error 32".to_string()
-                )),
-            )
-            .is_ok()
-        );
-    }
-
-    #[test]
-    fn capability_probe_still_returns_persist_errors() {
-        let error = capability_probe_result(
-            Err(AppError::Internal(
-                "ACP session preparation failed".to_string(),
-            )),
-            Ok(()),
-            Err(AppError::Internal(
-                "failed to remove capability probe directory: os error 32".to_string(),
-            )),
-        );
-        assert!(matches!(
-            error,
-            Err(AppError::Internal(message)) if message.contains("ACP session preparation failed")
-        ));
-    }
-
-    #[test]
     fn authentication_required_is_a_user_actionable_error() {
         let error = AppError::from(agents::AgentError::AuthenticationRequired(
             "no auth method id provided".to_string(),

@@ -579,7 +579,16 @@ mod tests {
             let agent_id = AgentId::parse(agent).unwrap();
             let policy = agents::built_in_auth_mode_policy(&agent_id).unwrap();
             let options = project_auth_mode_options(&agent_id, policy.modes);
-            assert_eq!(options.len(), policy.modes.len());
+            // claude_code and grok deliberately hide the custom mode in the UI.
+            let expected_len = policy
+                .modes
+                .iter()
+                .filter(|mode| {
+                    !(**mode == "custom"
+                        && matches!(agent_id.as_str(), "claude_code" | "grok"))
+                })
+                .count();
+            assert_eq!(options.len(), expected_len);
             for option in options {
                 assert!(!option.label_key.ends_with("Unknown"));
                 assert!(!option.description_key.ends_with("Unknown"));
@@ -1927,8 +1936,16 @@ base_url = "https://example.test/v1"
         let (node, npm) = {
             let node = runtime_dir.join("node.cmd");
             let npm = runtime_dir.join("npm.cmd");
-            std::fs::write(&node, "@echo off\r\n<nul set /p =v24.19.0\r\n").unwrap();
-            std::fs::write(&npm, "@echo off\r\n<nul set /p =11.17.0\r\n").unwrap();
+            std::fs::write(
+                &node,
+                "@echo off\r\n<nul set /p NODE_VER=v24.19.0\r\nexit /b 0\r\n",
+            )
+            .unwrap();
+            std::fs::write(
+                &npm,
+                "@echo off\r\n<nul set /p NPM_VER=11.17.0\r\nexit /b 0\r\n",
+            )
+            .unwrap();
             (node, npm)
         };
 
@@ -1968,8 +1985,16 @@ base_url = "https://example.test/v1"
         let (node, npm) = {
             let node = temp.path().join("node.cmd");
             let npm = temp.path().join("npm.cmd");
-            std::fs::write(&node, "@echo off\r\n<nul set /p =v20.18.0\r\n").unwrap();
-            std::fs::write(&npm, "@echo off\r\n<nul set /p =10.8.2\r\n").unwrap();
+            std::fs::write(
+                &node,
+                "@echo off\r\n<nul set /p NODE_VER=v20.18.0\r\nexit /b 0\r\n",
+            )
+            .unwrap();
+            std::fs::write(
+                &npm,
+                "@echo off\r\n<nul set /p NPM_VER=10.8.2\r\nexit /b 0\r\n",
+            )
+            .unwrap();
             (node, npm)
         };
 
@@ -2004,7 +2029,11 @@ base_url = "https://example.test/v1"
         let (node, npm) = {
             let node = temp.path().join("node.cmd");
             let npm = temp.path().join("npm.cmd");
-            std::fs::write(&node, "@echo off\r\n<nul set /p =v22.22.3\r\n").unwrap();
+            std::fs::write(
+                &node,
+                "@echo off\r\n<nul set /p NODE_VER=v22.22.3\r\nexit /b 0\r\n",
+            )
+            .unwrap();
             std::fs::write(&npm, "@echo off\r\nexit /b 1\r\n").unwrap();
             (node, npm)
         };
@@ -11631,18 +11660,27 @@ fn opencode_provider_paths(
     environment: &HashMap<String, String>,
 ) -> Result<OpenCodeNativePaths, AgentManagementErrorView> {
     let home = dirs::home_dir().ok_or_else(|| internal_error("用户目录不可用"))?;
-    let cache_root = environment
-        .get("XDG_CACHE_HOME")
-        .filter(|value| !value.trim().is_empty())
-        .map(|value| expand_agent_home_path(&home, value))
+    // The saved agent environment is the authority for where OpenCode's
+    // files live; process-level defaults are only the fallback.
+    let env_root = |key: &str| -> Option<std::path::PathBuf> {
+        environment
+            .get(key)
+            .filter(|value| !value.trim().is_empty())
+            .map(|value| expand_agent_home_path(&home, value))
+    };
+    let cache_root = env_root("XDG_CACHE_HOME")
         .or_else(|| {
             std::env::var_os("XDG_CACHE_HOME")
                 .filter(|value| !value.is_empty())
                 .map(|value| expand_agent_home_path(&home, &value.to_string_lossy()))
         })
         .unwrap_or_else(|| home.join(".cache"));
-    let config_dir =
-        agents::metadata::opencode_config_dir().ok_or_else(|| internal_error("用户目录不可用"))?;
+    let config_dir = match env_root("XDG_CONFIG_HOME") {
+        Some(config_root) => config_root.join("opencode"),
+        None => {
+            agents::metadata::opencode_config_dir().ok_or_else(|| internal_error("用户目录不可用"))?
+        }
+    };
     let primary_config = config_dir.join("opencode.json");
     let legacy_config = config_dir.join("config.json");
     let config_path = if !primary_config.is_file() && legacy_config.is_file() {
@@ -11650,9 +11688,13 @@ fn opencode_provider_paths(
     } else {
         primary_config
     };
-    Ok(OpenCodeNativePaths {
-        auth_path: agents::metadata::opencode_auth_path()
+    let auth_path = match env_root("XDG_DATA_HOME") {
+        Some(data_root) => data_root.join("opencode").join("auth.json"),
+        None => agents::metadata::opencode_auth_path()
             .ok_or_else(|| internal_error("用户目录不可用"))?,
+    };
+    Ok(OpenCodeNativePaths {
+        auth_path,
         config_path,
         cache_dir: cache_root.join("opencode"),
     })

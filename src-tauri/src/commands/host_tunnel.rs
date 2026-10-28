@@ -430,9 +430,10 @@ async fn open_data_path(
 }
 
 async fn probe_health(origin: &str) -> Result<bool, AppError> {
+    // Strict TLS: the probe must reflect what the real remote-protocol client
+    // (default reqwest verification) can actually reach.
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
-        .danger_accept_invalid_certs(true)
         .no_proxy()
         .build()
         .map_err(|error| AppError::Internal(error.to_string()))?;

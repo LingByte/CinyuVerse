@@ -1016,67 +1016,6 @@ pub async fn plugin_control_gc_runtimes(
 }
 
 #[tauri::command]
-pub async fn plugin_dev_link(
-    state: State<'_, AppState>,
-    source_path: String,
-    confirmed: bool,
-    conversation_id: Option<String>,
-) -> Result<serde_json::Value, AppError> {
-    if !confirmed {
-        return Ok(serde_json::json!({
-            "status": "pending_confirmation",
-            "message": "Confirm Full Trust before linking this plugin"
-        }));
-    }
-    let package = plugins::PluginPackage::inspect(
-        std::path::Path::new(&source_path),
-        plugins::PluginSourceKind::DeveloperLink,
-    )
-    .map_err(plugin_error)?;
-    if package.package_class == "isolated" && !plugins::isolated_spawn_supported() {
-        return Err(AppError::BadRequest(
-            "Isolated packages cannot be linked on this host".into(),
-        ));
-    }
-    let digest = plugins::package_content_digest(std::path::Path::new(&source_path))
-        .map_err(plugin_error)?;
-    state
-        .plugin_control_plane
-        .import(package.clone(), plugins::ConflictDecision::Replace)
-        .await
-        .map_err(plugin_error)?;
-    let grant_id = uuid::Uuid::new_v4();
-    let grant_dir = plugin_snapshot_root(&state.app_handle)?.join("plugin-dev/grants");
-    std::fs::create_dir_all(&grant_dir).map_err(|error| {
-        AppError::Internal(format!("create plugin-dev grant directory: {error}"))
-    })?;
-    let token = uuid::Uuid::new_v4().to_string();
-    let grant_path = grant_dir.join(format!("{grant_id}.env"));
-    std::fs::write(
-        &grant_path,
-        format!(
-            "CONVERSATION_ID={}\nPUBLISHER={}\nPLUGIN_ID={}\nSOURCE_DIGEST={}\nTOKEN={token}\n",
-            conversation_id.as_deref().unwrap_or(""),
-            package.publisher.clone().unwrap_or_default(),
-            package.id.as_str(),
-            digest,
-        ),
-    )
-    .map_err(|error| AppError::Internal(format!("write plugin-dev grant: {error}")))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&grant_path, std::fs::Permissions::from_mode(0o600));
-    }
-    Ok(serde_json::json!({
-        "status": "granted",
-        "grantId": grant_id,
-        "sourcePath": source_path,
-        "packageDigest": digest
-    }))
-}
-
-#[tauri::command]
 pub async fn plugin_invoke_contribution(
     state: State<'_, AppState>,
     plugin_id: String,
@@ -2961,19 +2900,19 @@ fn discover_native_resources(root: &Path, directory: &str) -> Vec<PluginNativeRe
                 continue;
             }
             let relative = path.strip_prefix(root).unwrap_or(&path);
-            let id = relative
+            // Resource paths are contract strings shared with manifests and
+            // the frontend; always join with `/` regardless of host OS.
+            let components: Vec<String> = relative
                 .components()
-                .skip(1)
                 .map(|component| component.as_os_str().to_string_lossy().into_owned())
-                .collect::<Vec<_>>()
-                .join("/");
-            let id = Path::new(&id)
+                .collect();
+            let id = Path::new(&components[1..].join("/"))
                 .with_extension("")
                 .to_string_lossy()
                 .into_owned();
             resources.push(PluginNativeResourceDto {
                 id,
-                path: relative.to_string_lossy().into_owned(),
+                path: components.join("/"),
             });
         }
     }

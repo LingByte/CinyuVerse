@@ -719,7 +719,12 @@ mod tests {
         .fetch_all(&pool)
         .await
         .unwrap();
-        assert_eq!(agent_ids.len(), 13);
+        // The count follows the authoritative built-in bar order (QaMock is a
+        // test identity and never joins the catalog), not a magic number.
+        assert_eq!(
+            agent_ids.len(),
+            agents::AgentKind::built_in_bar_order().count()
+        );
         assert!(agent_ids.iter().any(|agent_id| agent_id == "claude_code"));
         assert!(agent_ids.iter().any(|agent_id| agent_id == "codex"));
         assert!(agent_ids.iter().any(|agent_id| agent_id == "cursor"));
