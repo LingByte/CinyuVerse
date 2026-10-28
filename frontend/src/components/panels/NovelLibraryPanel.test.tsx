@@ -82,3 +82,104 @@ describe('NovelLibraryPanel empty state', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe('NovelLibraryPanel import progress scoping', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const bookA = {
+    key: 'novels/jia',
+    title: '书甲',
+    author: '甲作者',
+    category: '玄幻',
+    word_count: 100000,
+    chapter_count: 100,
+    status: 'completed',
+    source_url: 'https://example.com/a',
+    uploaded_at: '',
+    size: 100,
+  };
+  const bookB = {
+    key: 'novels/yi',
+    title: '书乙',
+    author: '乙作者',
+    category: '都市',
+    word_count: 200000,
+    chapter_count: 200,
+    status: 'completed',
+    source_url: 'https://example.com/b',
+    uploaded_at: '',
+    size: 200,
+  };
+
+  it('imports several books concurrently with independent progress states', async () => {
+    const deferred = <T,>() => {
+      let resolve!: (value: T) => void;
+      const promise = new Promise<T>((r) => {
+        resolve = r;
+      });
+      return { promise, resolve };
+    };
+    const dlA = deferred<{ content: string; failed_chapters: string[] }>();
+    const dlB = deferred<{ content: string; failed_chapters: string[] }>();
+    mocks.invoke.mockImplementation((cmd: string, args: unknown) => {
+      if (cmd === 'qiniu_get_config') return Promise.resolve(CONFIGURED);
+      if (cmd === 'qiniu_list_novels')
+        return Promise.resolve({ items: [bookA, bookB], total: 2 });
+      if (cmd === 'qiniu_list_chapters') return Promise.resolve([]);
+      if (cmd === 'qiniu_download_book') {
+        const key = (args as { bookKey: string }).bookKey;
+        return key === bookA.key ? dlA.promise : dlB.promise;
+      }
+      return Promise.reject(new Error(`unexpected ${cmd}`));
+    });
+
+    render(<NovelLibraryPanel />);
+
+    // Clicking a list row: once a book is selected its title also appears in
+    // the detail header, so take the sidebar-row occurrence (always first).
+    const clickRow = (title: string) => {
+      fireEvent.click(screen.getAllByText(title)[0]);
+    };
+
+    // Start both imports while the downloads are in flight.
+    await screen.findByText('书甲');
+    clickRow('书甲');
+    fireEvent.click(
+      await screen.findByRole('button', { name: '导入到当前作品参考库' })
+    );
+    await waitFor(() => {
+      expect(screen.getByText('导入中...')).toBeInTheDocument();
+    });
+    clickRow('书乙');
+    fireEvent.click(
+      screen.getByRole('button', { name: '导入到当前作品参考库' })
+    );
+
+    // Each book reports its own in-progress state.
+    clickRow('书甲');
+    expect(screen.getByText('导入中...')).toBeInTheDocument();
+    clickRow('书乙');
+    expect(screen.getByText('导入中...')).toBeInTheDocument();
+
+    // Finishing one leaves the other untouched.
+    dlA.resolve({ content: '甲的内容', failed_chapters: [] });
+    clickRow('书甲');
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: '已导入' })
+      ).toBeInTheDocument();
+    });
+    clickRow('书乙');
+    expect(screen.getByText('导入中...')).toBeInTheDocument();
+
+    dlB.resolve({ content: '乙的内容', failed_chapters: [] });
+    clickRow('书乙');
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: '已导入' })
+      ).toBeInTheDocument();
+    });
+  });
+});

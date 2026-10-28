@@ -1,15 +1,18 @@
 //! Tauri commands for Qiniu object storage integration.
 
 use qiniu_storage::{QiniuClient, QiniuConfig, QiniuConfigManager, ListResult};
+use futures::StreamExt as _;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::sync::Mutex;
 
-/// Serializable config for the frontend.
+/// Serializable config for the frontend. The secret key never crosses IPC:
+/// `secret_key` is always empty and `secret_key_set` reports presence.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QiniuConfigResponse {
     pub access_key: String,
     pub secret_key: String,
+    pub secret_key_set: bool,
     pub bucket: String,
     pub domain: String,
     pub is_configured: bool,
@@ -20,7 +23,8 @@ impl From<QiniuConfig> for QiniuConfigResponse {
         let is_configured = cfg.is_configured();
         Self {
             access_key: cfg.access_key.clone(),
-            secret_key: cfg.secret_key.clone(),
+            secret_key: String::new(),
+            secret_key_set: !cfg.secret_key.is_empty(),
             bucket: cfg.bucket.clone(),
             domain: cfg.domain.clone(),
             is_configured,
@@ -28,7 +32,8 @@ impl From<QiniuConfig> for QiniuConfigResponse {
     }
 }
 
-/// Cached Qiniu client — rebuilt when config changes.
+/// Cached Qiniu client — `qiniu_set_config` clears it, so a cached client
+/// always matches the persisted config.
 #[derive(Default)]
 pub struct QiniuState {
     client: Mutex<Option<QiniuClient>>,
@@ -36,8 +41,8 @@ pub struct QiniuState {
 
 async fn get_or_build_client(state: &QiniuState) -> Result<QiniuClient, String> {
     let mut guard = state.client.lock().await;
-    if guard.is_some() {
-        // Always rebuild from disk to pick up config changes.
+    if let Some(client) = guard.as_ref() {
+        return Ok(client.clone());
     }
     let cfg = QiniuConfigManager::load().map_err(|e| e.to_string())?;
     if !cfg.is_configured() {
@@ -62,6 +67,15 @@ pub async fn qiniu_set_config(
     domain: String,
     state: State<'_, QiniuState>,
 ) -> Result<(), String> {
+    // An empty secret key means "keep the stored one", so a masked config
+    // round-trip never wipes credentials.
+    let secret_key = if secret_key.trim().is_empty() {
+        QiniuConfigManager::load()
+            .map(|existing| existing.secret_key)
+            .unwrap_or_default()
+    } else {
+        secret_key
+    };
     let cfg = QiniuConfig {
         access_key,
         secret_key,
@@ -116,6 +130,16 @@ pub async fn qiniu_list_chapters(
         .map_err(|e| e.to_string())
 }
 
+/// A downloaded book: the concatenated Markdown and the chapter keys that
+/// failed to download (skipped from `content`). Chapters missing from an
+/// import are data loss for the author, so the caller must be able to see
+/// them instead of a silently incomplete "success".
+#[derive(Debug, Clone, Serialize)]
+pub struct QiniuDownloadBookResult {
+    pub content: String,
+    pub failed_chapters: Vec<String>,
+}
+
 /// Download an entire book: fetches _meta.json + all chapter files,
 /// concatenates them into a single Markdown string.
 #[tauri::command]
@@ -123,7 +147,7 @@ pub async fn qiniu_download_book(
     book_key: String,
     max_chars: usize,
     state: State<'_, QiniuState>,
-) -> Result<String, String> {
+) -> Result<QiniuDownloadBookResult, String> {
     let client = get_or_build_client(&state).await?;
 
     // 1. Download metadata
@@ -150,34 +174,78 @@ pub async fn qiniu_download_book(
         "---\ntitle: \"{title}\"\nauthor: \"{author}\"\ncategory: \"{category}\"\nchapter_count: {chapter_count}\n---\n\n# {title}\n\n**作者**: {author}\n\n**简介**:\n\n{description}\n"
     ));
 
-    // 4. Download each chapter, append
-    let mut total_len = 0usize;
-    for ch_key in &chapters {
-        if max_chars > 0 && total_len >= max_chars {
-            break;
-        }
-        match client.download_text(ch_key, 0).await {
-            Ok(content) => {
-                let remaining = if max_chars > 0 {
-                    max_chars.saturating_sub(total_len)
-                } else {
-                    usize::MAX
-                };
-                let chunk: String = if content.len() > remaining {
-                    content.chars().take(remaining).collect()
-                } else {
-                    content
-                };
-                total_len += chunk.len();
-                parts.push(chunk);
+    // 4. Download chapters, append. Budgets count characters (CJK text is
+    // ~3 bytes per char, so byte budgets would return ~⅓ of the request).
+    // Preview (max_chars > 0) stops as soon as the budget is filled; full
+    // imports download every chapter with bounded concurrency, order preserved
+    // by `buffered` so chapters concatenate in sequence.
+    let chapter_texts: Vec<Result<String, String>> = if max_chars > 0 {
+        let mut acc = Vec::with_capacity(chapters.len());
+        let mut total_chars = 0usize;
+        for ch_key in &chapters {
+            if total_chars >= max_chars {
+                break;
             }
-            Err(e) => {
-                tracing::warn!("Failed to download chapter {ch_key}: {e}");
+            match client.download_text(ch_key, 0).await {
+                Ok(content) => {
+                    total_chars += content.chars().count();
+                    acc.push(Ok(content));
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to download chapter {ch_key}: {e}");
+                    acc.push(Err(ch_key.clone()));
+                }
             }
         }
+        acc
+    } else {
+        futures::stream::iter(chapters)
+            .map(|ch_key| {
+                let client = client.clone();
+                async move {
+                    client
+                        .download_text(&ch_key, 0)
+                        .await
+                        .map_err(|e| {
+                            tracing::warn!("Failed to download chapter {ch_key}: {e}");
+                            ch_key
+                        })
+                }
+            })
+            .buffered(qiniu_storage::DOWNLOAD_CONCURRENCY)
+            .collect()
+            .await
+    };
+
+    let mut failed_chapters = Vec::new();
+    let mut total_chars = 0usize;
+    for content in chapter_texts {
+        let content = match content {
+            Ok(content) => content,
+            Err(ch_key) => {
+                failed_chapters.push(ch_key);
+                continue;
+            }
+        };
+        let remaining = if max_chars > 0 {
+            max_chars.saturating_sub(total_chars)
+        } else {
+            usize::MAX
+        };
+        let char_count = content.chars().count();
+        let chunk: String = if char_count > remaining {
+            content.chars().take(remaining).collect()
+        } else {
+            content
+        };
+        total_chars += chunk.chars().count();
+        parts.push(chunk);
     }
 
-    Ok(parts.join("\n\n---\n\n"))
+    Ok(QiniuDownloadBookResult {
+        content: parts.join("\n\n---\n\n"),
+        failed_chapters,
+    })
 }
 
 #[tauri::command]

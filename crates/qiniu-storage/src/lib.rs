@@ -7,8 +7,8 @@
 //! The crate is Tauri-agnostic — the Tauri command layer in `src-tauri`
 //! wraps these functions.
 
-mod config;
 mod client;
+mod config;
 
+pub use client::{DOWNLOAD_CONCURRENCY, ListResult, NovelInfo, QiniuClient};
 pub use config::{QiniuConfig, QiniuConfigManager};
-pub use client::{QiniuClient, NovelInfo, ListResult};

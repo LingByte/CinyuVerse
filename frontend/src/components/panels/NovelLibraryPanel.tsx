@@ -4,7 +4,7 @@
  * search, preview, and import reference texts into the current project's
  * `.cinyuverse/references/` directory for AI style analysis.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Library,
@@ -40,8 +40,6 @@ type LibraryItem = {
   chapter_count: number;
   status: string;
   source_url: string;
-  uploaded_at: string;
-  size: number;
 };
 
 type LibraryListResponse = {
@@ -49,13 +47,25 @@ type LibraryListResponse = {
   total: number;
 };
 
+type QiniuDownloadBookResult = {
+  content: string;
+  failed_chapters: string[];
+};
+
 type QiniuConfig = {
   access_key: string;
   secret_key: string;
+  secret_key_set: boolean;
   bucket: string;
   domain: string;
   is_configured: boolean;
 };
+
+// Staged library books are prefixed apart from 文风- skill references so
+// neither panel's "already staged" check can false-positive on the other.
+function stagedLibraryName(title: string): string {
+  return `书库-${title.replace(/[\\/:*?"<>|]/g, '_')}.md`;
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -80,7 +90,9 @@ export function NovelLibraryPanel() {
   const [chapterLoading, setChapterLoading] = useState(false);
   const [config, setConfig] = useState<QiniuConfig | null>(null);
   const [showConfig, setShowConfig] = useState(false);
-  const [importing, setImporting] = useState(false);
+  // Each import writes its own references/<title>.md, so several books can
+  // be in flight at once; the set tracks exactly which ones are.
+  const [importingKeys, setImportingKeys] = useState<Set<string>>(new Set());
   const [importNotice, setImportNotice] = useState<{
     tone: 'success' | 'error';
     text: string;
@@ -133,7 +145,11 @@ export function NovelLibraryPanel() {
   }, [items, search]);
 
   // ----- Preview a novel: load metadata + chapter list -----
+  // Slow responses from an earlier click must never overwrite the latest
+  // selection, so each preview takes an epoch and stale ones drop out.
+  const previewEpochRef = useRef(0);
   const handlePreview = useCallback(async (item: LibraryItem) => {
+    const epoch = ++previewEpochRef.current;
     setSelectedItem(item);
     setPreviewContent(null);
     setSelectedChapter(null);
@@ -144,23 +160,31 @@ export function NovelLibraryPanel() {
     setPreviewLoading(true);
     try {
       // Load book overview (first 3000 chars for the header preview)
-      const content = await invoke<string>('qiniu_download_book', {
-        bookKey: item.key,
-        maxChars: 3000,
-      });
-      setPreviewContent(content);
+      const result = await invoke<QiniuDownloadBookResult>(
+        'qiniu_download_book',
+        {
+          bookKey: item.key,
+          maxChars: 3000,
+        }
+      );
+      if (epoch !== previewEpochRef.current) return;
+      setPreviewContent(result.content);
       // Load chapter list
       const chList = await invoke<string[]>('qiniu_list_chapters', {
         bookKey: item.key,
       });
+      if (epoch !== previewEpochRef.current) return;
       setChapters(chList);
     } catch (err) {
+      if (epoch !== previewEpochRef.current) return;
       setPreviewContent(
         `加载失败: ${err instanceof Error ? err.message : String(err)}`
       );
     } finally {
-      setChaptersLoading(false);
-      setPreviewLoading(false);
+      if (epoch === previewEpochRef.current) {
+        setChaptersLoading(false);
+        setPreviewLoading(false);
+      }
     }
   }, []);
 
@@ -218,8 +242,7 @@ export function NovelLibraryPanel() {
   }, [rootPath]);
 
   const isImported = useCallback(
-    (item: LibraryItem) =>
-      importedNames.has(`${item.title.replace(/[\\/:*?"<>|]/g, '_')}.md`),
+    (item: LibraryItem) => importedNames.has(stagedLibraryName(item.title)),
     [importedNames]
   );
 
@@ -230,29 +253,45 @@ export function NovelLibraryPanel() {
         setImportNotice({ tone: 'error', text: '导入失败: 未找到作品目录' });
         return;
       }
-      setImporting(true);
+      setImportingKeys((prev) => new Set(prev).add(item.key));
       setImportNotice(null);
       try {
-        const content = await invoke<string>('qiniu_download_book', {
-          bookKey: item.key,
-          maxChars: 0,
-        });
-        const safeName = item.title.replace(/[\\/:*?"<>|]/g, '_');
-        const refPath = `${rootPath}/.cinyuverse/references/${safeName}.md`;
+        const result = await invoke<QiniuDownloadBookResult>(
+          'qiniu_download_book',
+          {
+            bookKey: item.key,
+            maxChars: 0,
+          }
+        );
+        const stagedName = stagedLibraryName(item.title);
+        const refPath = `${rootPath}/.cinyuverse/references/${stagedName}`;
         await fileTreeApi.createDirectory(`${rootPath}/.cinyuverse/references`);
-        await fileTreeApi.saveFile(refPath, content);
-        setImportedNames((prev) => new Set(prev).add(`${safeName}.md`));
-        setImportNotice({
-          tone: 'success',
-          text: `已导入「${item.title}」到 .cinyuverse/references/`,
-        });
+        await fileTreeApi.saveFile(refPath, result.content);
+        setImportedNames((prev) => new Set(prev).add(stagedName));
+        // Concurrent imports share one notice slot — a success must never
+        // overwrite a sibling import's failure.
+        setImportNotice((prev) =>
+          prev?.tone === 'error'
+            ? prev
+            : {
+                tone: result.failed_chapters.length > 0 ? 'error' : 'success',
+                text:
+                  result.failed_chapters.length > 0
+                    ? `「${item.title}」已导入，但 ${result.failed_chapters.length} 个章节下载失败被跳过，建议稍后重试整本导入`
+                    : `已导入「${item.title}」到 .cinyuverse/references/`,
+              }
+        );
       } catch (err) {
         setImportNotice({
           tone: 'error',
           text: `导入失败: ${describeImportError(err)}`,
         });
       } finally {
-        setImporting(false);
+        setImportingKeys((prev) => {
+          const next = new Set(prev);
+          next.delete(item.key);
+          return next;
+        });
       }
     },
     [projectId, rootPath]
@@ -467,10 +506,13 @@ export function NovelLibraryPanel() {
                     size="sm"
                     variant="secondary"
                     onClick={() => void handleImport(selectedItem)}
-                    disabled={importing || isImported(selectedItem)}
+                    disabled={
+                      importingKeys.has(selectedItem.key) ||
+                      isImported(selectedItem)
+                    }
                   >
                     <Download className="h-3.5 w-3.5" />
-                    {importing
+                    {importingKeys.has(selectedItem.key)
                       ? '导入中...'
                       : isImported(selectedItem)
                         ? '已导入'
@@ -637,7 +679,9 @@ function QiniuConfigPanel({
   useEffect(() => {
     if (config) {
       setAccessKey(config.access_key);
-      setSecretKey(config.secret_key);
+      // The backend never returns the secret key; an untouched (empty) field
+      // means "keep the stored one" on save.
+      setSecretKey('');
       setBucket(config.bucket);
       setDomain(config.domain);
     }
@@ -672,7 +716,9 @@ function QiniuConfigPanel({
           className="h-7 text-xs"
         />
         <Input
-          placeholder="Secret Key"
+          placeholder={
+            config?.secret_key_set ? '已配置，留空保持不变' : 'Secret Key'
+          }
           value={secretKey}
           onChange={(e) => setSecretKey(e.target.value)}
           type="password"

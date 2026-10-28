@@ -1,6 +1,7 @@
 //! Qiniu credential configuration, persisted to a local JSON file.
 
 use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
@@ -15,9 +16,7 @@ pub struct QiniuConfig {
 
 impl QiniuConfig {
     pub fn is_configured(&self) -> bool {
-        !self.access_key.is_empty()
-            && !self.secret_key.is_empty()
-            && !self.bucket.is_empty()
+        !self.access_key.is_empty() && !self.secret_key.is_empty() && !self.bucket.is_empty()
     }
 
     /// Strip the scheme from the domain for use in upload tokens.
@@ -36,8 +35,7 @@ impl QiniuConfigManager {
     /// On macOS this is `~/Library/Application Support/cinyuverse/qiniu.json`.
     /// Also checks `~/.config/cinyuverse/qiniu.json` as a fallback (XDG).
     fn config_path() -> Result<PathBuf> {
-        let base = dirs::config_dir()
-            .context("Cannot determine config directory")?;
+        let base = dirs::config_dir().context("Cannot determine config directory")?;
         Ok(base.join("cinyuverse").join("qiniu.json"))
     }
 
