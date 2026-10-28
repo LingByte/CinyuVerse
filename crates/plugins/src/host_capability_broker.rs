@@ -144,7 +144,18 @@ impl crate::CapabilityBroker for HostCapabilityBroker {
                 "artifact_not_found",
                 "Artifact text is only available on an editor surface session",
             )),
-            "log" => Ok(json!({})),
+            "log" => {
+                let message = input
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| input.to_string());
+                match operation {
+                    "warn" | "error" => tracing::warn!(plugin = plugin_id, "{message}"),
+                    _ => tracing::info!(plugin = plugin_id, "{message}"),
+                };
+                Ok(json!({}))
+            }
             "plugin.self" if operation == "doctor" => Ok(json!({
                 "pluginId": plugin_id,
                 "generation": generation,
@@ -333,9 +344,15 @@ impl HostCapabilityBroker {
                     .map(Value::String)
                     .collect(),
             )),
-            "storage.settings.get" | "storage.settings.put" => Ok(input),
+            "storage.settings.get" | "storage.settings.put" => Err(broker_error(
+                "capability_unimplemented",
+                "storage.settings is not exposed by the Host capability broker",
+            )),
             "secrets.get" => Ok(json!({ "present": false })),
-            "secrets.put" | "secrets.delete" => Ok(json!({ "present": false })),
+            "secrets.put" | "secrets.delete" => Err(broker_error(
+                "capability_unimplemented",
+                "No secrets vault is exposed to Isolated packages",
+            )),
             "network.fetch" => Err(broker_error(
                 "network_denied",
                 "Use the language runtime for Full Trust network access; Isolated packages require v5 grant",
@@ -344,8 +361,10 @@ impl HostCapabilityBroker {
                 "files_root_denied",
                 "File roots are bound to workspace and plugin-data sessions",
             )),
-            "events.subscribe" => Ok(json!({ "cursor": 0 })),
-            "events.ack" => Ok(json!({})),
+            "events.subscribe" | "events.ack" => Err(broker_error(
+                "capability_unimplemented",
+                "Event subscription is not exposed by the Host capability broker",
+            )),
             "agent.invoke" => Err(broker_error(
                 "handler_not_visible",
                 "Cross-plugin handlers are not visible",
@@ -354,7 +373,10 @@ impl HostCapabilityBroker {
                 "conversation_scope_denied",
                 "No conversation is bound to this Worker",
             )),
-            "app.notify.toast" => Ok(json!({})),
+            "app.notify.toast" => Err(broker_error(
+                "capability_unimplemented",
+                "Desktop toasts are not exposed by the Host capability broker",
+            )),
             _ => Err(broker_error(
                 "capability_unimplemented",
                 format!("{key} is not implemented"),
@@ -369,6 +391,10 @@ fn plugin_kv(plugin_id: &str) -> PluginKv {
     }
 }
 
+// ponytail: plugin KV is process-memory only — data is lost on Host restart
+// and nothing in the API distinguishes volatile from durable storage.
+// Upgrade path: persist the namespaced map as JSON under each plugin's
+// data directory when the control plane exposes one to the broker.
 struct PluginKv {
     plugin_id: String,
 }
