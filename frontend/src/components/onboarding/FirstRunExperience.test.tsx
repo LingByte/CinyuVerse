@@ -262,12 +262,16 @@ describe('FirstRunExperience', () => {
     await waitFor(() => expect(managementMock.registry).toHaveBeenCalled());
 
     expect(
-      screen.getByRole('heading', { name: 'Agent 需要新的 IDE 于是有了 Cinyuverse' })
+      screen.getByRole('heading', {
+        name: 'Agent 需要新的 IDE 于是有了 Cinyuverse',
+      })
     ).toBeInTheDocument();
     expect(
       screen.getByText('All in One 的综合 VibeCoding 强大平台')
     ).toBeInTheDocument();
-    expect(screen.getByTestId('onboarding-eq-line')).toHaveTextContent('Cinyuverse');
+    expect(screen.getByTestId('onboarding-eq-line')).toHaveTextContent(
+      'Cinyuverse'
+    );
     expect(screen.getByTestId('onboarding-eq-line')).toHaveTextContent(
       'Cursor'
     );
@@ -582,7 +586,7 @@ describe('FirstRunExperience', () => {
       'Agent 与本机执行',
       '第三方 Agent、安装与凭据',
       '插件与扩展',
-      'Git、工作区与破坏性操作',
+      'Git、草稿与破坏性操作',
       '自动化、工作流与无人值守运行',
       '多智能体委派',
       '远程访问、配对与隧道',

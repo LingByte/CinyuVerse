@@ -49,7 +49,7 @@ describe('WorkspaceActivityRail', () => {
         .getAllByRole('button')
         .filter((button) => button.getAttribute('aria-label'))
         .map((button) => button.getAttribute('aria-label'))
-    ).toEqual(['文件', 'Git', '搜索 (Ctrl+Shift+F)', '会话列表']);
+    ).toEqual(['章节', 'Git', '搜索 (Ctrl+Shift+F)', '创作会话列表']);
   });
 
   it('opens a panel on click without requiring a drag', () => {
@@ -57,7 +57,7 @@ describe('WorkspaceActivityRail', () => {
       <WorkspaceActivityRail isEditorAreaVisible onToggleEditorArea={vi.fn()} />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '会话列表' }));
+    fireEvent.click(screen.getByRole('button', { name: '创作会话列表' }));
     expect(mocks.toggleSessionList).toHaveBeenCalledOnce();
   });
 
@@ -66,15 +66,15 @@ describe('WorkspaceActivityRail', () => {
       <WorkspaceActivityRail isEditorAreaVisible onToggleEditorArea={vi.fn()} />
     );
 
-    fireEvent.keyDown(screen.getByRole('button', { name: '会话列表' }), {
+    fireEvent.keyDown(screen.getByRole('button', { name: '创作会话列表' }), {
       key: 'ArrowUp',
       altKey: true,
     });
-    fireEvent.keyDown(screen.getByRole('button', { name: '会话列表' }), {
+    fireEvent.keyDown(screen.getByRole('button', { name: '创作会话列表' }), {
       key: 'ArrowUp',
       altKey: true,
     });
-    fireEvent.keyDown(screen.getByRole('button', { name: '会话列表' }), {
+    fireEvent.keyDown(screen.getByRole('button', { name: '创作会话列表' }), {
       key: 'ArrowUp',
       altKey: true,
     });
@@ -84,7 +84,7 @@ describe('WorkspaceActivityRail', () => {
         .getAllByRole('button')
         .filter((button) => button.getAttribute('aria-label'))
         .map((button) => button.getAttribute('aria-label'))
-    ).toEqual(['会话列表', '文件', 'Git', '搜索 (Ctrl+Shift+F)']);
+    ).toEqual(['创作会话列表', '章节', 'Git', '搜索 (Ctrl+Shift+F)']);
     expect(getDefaultActivityRailPanelId()).toBe(PANEL_IDS.SESSION_LIST);
   });
 });

@@ -115,7 +115,7 @@ describe('PermissionRequestCard', () => {
     );
 
     expect(
-      screen.queryByRole('menuitem', { name: '本次会话中允许' })
+      screen.queryByRole('menuitem', { name: '本次创作会话中允许' })
     ).toBeNull();
     await user.click(screen.getByRole('button', { name: '展开允许选项' }));
     expect(
@@ -124,7 +124,9 @@ describe('PermissionRequestCard', () => {
     expect(
       screen.getByRole('menuitem', { name: '总是允许全部' })
     ).toBeInTheDocument();
-    await user.click(screen.getByRole('menuitem', { name: '本次会话中允许' }));
+    await user.click(
+      screen.getByRole('menuitem', { name: '本次创作会话中允许' })
+    );
 
     expect(onRespond).toHaveBeenCalledWith('perm-1', {
       kind: 'selected',
@@ -229,7 +231,9 @@ describe('PermissionRequestCard', () => {
   });
 
   it('does not render the ByPass entry when onEnableBypass is absent', () => {
-    render(<PermissionRequestCard request={fileEditRequest()} onRespond={vi.fn()} />);
+    render(
+      <PermissionRequestCard request={fileEditRequest()} onRespond={vi.fn()} />
+    );
 
     expect(screen.queryByRole('menuitem', { name: /ByPass/ })).toBeNull();
   });

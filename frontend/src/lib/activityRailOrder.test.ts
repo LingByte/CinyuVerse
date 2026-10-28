@@ -43,7 +43,7 @@ describe('activityRailOrder', () => {
 
     expect(getDefaultActivityRailPanelId()).toBe(PANEL_IDS.SESSION_LIST);
     expect(ACTIVITY_RAIL_PANEL_TITLES[getDefaultActivityRailPanelId()]).toBe(
-      'Sessions'
+      'Writing Sessions'
     );
   });
 

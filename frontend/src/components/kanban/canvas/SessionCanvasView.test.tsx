@@ -108,7 +108,7 @@ describe('SessionCanvasView', () => {
     );
 
     expect(screen.getByText('画布是空的')).toBeInTheDocument();
-    await user.click(screen.getByText('导入最近的会话'));
+    await user.click(screen.getByText('导入最近的创作会话'));
     expect(screen.getByText(/将导入/)).toBeInTheDocument();
   });
 
@@ -176,7 +176,9 @@ describe('SessionCanvasView', () => {
     );
 
     await user.click(screen.getByRole('button', { name: '新建' }));
-    await user.click(await screen.findByRole('menuitem', { name: '新建会话' }));
+    await user.click(
+      await screen.findByRole('menuitem', { name: '新建创作会话' })
+    );
     expect(onCreateSession).toHaveBeenCalledTimes(1);
   });
 
@@ -201,8 +203,9 @@ describe('SessionCanvasView', () => {
 
     await user.click(screen.getByRole('button', { name: '后退' }));
     expect(
-      JSON.parse(window.localStorage.getItem('cinyuverse:kanban-canvas:p1') ?? '{}')
-        .nodes
+      JSON.parse(
+        window.localStorage.getItem('cinyuverse:kanban-canvas:p1') ?? '{}'
+      ).nodes
     ).toEqual([]);
 
     await user.click(screen.getByRole('button', { name: '前进' }));

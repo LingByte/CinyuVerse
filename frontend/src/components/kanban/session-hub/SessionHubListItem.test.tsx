@@ -71,8 +71,8 @@ describe('SessionHubListItem', () => {
     renderItem();
 
     const name = screen.getByText('A fairly long session name for the card');
-    const deleteButton = screen.getByRole('button', { name: '删除会话' });
-    const renameButton = screen.getByRole('button', { name: '重命名会话' });
+    const deleteButton = screen.getByRole('button', { name: '删除创作会话' });
+    const renameButton = screen.getByRole('button', { name: '重命名创作会话' });
 
     expect(
       name.compareDocumentPosition(deleteButton) &
@@ -97,7 +97,7 @@ describe('SessionHubListItem', () => {
     renderItem({ displayMode: 'canvas' });
 
     const workspace = screen.getByText('Main');
-    const deleteButton = screen.getByRole('button', { name: '删除会话' });
+    const deleteButton = screen.getByRole('button', { name: '删除创作会话' });
     const row = deleteButton.parentElement?.parentElement;
 
     expect(deleteButton.parentElement).not.toHaveClass('absolute');
@@ -113,10 +113,10 @@ describe('SessionHubListItem', () => {
     fireEvent.mouseEnter(card as HTMLElement);
 
     expect(
-      screen.getByRole('button', { name: '删除会话' }).parentElement
+      screen.getByRole('button', { name: '删除创作会话' }).parentElement
     ).toHaveClass('opacity-100');
     expect(
-      screen.getByRole('button', { name: '删除会话' }).parentElement
+      screen.getByRole('button', { name: '删除创作会话' }).parentElement
     ).not.toHaveClass('pointer-events-none');
   });
 });

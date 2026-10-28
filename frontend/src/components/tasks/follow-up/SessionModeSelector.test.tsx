@@ -32,7 +32,7 @@ describe('SessionModeSelector', () => {
         onSelect={vi.fn()}
       />
     );
-    expect(screen.getByTitle('会话模式: Plan')).toBeInTheDocument();
+    expect(screen.getByTitle('创作会话模式: Plan')).toBeInTheDocument();
   });
 
   it('prefers the pending selection over the agent current mode', () => {
@@ -44,7 +44,7 @@ describe('SessionModeSelector', () => {
         onSelect={vi.fn()}
       />
     );
-    expect(screen.getByTitle('会话模式: Code')).toBeInTheDocument();
+    expect(screen.getByTitle('创作会话模式: Code')).toBeInTheDocument();
   });
 
   it('reports the chosen mode id', async () => {
@@ -59,7 +59,7 @@ describe('SessionModeSelector', () => {
       />
     );
 
-    await user.click(screen.getByTitle('会话模式: Plan'));
+    await user.click(screen.getByTitle('创作会话模式: Plan'));
     await user.click(await screen.findByText('Code'));
 
     expect(onSelect).toHaveBeenCalledWith('code');
@@ -80,7 +80,7 @@ describe('SessionModeSelector', () => {
       />
     );
 
-    await user.click(screen.getByTitle('会话模式: Default'));
+    await user.click(screen.getByTitle('创作会话模式: Default'));
     expect(screen.queryByText('Bypass permissions')).not.toBeInTheDocument();
     await user.click(screen.getByRole('switch', { name: '允许危险操作' }));
     await user.click(await screen.findByText('Bypass permissions'));

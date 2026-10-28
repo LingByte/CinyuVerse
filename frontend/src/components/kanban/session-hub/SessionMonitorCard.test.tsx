@@ -87,7 +87,7 @@ describe('SessionMonitorCard', () => {
     expect(container.firstElementChild).not.toHaveClass('border-transparent');
     fireEvent.click(reset);
     expect(onZoom).toHaveBeenCalledWith(session);
-    fireEvent.click(screen.getByRole('button', { name: '收起会话' }));
+    fireEvent.click(screen.getByRole('button', { name: '收起创作会话' }));
     expect(onClose).toHaveBeenCalledWith(session);
     expect(screen.getByTestId('session-conversation')).toHaveAttribute(
       'data-interactive',

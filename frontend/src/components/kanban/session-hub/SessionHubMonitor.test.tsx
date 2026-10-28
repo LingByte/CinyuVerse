@@ -36,7 +36,7 @@ describe('SessionHubMonitor', () => {
       </TooltipProvider>
     );
 
-    expect(screen.queryByText('会话监控区')).not.toBeInTheDocument();
+    expect(screen.queryByText('创作会话监控区')).not.toBeInTheDocument();
     expect(screen.queryByText('1 / 4')).not.toBeInTheDocument();
     expect(screen.getByText('技术重构可行性')).toBeInTheDocument();
     expect(
@@ -63,9 +63,9 @@ describe('SessionHubMonitor', () => {
       </TooltipProvider>
     );
 
-    expect(screen.getByText('会话监控区')).toBeInTheDocument();
+    expect(screen.getByText('创作会话监控区')).toBeInTheDocument();
     expect(
-      screen.getByText('点击左侧会话即可在右侧栏或监控区中展开。')
+      screen.getByText('点击左侧创作会话即可在右侧栏或监控区中展开。')
     ).toBeInTheDocument();
   });
 });

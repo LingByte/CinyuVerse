@@ -331,8 +331,8 @@ describe('KanbanUsageDashboard', () => {
     );
     expect(within(summary).getByText('总 Token')).toBeVisible();
     expect(within(summary).getByText('总费用')).toBeVisible();
-    expect(within(summary).getByText('总会话')).toBeVisible();
-    expect(within(summary).getByText('平均/会话')).toBeVisible();
+    expect(within(summary).getByText('总创作会话')).toBeVisible();
+    expect(within(summary).getByText('平均/创作会话')).toBeVisible();
     expect(within(summary).getByText('活跃天数')).toBeVisible();
     expect(within(summary).getByText('$0.4200')).toBeVisible();
     expect(within(summary).getByText('平均每次 125 Token')).toBeVisible();
@@ -532,7 +532,7 @@ describe('KanbanUsageDashboard', () => {
       </QueryClientProvider>
     );
 
-    const notice = await screen.findByText('132 条厂商日志未能对齐会话');
+    const notice = await screen.findByText('132 条厂商日志未能对齐创作会话');
     fireEvent.click(
       within(notice.closest('div') as HTMLElement).getByRole('button', {
         name: '关闭',
@@ -540,7 +540,7 @@ describe('KanbanUsageDashboard', () => {
     );
 
     expect(
-      screen.queryByText('132 条厂商日志未能对齐会话')
+      screen.queryByText('132 条厂商日志未能对齐创作会话')
     ).not.toBeInTheDocument();
   });
 
@@ -563,14 +563,14 @@ describe('KanbanUsageDashboard', () => {
       </QueryClientProvider>
     );
 
-    expect(screen.getByText('132 条厂商日志未能对齐会话')).toBeVisible();
+    expect(screen.getByText('132 条厂商日志未能对齐创作会话')).toBeVisible();
 
     act(() => {
       vi.advanceTimersByTime(UNATTRIBUTED_VENDOR_NOTICE_MS);
     });
 
     expect(
-      screen.queryByText('132 条厂商日志未能对齐会话')
+      screen.queryByText('132 条厂商日志未能对齐创作会话')
     ).not.toBeInTheDocument();
     vi.useRealTimers();
   });

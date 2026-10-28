@@ -41,11 +41,11 @@ describe('ConversationBundlePanel', () => {
       </div>
     );
 
-    const panel = screen.getByRole('region', { name: '会话包导入导出' });
+    const panel = screen.getByRole('region', { name: '创作会话包导入导出' });
     const importControls = screen.getByRole('group', {
-      name: '导入会话包',
+      name: '导入创作会话包',
     });
-    const jsonWorkspace = screen.getByPlaceholderText(/导出的会话包/);
+    const jsonWorkspace = screen.getByPlaceholderText(/导出的创作会话包/);
 
     expect(getComputedStyle(panel).display).toBe('flex');
     expect(getComputedStyle(panel).flexDirection).toBe('column');
@@ -83,10 +83,10 @@ describe('ConversationBundlePanel', () => {
 
     render(<ConversationBundlePanel />);
 
-    fireEvent.change(screen.getByPlaceholderText('会话 ID'), {
+    fireEvent.change(screen.getByPlaceholderText('创作会话 ID'), {
       target: { value: 'conversation-1' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '导出会话包' }));
+    fireEvent.click(screen.getByRole('button', { name: '导出创作会话包' }));
 
     await waitFor(() =>
       expect(exportMock).toHaveBeenCalledWith({
@@ -95,7 +95,8 @@ describe('ConversationBundlePanel', () => {
       })
     );
     expect(
-      (screen.getByPlaceholderText(/导出的会话包/) as HTMLTextAreaElement).value
+      (screen.getByPlaceholderText(/导出的创作会话包/) as HTMLTextAreaElement)
+        .value
     ).toContain('"bundle_version": "v1"');
   });
 });

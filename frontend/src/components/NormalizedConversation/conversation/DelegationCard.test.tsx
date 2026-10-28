@@ -162,7 +162,7 @@ describe('DelegationCard', () => {
       <DelegationCard delegation={running()} onOpenChild={onOpenChild} />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /查看会话/ }));
+    fireEvent.click(screen.getByRole('button', { name: /查看创作会话/ }));
 
     expect(onOpenChild).toHaveBeenCalledWith('child-conversation-1');
   });
@@ -186,7 +186,7 @@ describe('DelegationCard', () => {
     expect(screen.queryByText('委派给 Codex')).toBeNull();
     expect(screen.getByText('已完成')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /查看会话/ })
+      screen.getByRole('button', { name: /查看创作会话/ })
     ).toBeInTheDocument();
     expect(screen.getByText('耗时 1.5 秒')).toBeInTheDocument();
   });
@@ -213,7 +213,7 @@ describe('DelegationCard', () => {
     const icon = screen.getByTestId('host-delegation-agent-icon');
     const name = screen.getByTestId('host-delegation-agent-name');
     expect(name.className).toContain('host-delegation-wide-only');
-    const open = screen.getByRole('button', { name: /查看会话/ });
+    const open = screen.getByRole('button', { name: /查看创作会话/ });
     const task = screen.getByRole('button', { name: '任务' });
     const result = screen.getByRole('button', { name: '结果' });
     const duration = screen.getByTestId('host-delegation-duration');
@@ -270,7 +270,7 @@ describe('DelegationCard', () => {
   it('hides the open-child action when navigation is unavailable', () => {
     renderCard(<DelegationCard delegation={running()} />);
 
-    expect(screen.queryByRole('button', { name: /查看会话/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /查看创作会话/ })).toBeNull();
   });
 
   it('cancels a running delegation through the active remote transport', async () => {

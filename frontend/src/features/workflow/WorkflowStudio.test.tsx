@@ -171,7 +171,9 @@ describe('WorkflowStudio', () => {
       container.querySelector('.workflow-studio-floating-controls')
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /工作区|workspace/i }));
+    await user.click(
+      screen.getByRole('button', { name: /草稿配置|workspace/i })
+    );
     expect(screen.getByTestId('workflow-workspace-panel')).toHaveTextContent(
       'Workspace form'
     );
@@ -284,7 +286,7 @@ describe('WorkflowStudio', () => {
     expect(
       screen.getByRole('button', { name: /严格|strict/i })
     ).toBeInTheDocument();
-    expect(screen.queryByText(/工作区访问|workspace access/i)).toBeNull();
+    expect(screen.queryByText(/草稿访问|workspace access/i)).toBeNull();
   });
 
   it('switches the output requirement between brief description and strict JSON Schema tabs', async () => {
@@ -475,7 +477,7 @@ describe('WorkflowStudio', () => {
     fireEvent.click(screen.getByRole('button', { name: /start codex/i }));
     expect(
       await screen.findByRole('button', {
-        name: /本次会话: 完全访问|This session: Full Access/i,
+        name: /本次创作会话: 完全访问|This session: Full Access/i,
       })
     ).toBeInTheDocument();
 

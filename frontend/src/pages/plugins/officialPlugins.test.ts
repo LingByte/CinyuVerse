@@ -17,29 +17,31 @@ const en = i18n.getFixedT('en', 'settings');
 
 describe('official plugin presentation', () => {
   it('localizes official plugin names in the active locale', () => {
-    expect(officialPluginName('cinyuverse.office', 'fallback', t)).toBe('办公套件');
-    expect(officialPluginName('cinyuverse.workflow-creator', 'fallback', t)).toBe(
-      'DAG 工作流编辑器'
+    expect(officialPluginName('cinyuverse.office', 'fallback', t)).toBe(
+      '办公套件'
     );
-    expect(officialPluginName('cinyuverse.session-enhance', 'fallback', t)).toBe(
-      '会话增强'
-    );
+    expect(
+      officialPluginName('cinyuverse.workflow-creator', 'fallback', t)
+    ).toBe('DAG 工作流编辑器');
+    expect(
+      officialPluginName('cinyuverse.session-enhance', 'fallback', t)
+    ).toBe('创作会话增强');
     expect(officialPluginName('cinyuverse.multi-agent', 'fallback', t)).toBe(
       '多智能体协同'
     );
-    expect(officialPluginName('cinyuverse.plugin-development', 'fallback', t)).toBe(
-      '插件开发'
-    );
+    expect(
+      officialPluginName('cinyuverse.plugin-development', 'fallback', t)
+    ).toBe('插件开发');
     expect(officialPluginName('third.party', 'Drawio', t)).toBe('Drawio');
     expect(officialPluginName('cinyuverse.office', 'fallback', en)).toBe(
       'Cinyuverse Office'
     );
-    expect(officialPluginName('cinyuverse.workflow-creator', 'fallback', en)).toBe(
-      'Cinyuverse Workflow Creator'
-    );
-    expect(officialPluginName('cinyuverse.session-enhance', 'fallback', en)).toBe(
-      'Session Enhance'
-    );
+    expect(
+      officialPluginName('cinyuverse.workflow-creator', 'fallback', en)
+    ).toBe('Cinyuverse Workflow Creator');
+    expect(
+      officialPluginName('cinyuverse.session-enhance', 'fallback', en)
+    ).toBe('Writing Session Enhance');
     expect(officialPluginName('cinyuverse.multi-agent', 'fallback', en)).toBe(
       'Multi-agent'
     );
@@ -109,7 +111,8 @@ describe('official plugin presentation', () => {
     expect(
       isOpenSourcePluginOrigin({
         sourceKind: 'marketplace',
-        sourceOrigin: 'https://cinyuverse.xforever.xin/marketplace/cinyuverse/office',
+        sourceOrigin:
+          'https://cinyuverse.xforever.xin/marketplace/cinyuverse/office',
       })
     ).toBe(false);
   });

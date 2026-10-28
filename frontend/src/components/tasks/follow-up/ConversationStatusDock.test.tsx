@@ -78,7 +78,7 @@ describe('ConversationStatusDock', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '重发' }));
     const reloadButton = screen.getByRole('button', {
-      name: /重新加载会话/,
+      name: /重新加载创作会话/,
     });
     fireEvent.click(reloadButton);
     expect(onResend).toHaveBeenCalledTimes(1);
@@ -197,7 +197,9 @@ describe('ConversationStatusDock', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: '关闭提示' }));
-    expect(screen.queryByText('部分会话记录无法显示')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('部分创作会话记录无法显示')
+    ).not.toBeInTheDocument();
 
     rerender(
       <ConversationStatusDock
@@ -215,7 +217,9 @@ describe('ConversationStatusDock', () => {
         ]}
       />
     );
-    expect(screen.queryByText('部分会话记录无法显示')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('部分创作会话记录无法显示')
+    ).not.toBeInTheDocument();
 
     rerender(
       <ConversationStatusDock
@@ -270,7 +274,9 @@ describe('ConversationStatusDock', () => {
         ]}
       />
     );
-    expect(screen.queryByText('部分会话记录无法显示')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('部分创作会话记录无法显示')
+    ).not.toBeInTheDocument();
 
     reopened.unmount();
     const reusedSequence = render(
@@ -308,7 +314,7 @@ describe('ConversationStatusDock', () => {
         ]}
       />
     );
-    expect(screen.getByText('部分会话记录无法显示')).toBeInTheDocument();
+    expect(screen.getByText('部分创作会话记录无法显示')).toBeInTheDocument();
   });
 
   it('allows turn failures, interruptions, and local send errors to be dismissed', () => {
@@ -402,13 +408,13 @@ describe('ConversationStatusDock', () => {
     );
 
     expect(
-      screen.getByRole('button', { name: /重新加载会话/ })
+      screen.getByRole('button', { name: /重新加载创作会话/ })
     ).toBeInTheDocument();
     expect(
-      screen.getAllByRole('button', { name: /重新加载会话/ })
+      screen.getAllByRole('button', { name: /重新加载创作会话/ })
     ).toHaveLength(1);
     expect(
-      screen.queryByRole('button', { name: '重新绑定会话' })
+      screen.queryByRole('button', { name: '重新绑定创作会话' })
     ).not.toBeInTheDocument();
   });
 
@@ -457,7 +463,9 @@ describe('ConversationStatusDock', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: '关闭提示' }));
-    expect(screen.queryByText('部分会话记录无法显示')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('部分创作会话记录无法显示')
+    ).not.toBeInTheDocument();
 
     rerender(
       <ConversationStatusDock
@@ -465,7 +473,9 @@ describe('ConversationStatusDock', () => {
         notices={[{ ...notice, id: 'notice:44' }]}
       />
     );
-    expect(screen.queryByText('部分会话记录无法显示')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('部分创作会话记录无法显示')
+    ).not.toBeInTheDocument();
   });
 
   it('does not offer session rebind for notices that do not block the session', () => {
@@ -491,7 +501,7 @@ describe('ConversationStatusDock', () => {
 
     expect(screen.getByText('Grok 4.6 is here!')).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: '重新绑定会话' })
+      screen.queryByRole('button', { name: '重新绑定创作会话' })
     ).not.toBeInTheDocument();
   });
 
@@ -515,7 +525,7 @@ describe('ConversationStatusDock', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '重新绑定会话' }));
+    fireEvent.click(screen.getByRole('button', { name: '重新绑定创作会话' }));
     expect(onRebind).toHaveBeenCalledTimes(1);
   });
 
@@ -569,6 +579,8 @@ describe('ConversationStatusDock', () => {
     expect(within(dock).getByTestId('children-extra')).toHaveTextContent(
       '子会话（1）'
     );
-    expect(within(dock).getByText('部分会话记录无法显示')).toBeInTheDocument();
+    expect(
+      within(dock).getByText('部分创作会话记录无法显示')
+    ).toBeInTheDocument();
   });
 });

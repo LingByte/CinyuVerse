@@ -235,14 +235,14 @@ describe('SessionHubSidebar', () => {
       <Harness onCreateSessionRequested={onCreateSessionRequested} />
     );
 
-    expect(screen.getByText('会话列表')).toBeInTheDocument();
-    expect(screen.getByText('会话列表').className).not.toMatch(/truncate/);
+    expect(screen.getByText('创作会话列表')).toBeInTheDocument();
+    expect(screen.getByText('创作会话列表').className).not.toMatch(/truncate/);
     expect(
       container.querySelector('.flex.items-center.justify-between')
     ).not.toBeNull();
-    await user.click(screen.getByRole('button', { name: '新增会话' }));
+    await user.click(screen.getByRole('button', { name: '新增创作会话' }));
     expect(onCreateSessionRequested).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText('新建会话')).not.toBeInTheDocument();
+    expect(screen.queryByText('新建创作会话')).not.toBeInTheDocument();
   });
 
   it('keeps delete available in archive view without a title or archive border', () => {
@@ -257,7 +257,7 @@ describe('SessionHubSidebar', () => {
       .querySelector('svg.lucide-trash-2')
       ?.closest('button');
 
-    expect(screen.queryByText('会话列表')).not.toBeInTheDocument();
+    expect(screen.queryByText('创作会话列表')).not.toBeInTheDocument();
     expect(screen.queryByText('归档区')).not.toBeInTheDocument();
     expect(deleteButton).not.toBeNull();
     expect(deleteButton).toHaveClass('order-1');
@@ -331,7 +331,7 @@ describe('SessionHubSidebar', () => {
     );
 
     fireEvent.contextMenu(screen.getByText('Archived Session'));
-    await user.click(screen.getByText('移至会话列表'));
+    await user.click(screen.getByText('移至创作会话列表'));
 
     expect(onRestoreArchivedSession).toHaveBeenCalledWith(archivedSession);
   });

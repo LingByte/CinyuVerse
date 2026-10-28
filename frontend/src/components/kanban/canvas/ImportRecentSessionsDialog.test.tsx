@@ -49,7 +49,7 @@ describe('ImportRecentSessionsDialog', () => {
       </HotkeysProvider>
     );
 
-    expect(screen.getByText('将导入 1 个会话')).toBeInTheDocument();
+    expect(screen.getByText('将导入 1 个创作会话')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '导入' }));
     expect(onImport).toHaveBeenCalledWith(['fresh'], '最近 7 天');
   });

@@ -25,13 +25,13 @@ describe('ChangeTargetBranchDialog', () => {
       </HotkeysProvider>
     );
 
-    const title = await screen.findByText('更改目标分支');
-    const selector = screen.getByLabelText('目标分支');
+    const title = await screen.findByText('更改目标版本');
+    const selector = screen.getByLabelText('目标版本');
     const cancel = screen.getByRole('button', { name: '取消' });
-    const confirm = screen.getByRole('button', { name: '更改分支' });
+    const confirm = screen.getByRole('button', { name: '更改版本' });
 
     expect(title).toHaveClass('sr-only');
-    expect(screen.queryByText('为任务尝试选择新的目标分支。')).toBeNull();
+    expect(screen.queryByText('为任务尝试选择新的目标版本。')).toBeNull();
 
     const field = selector.parentElement;
     const actions = cancel.parentElement;
@@ -48,7 +48,7 @@ describe('ChangeTargetBranchDialog', () => {
     expect(confirm).toHaveClass('h-7');
 
     await user.click(selector);
-    const menu = (await screen.findByText('未找到分支')).closest(
+    const menu = (await screen.findByText('未找到版本')).closest(
       '[role="menu"]'
     );
     expect(menu).toHaveClass(

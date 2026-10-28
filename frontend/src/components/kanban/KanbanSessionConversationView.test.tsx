@@ -16,24 +16,24 @@ const {
   sessionsMarkViewedMock,
   useWorkspaceSessionsMock,
 } = vi.hoisted(() => ({
-    attemptsGetMock: vi.fn(() => new Promise<Workspace>(() => {})),
-    sessionsGetByIdMock: vi.fn(() => new Promise<Session>(() => {})),
-    sessionsMarkViewedMock: vi.fn().mockResolvedValue({}),
-    useWorkspaceSessionsMock: vi.fn(() => ({
-      sessions: [] as Array<Record<string, unknown>>,
-      selectedSession: undefined as Session | undefined,
-      selectedSessionId: undefined as string | undefined,
-      selectSession: vi.fn(),
-      selectLatestSession: vi.fn(),
-      isLoading: false,
-      isNewSessionMode: false,
-      isPendingNewSessionMode: false,
-      requestNewSession: vi.fn(),
-      confirmNewSession: vi.fn(),
-      cancelNewSession: vi.fn(),
-      startNewSession: vi.fn(),
-    })),
-  }));
+  attemptsGetMock: vi.fn(() => new Promise<Workspace>(() => {})),
+  sessionsGetByIdMock: vi.fn(() => new Promise<Session>(() => {})),
+  sessionsMarkViewedMock: vi.fn().mockResolvedValue({}),
+  useWorkspaceSessionsMock: vi.fn(() => ({
+    sessions: [] as Array<Record<string, unknown>>,
+    selectedSession: undefined as Session | undefined,
+    selectedSessionId: undefined as string | undefined,
+    selectSession: vi.fn(),
+    selectLatestSession: vi.fn(),
+    isLoading: false,
+    isNewSessionMode: false,
+    isPendingNewSessionMode: false,
+    requestNewSession: vi.fn(),
+    confirmNewSession: vi.fn(),
+    cancelNewSession: vi.fn(),
+    startNewSession: vi.fn(),
+  })),
+}));
 
 vi.mock('@/contexts/ProjectContext', () => ({
   useProject: () => ({ projectId: 'project-1' }),
@@ -243,7 +243,7 @@ describe('KanbanSessionConversationView', () => {
       </MemoryRouter>
     );
 
-    const button = screen.getByRole('button', { name: '新建会话' });
+    const button = screen.getByRole('button', { name: '新建创作会话' });
     expect(screen.queryByTestId('virtualized-list')).not.toBeInTheDocument();
     expect(screen.queryByTestId('follow-up-section')).not.toBeInTheDocument();
 
@@ -515,7 +515,7 @@ describe('KanbanSessionConversationView', () => {
     );
     expect(screen.getByTestId('follow-up-section')).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: '新建会话' })
+      screen.queryByRole('button', { name: '新建创作会话' })
     ).not.toBeInTheDocument();
     expect(selectSession).not.toHaveBeenCalled();
     expect(startNewSession).not.toHaveBeenCalled();
@@ -744,7 +744,7 @@ describe('KanbanSessionConversationView', () => {
     );
 
     expect(
-      await screen.findByRole('button', { name: '新建会话' })
+      await screen.findByRole('button', { name: '新建创作会话' })
     ).toBeInTheDocument();
     expect(screen.queryByTestId('virtualized-list')).not.toBeInTheDocument();
   });

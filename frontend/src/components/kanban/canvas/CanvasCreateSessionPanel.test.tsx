@@ -55,7 +55,7 @@ describe('CanvasCreateSessionPanel', () => {
       </QueryClientProvider>
     );
 
-    expect(screen.getByText('新增会话')).toBeInTheDocument();
+    expect(screen.getByText('新增创作会话')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '创建会话' }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
     await user.click(screen.getByRole('button', { name: '取消' }));

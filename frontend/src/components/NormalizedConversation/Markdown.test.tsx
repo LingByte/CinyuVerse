@@ -257,20 +257,20 @@ describe('Markdown', () => {
     expect(image).toHaveAttribute('src', 'data:image/png;base64,abc123');
   });
 
-  it('renders relative workspace images through the Tauri file asset URL', () => {
+  it('renders relative workspace images through the Tauri file asset URL', async () => {
     renderMarkdown('![Mockup](outputs/mockup.png)');
 
-    const image = screen.getByRole('img', { name: 'Mockup' });
+    const image = await screen.findByRole('img', { name: 'Mockup' });
     expect(image).toHaveAttribute(
       'src',
       'asset://C:/workspace/project/outputs/mockup.png'
     );
   });
 
-  it('renders bare image paths inline', () => {
+  it('renders bare image paths inline', async () => {
     renderMarkdown('outputs/mockup.png');
 
-    const image = screen.getByRole('img', { name: 'mockup.png' });
+    const image = await screen.findByRole('img', { name: 'mockup.png' });
     expect(image).toHaveAttribute(
       'src',
       'asset://C:/workspace/project/outputs/mockup.png'
@@ -717,7 +717,9 @@ describe('Markdown raw HTML', () => {
     );
 
     expect(container.querySelector('script')).not.toBeInTheDocument();
-    expect(container.querySelector('.conv-md-raw-html')).not.toBeInTheDocument();
+    expect(
+      container.querySelector('.conv-md-raw-html')
+    ).not.toBeInTheDocument();
     expect(container.textContent).toContain('<system-reminder>');
     expect(container.textContent).toContain('<script>');
   });
@@ -737,7 +739,9 @@ describe('Markdown raw HTML', () => {
       rawHtml: false,
     });
 
-    expect(container.querySelector('.conv-md-raw-html')).not.toBeInTheDocument();
+    expect(
+      container.querySelector('.conv-md-raw-html')
+    ).not.toBeInTheDocument();
     expect(container.textContent).toContain('<div class="box">hi</div>');
   });
 });

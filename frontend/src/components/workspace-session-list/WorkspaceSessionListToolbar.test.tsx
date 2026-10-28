@@ -35,10 +35,10 @@ describe('WorkspaceSessionListToolbar', () => {
   it('renders action buttons without a session list title', () => {
     renderToolbar();
 
-    expect(screen.queryByText('会话列表')).not.toBeInTheDocument();
+    expect(screen.queryByText('创作会话列表')).not.toBeInTheDocument();
     expect(screen.queryByText('归档区')).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: '新建会话' })
+      screen.getByRole('button', { name: '新建创作会话' })
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: '打开归档区' })
@@ -48,37 +48,43 @@ describe('WorkspaceSessionListToolbar', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '排序' })).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: '搜索会话' })
+      screen.getByRole('button', { name: '搜索创作会话' })
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('textbox', { name: '搜索会话' })
+      screen.queryByRole('textbox', { name: '搜索创作会话' })
     ).not.toBeInTheDocument();
     expect(
       screen
         .getAllByRole('button')
         .map((button) => button.getAttribute('aria-label'))
-    ).toEqual(['搜索会话', '新建会话', '打开归档区', '排序', '批量删除']);
+    ).toEqual([
+      '搜索创作会话',
+      '新建创作会话',
+      '打开归档区',
+      '排序',
+      '批量删除',
+    ]);
   });
 
   it('expands the search button into a field and hides other actions', () => {
     renderToolbar();
 
-    fireEvent.click(screen.getByRole('button', { name: '搜索会话' }));
-    const search = screen.getByRole('textbox', { name: '搜索会话' });
+    fireEvent.click(screen.getByRole('button', { name: '搜索创作会话' }));
+    const search = screen.getByRole('textbox', { name: '搜索创作会话' });
     expect(search).toHaveAttribute('aria-expanded', 'true');
     expect(
-      screen.queryByRole('button', { name: '搜索会话' })
+      screen.queryByRole('button', { name: '搜索创作会话' })
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: '新建会话' })
+      screen.queryByRole('button', { name: '新建创作会话' })
     ).not.toBeInTheDocument();
 
     fireEvent.blur(search);
     expect(
-      screen.getByRole('button', { name: '搜索会话' })
+      screen.getByRole('button', { name: '搜索创作会话' })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: '新建会话' })
+      screen.getByRole('button', { name: '新建创作会话' })
     ).toBeInTheDocument();
   });
 

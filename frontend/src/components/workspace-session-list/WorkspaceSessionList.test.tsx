@@ -69,7 +69,11 @@ describe('WorkspaceSessionList', () => {
   });
 
   it('groups sessions under the workspace branch or worktree name', () => {
-    const main = workspace({ id: 'ws-main', branch: 'main', name: 'Cinyuverse' });
+    const main = workspace({
+      id: 'ws-main',
+      branch: 'main',
+      name: 'Cinyuverse',
+    });
     const worktree = workspace({
       id: 'ws-wt',
       branch: 'feature/login',
@@ -492,7 +496,7 @@ describe('WorkspaceSessionList', () => {
       true
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '删除会话' }));
+    fireEvent.click(screen.getByRole('button', { name: '删除创作会话' }));
     expect(onDeleteSession).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'session-1' })
     );

@@ -171,10 +171,10 @@ describe('AppearanceSettings', () => {
     const user = userEvent.setup();
     render(<AppearanceSettings />);
 
-    expect(screen.getByText('Kanban 会话列表')).toBeInTheDocument();
+    expect(screen.getByText('Kanban 创作会话列表')).toBeInTheDocument();
     const selects = screen.getAllByRole('combobox');
     await user.click(selects[5]);
-    await user.click(screen.getByRole('option', { name: '工作区分组视图' }));
+    await user.click(screen.getByRole('option', { name: '草稿分组视图' }));
 
     expect(mocks.setKanbanSessionListView).toHaveBeenCalledWith('workspace');
   });
@@ -183,7 +183,7 @@ describe('AppearanceSettings', () => {
     const user = userEvent.setup();
     render(<AppearanceSettings />);
 
-    expect(screen.getByText('会话看板样式')).toBeInTheDocument();
+    expect(screen.getByText('创作会话看板样式')).toBeInTheDocument();
     const selects = screen.getAllByRole('combobox');
     await user.click(selects[6]);
     await user.click(screen.getByRole('option', { name: '无限画布' }));

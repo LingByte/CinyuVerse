@@ -19,7 +19,7 @@ describe('getSessionUiErrorMessage', () => {
         'Internal error: Invalid repository: git command failed: fatal: invalid reference: vk/0686-new-session-work',
         '创建会话失败，请稍后重试。'
       )
-    ).toBe('所选分支不存在，工作区/分支列表可能已过期。请刷新后重新选择。');
+    ).toBe('所选版本不存在，草稿/版本列表可能已过期。请刷新后重新选择。');
   });
 
   it('falls back to the original message when no specialized mapping exists', () => {

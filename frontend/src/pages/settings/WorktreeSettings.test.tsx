@@ -197,7 +197,7 @@ describe('WorktreeSettings', () => {
     await user.type(prefixInput, 'a/');
     expect(prefixInput).toHaveValue('a/');
     expect(
-      screen.getByText('分支前缀不能以 / 开头或结尾。')
+      screen.getByText('版本前缀不能以 / 开头或结尾。')
     ).toBeInTheDocument();
   });
 });

@@ -72,8 +72,10 @@ describe('TurnErrorCard', () => {
       />
     );
 
-    expect(screen.getByText('代理会话已过期')).toBeInTheDocument();
-    const rebindButton = screen.getByRole('button', { name: /重新绑定会话/ });
+    expect(screen.getByText('代理创作会话已过期')).toBeInTheDocument();
+    const rebindButton = screen.getByRole('button', {
+      name: /重新绑定创作会话/,
+    });
     fireEvent.click(rebindButton);
     expect(onRebind).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(rebindButton).not.toBeDisabled());
@@ -89,7 +91,9 @@ describe('TurnErrorCard', () => {
     );
 
     expect(screen.getByText('代理无响应')).toBeInTheDocument();
-    const reloadButton = screen.getByRole('button', { name: /重新加载会话/ });
+    const reloadButton = screen.getByRole('button', {
+      name: /重新加载创作会话/,
+    });
     fireEvent.click(reloadButton);
     expect(onReload).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(reloadButton).not.toBeDisabled());
@@ -105,7 +109,7 @@ describe('TurnErrorCard', () => {
 
     expect(screen.getByText('连接已断开')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /重新加载会话/ })
+      screen.getByRole('button', { name: /重新加载创作会话/ })
     ).toBeInTheDocument();
   });
 
@@ -130,7 +134,7 @@ describe('TurnErrorCard', () => {
       />
     );
 
-    expect(screen.getByText('会话出错')).toBeInTheDocument();
+    expect(screen.getByText('创作会话出错')).toBeInTheDocument();
     expect(
       screen.getByText('model unavailable（rpc_-32050）')
     ).toBeInTheDocument();
@@ -139,7 +143,7 @@ describe('TurnErrorCard', () => {
   it('falls back to a generic error when there is no code', () => {
     render(<TurnErrorCard error={err({ message: 'something failed' })} />);
 
-    expect(screen.getByText('会话出错')).toBeInTheDocument();
+    expect(screen.getByText('创作会话出错')).toBeInTheDocument();
     expect(screen.getByText('something failed')).toBeInTheDocument();
   });
 
@@ -168,7 +172,7 @@ describe('TurnErrorCard', () => {
     expect(screen.getByText('请求被拒绝')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /重新加载/ })).toBeNull();
     expect(
-      screen.getByRole('button', { name: /重新绑定会话/ })
+      screen.getByRole('button', { name: /重新绑定创作会话/ })
     ).toBeInTheDocument();
   });
 
@@ -182,7 +186,7 @@ describe('TurnErrorCard', () => {
 
     expect(screen.getByText('服务故障')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /重新加载会话/ })
+      screen.getByRole('button', { name: /重新加载创作会话/ })
     ).toBeInTheDocument();
   });
 
@@ -196,7 +200,7 @@ describe('TurnErrorCard', () => {
 
     expect(screen.getByText('已触发限流')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /重新加载会话/ })
+      screen.getByRole('button', { name: /重新加载创作会话/ })
     ).toBeInTheDocument();
   });
 
@@ -212,7 +216,7 @@ describe('TurnErrorCard', () => {
       />
     );
 
-    expect(screen.getByText('会话出错')).toBeInTheDocument();
+    expect(screen.getByText('创作会话出错')).toBeInTheDocument();
     expect(screen.queryByText('已触发限流')).toBeNull();
   });
 
@@ -235,7 +239,7 @@ describe('TurnErrorCard', () => {
     );
     expect(
       within(header as HTMLElement).getByRole('button', {
-        name: /重新加载会话/,
+        name: /重新加载创作会话/,
       })
     ).toBeInTheDocument();
     expect(

@@ -38,7 +38,9 @@ describe('AutomationCenter', () => {
       screen.getByText(/选择自动化类型|choose an automation type/i)
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /单次会话|single session/i })
+      screen.getByRole('button', {
+        name: /单次创作会话|single writing session/i,
+      })
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /工作流|workflow/i })

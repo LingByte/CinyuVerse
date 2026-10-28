@@ -76,11 +76,11 @@ describe('SessionSettingsSummary', () => {
     );
 
     expect(
-      screen.getByRole('button', { name: '本次会话: Agent' })
+      screen.getByRole('button', { name: '本次创作会话: Agent' })
     ).toBeInTheDocument();
 
     await user.click(screen.getByTestId('session-settings-summary'));
-    expect(screen.getByText('会话模式')).toBeInTheDocument();
+    expect(screen.getByText('创作会话模式')).toBeInTheDocument();
     expect(screen.queryByText('Mode')).not.toBeInTheDocument();
   });
 
@@ -100,7 +100,7 @@ describe('SessionSettingsSummary', () => {
 
     expect(
       screen.getByRole('button', {
-        name: '本次会话: Plan · 5.6 Terra · 高',
+        name: '本次创作会话: Plan · 5.6 Terra · 高',
       })
     ).toBeInTheDocument();
   });
@@ -117,7 +117,7 @@ describe('SessionSettingsSummary', () => {
 
     expect(
       screen.getByRole('button', {
-        name: '本次会话: 5.6 Terra · 高 · Fast',
+        name: '本次创作会话: 5.6 Terra · 高 · Fast',
       })
     ).toBeInTheDocument();
     expect(screen.getByText('5.6 Terra')).toHaveClass(
@@ -143,12 +143,12 @@ describe('SessionSettingsSummary', () => {
       />
     );
 
-    await user.click(screen.getByRole('button', { name: /本次会话/ }));
+    await user.click(screen.getByRole('button', { name: /本次创作会话/ }));
     await user.click(screen.getByText('Model'));
     fireEvent.click(await screen.findByRole('menuitem', { name: '5.6 Sol' }));
     expect(onSelectConfigOption).toHaveBeenCalledWith('model', 'sol');
 
-    await user.click(screen.getByRole('button', { name: /本次会话/ }));
+    await user.click(screen.getByRole('button', { name: /本次创作会话/ }));
     await user.click(screen.getByText('Fast'));
     expect(onSelectConfigOption).toHaveBeenCalledWith('fast_mode', 'true');
   });
@@ -164,7 +164,7 @@ describe('SessionSettingsSummary', () => {
       />
     );
 
-    await user.click(screen.getByRole('button', { name: /本次会话/ }));
+    await user.click(screen.getByRole('button', { name: /本次创作会话/ }));
     await user.click(screen.getByText('Fast mode'));
 
     expect(onSelectConfigOption).toHaveBeenCalledWith('fast-mode', 'on');
@@ -221,7 +221,7 @@ describe('SessionSettingsSummary', () => {
 
     expect(screen.getByTestId('session-settings-summary')).toHaveAttribute(
       'aria-label',
-      '本次会话: 默认'
+      '本次创作会话: 默认'
     );
   });
 
@@ -246,8 +246,10 @@ describe('SessionSettingsSummary', () => {
       />
     );
 
-    await user.click(screen.getByRole('button', { name: '本次会话: Agent' }));
-    await user.click(screen.getByText('会话模式'));
+    await user.click(
+      screen.getByRole('button', { name: '本次创作会话: Agent' })
+    );
+    await user.click(screen.getByText('创作会话模式'));
     fireEvent.click(screen.getByRole('menuitem', { name: '允许危险操作关闭' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: '完全访问' }));
 

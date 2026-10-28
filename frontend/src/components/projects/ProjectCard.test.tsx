@@ -53,7 +53,7 @@ describe('ProjectCard', () => {
     await user.click(screen.getByRole('button'));
 
     expect(await screen.findByText('查看详情')).toBeInTheDocument();
-    expect(screen.getByText('在 IDE 中打开')).toBeInTheDocument();
+    expect(screen.getByText('在编辑器中打开')).toBeInTheDocument();
     expect(screen.getByText('编辑')).toBeInTheDocument();
     expect(screen.getByText('删除')).toBeInTheDocument();
   });

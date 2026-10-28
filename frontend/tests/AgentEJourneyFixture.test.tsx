@@ -37,7 +37,7 @@ describe('Agent E desktop journey', () => {
       'fixture_delegate'
     );
     const openChildButtons = screen.getAllByRole('button', {
-      name: '查看会话',
+      name: '查看创作会话',
     });
     await user.click(openChildButtons[1]);
     expect(

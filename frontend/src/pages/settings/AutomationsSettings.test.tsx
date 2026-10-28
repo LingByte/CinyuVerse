@@ -263,9 +263,9 @@ describe('AutomationsSettings', () => {
 
     await user.click(await screen.findByRole('button', { name: '新建自动化' }));
 
-    expect(screen.getByRole('combobox', { name: '项目' })).toBeDisabled();
-    expect(screen.getByText('还没有可用于自动化的项目。')).toBeVisible();
-    expect(screen.getByRole('link', { name: '添加项目' })).toHaveAttribute(
+    expect(screen.getByRole('combobox', { name: '作品' })).toBeDisabled();
+    expect(screen.getByText('还没有可用于自动化的作品。')).toBeVisible();
+    expect(screen.getByRole('link', { name: '添加作品' })).toHaveAttribute(
       'href',
       '/local-projects'
     );
@@ -585,9 +585,7 @@ describe('AutomationsSettings', () => {
     const isolation = screen.getByRole('combobox', { name: 'Isolation' });
     isolation.focus();
     await user.keyboard('{ArrowDown}');
-    await user.click(
-      screen.getByRole('option', { name: 'Shared project root' })
-    );
+    await user.click(screen.getByRole('option', { name: 'Shared novel root' }));
     expect(screen.getByRole('alert')).toHaveTextContent(
       'backend rejects dirty roots'
     );

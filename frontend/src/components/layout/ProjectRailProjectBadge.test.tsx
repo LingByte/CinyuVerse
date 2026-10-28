@@ -18,8 +18,8 @@ describe('ProjectRailProjectBadge', () => {
   it('renders the project identity as its own component', () => {
     render(<ProjectRailProjectBadge name="Cinyuverse" active />);
 
-    expect(screen.getByText('VI')).toBeInTheDocument();
-    expect(screen.getByText('VI').parentElement).toHaveClass(
+    expect(screen.getByText('CI')).toBeInTheDocument();
+    expect(screen.getByText('CI').parentElement).toHaveClass(
       'project-rail-project-badge--active'
     );
   });

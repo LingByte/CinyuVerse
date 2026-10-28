@@ -71,7 +71,7 @@ describe('PiConfigurationPanel', () => {
       screen.getByLabelText('配置目录（PI_CODING_AGENT_DIR）'),
       '/tmp/pi-config'
     );
-    await userEvent.click(screen.getByLabelText('自动信任当前工作区'));
+    await userEvent.click(screen.getByLabelText('自动信任当前草稿'));
     await userEvent.click(screen.getByRole('button', { name: '保存 Runtime' }));
 
     expect(agentManagementApi.savePiRuntime).toHaveBeenCalledWith({

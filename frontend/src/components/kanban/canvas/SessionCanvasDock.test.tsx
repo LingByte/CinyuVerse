@@ -45,11 +45,13 @@ describe('SessionCanvasDock', () => {
     expect(onCreateSession).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: '新建' }));
-    await user.click(await screen.findByRole('menuitem', { name: '新建会话' }));
+    await user.click(
+      await screen.findByRole('menuitem', { name: '新建创作会话' })
+    );
     expect(onCreateSession).toHaveBeenCalledTimes(1);
 
-    await user.click(screen.getByRole('button', { name: '导入会话' }));
-    const project = await screen.findByRole('menuitem', { name: '项目导入' });
+    await user.click(screen.getByRole('button', { name: '导入创作会话' }));
+    const project = await screen.findByRole('menuitem', { name: '作品导入' });
     const recent = screen.getByRole('menuitem', { name: '最近时间导入' });
     const agent = screen.getByRole('menuitem', { name: 'Agent 导入' });
     expect(project.querySelector('svg')).toBeTruthy();

@@ -146,7 +146,7 @@ describe('AgentDefaultsField', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '配置 Grok' }));
     expect(
-      await screen.findByText('无法读取该智能体的会话选项。')
+      await screen.findByText('无法读取该智能体的创作会话选项。')
     ).toBeVisible();
   });
 });

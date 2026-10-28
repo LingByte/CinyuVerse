@@ -34,6 +34,6 @@ describe('searchTagsAndFiles', () => {
     )?.tag;
 
     expect(reviewTag?.tag_name).toBe('审查变更');
-    expect(reviewTag?.content).toContain('未提交代码变更');
+    expect(reviewTag?.content).toContain('未保存内容变更');
   });
 });

@@ -70,12 +70,14 @@ describe('KanbanLayoutToggles', () => {
       </TooltipProvider>
     );
 
-    await user.click(screen.getByRole('button', { name: '显示/隐藏会话列表' }));
     await user.click(
-      screen.getByRole('button', { name: '显示/隐藏会话监控区' })
+      screen.getByRole('button', { name: '显示/隐藏创作会话列表' })
     );
     await user.click(
-      screen.getByRole('button', { name: '显示/隐藏会话执行区' })
+      screen.getByRole('button', { name: '显示/隐藏创作会话监控区' })
+    );
+    await user.click(
+      screen.getByRole('button', { name: '显示/隐藏创作会话执行区' })
     );
 
     expect(useLayoutStore.getState().isKanbanListVisible).toBe(false);
@@ -98,7 +100,7 @@ describe('KanbanLayoutToggles', () => {
     );
 
     expect(
-      screen.queryByRole('button', { name: '显示/隐藏会话列表' })
+      screen.queryByRole('button', { name: '显示/隐藏创作会话列表' })
     ).not.toBeInTheDocument();
   });
 });
@@ -124,10 +126,10 @@ describe('WorkspaceBranchControls canvas list toggle', () => {
     });
     const buttons = group.querySelectorAll('button');
     expect(buttons[0]).toHaveTextContent('Projects');
-    expect(buttons[1]).toHaveAttribute('aria-label', '隐藏会话列表');
+    expect(buttons[1]).toHaveAttribute('aria-label', '隐藏创作会话列表');
 
     await user.click(buttons[1]);
-    expect(screen.getByRole('button', { name: '显示会话列表' })).toBe(
+    expect(screen.getByRole('button', { name: '显示创作会话列表' })).toBe(
       buttons[1]
     );
   });
@@ -144,7 +146,7 @@ describe('WorkspaceBranchControls canvas list toggle', () => {
     );
 
     expect(
-      screen.queryByRole('button', { name: '隐藏会话列表' })
+      screen.queryByRole('button', { name: '隐藏创作会话列表' })
     ).not.toBeInTheDocument();
   });
 });

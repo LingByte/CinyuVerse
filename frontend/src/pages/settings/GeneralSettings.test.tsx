@@ -140,7 +140,7 @@ describe('GeneralSettings Agent model catalogs', () => {
       expect(agentsApiMock.capabilityCatalog).toHaveBeenCalled();
     });
 
-    await user.click(screen.getByRole('button', { name: '刷新会话配置' }));
+    await user.click(screen.getByRole('button', { name: '刷新创作会话配置' }));
 
     await waitFor(() => {
       expect(agentsApiMock.refreshCapabilityCatalog).toHaveBeenCalledWith(
@@ -229,7 +229,7 @@ describe('GeneralSettings Agent model catalogs', () => {
     const { updateAndSaveConfig } = renderSettings();
 
     const toggle = await screen.findByRole('switch', {
-      name: '创建会话时允许选择先前的会话以继续',
+      name: '创建创作会话时允许选择先前的创作会话以继续',
     });
     expect(toggle).not.toBeChecked();
 

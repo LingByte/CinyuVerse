@@ -267,7 +267,7 @@ describe('product plugin experience', () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        /通过插件扩展平台能力，新建会话后生效|Extend the platform with plugins/i
+        /通过插件扩展平台能力，新建创作会话后生效|Extend the platform with plugins/i
       )
     ).toBeVisible();
     expect(
@@ -277,7 +277,7 @@ describe('product plugin experience', () => {
     ).toBeTruthy();
     expect(
       screen.getByText(
-        /通过插件扩展平台能力，新建会话后生效|Extend the platform with plugins/i
+        /通过插件扩展平台能力，新建创作会话后生效|Extend the platform with plugins/i
       ).parentElement
     ).toHaveClass('product-plugins-intro-row');
     expect(
@@ -680,7 +680,9 @@ describe('product plugin experience', () => {
       .getByText('办公套件')
       .closest('.product-plugin-row');
     expect(officeRow).not.toBeNull();
-    expect(within(officeRow as HTMLElement).getByText('cinyuverse')).toBeVisible();
+    expect(
+      within(officeRow as HTMLElement).getByText('cinyuverse')
+    ).toBeVisible();
     expect(
       within(officeRow as HTMLElement).getByText(/效率|Productivity/)
     ).toBeVisible();
@@ -697,7 +699,9 @@ describe('product plugin experience', () => {
         name: /^(安装|Install)$/,
       })
     ).toBeVisible();
-    expect(screen.queryByText(/cinyuverse\/cinyuverse.office@/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/cinyuverse\/cinyuverse.office@/)
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: /^(官方|Official)$/ }));
     expect(screen.queryByText('Notes')).not.toBeInTheDocument();
     expect(screen.getByText('办公套件')).toBeVisible();

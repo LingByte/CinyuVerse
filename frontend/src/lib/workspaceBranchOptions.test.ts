@@ -136,7 +136,7 @@ describe('buildWorkspaceBranchOptions', () => {
     expect(getWorkspaceBranchCheckoutHint(currentBranchOption)).toBeNull();
 
     expect(getWorkspaceBranchCheckoutHint(otherBranchOption)).toBe(
-      '选择后会先在当前项目目录 checkout 到该分支，以确保工作区正确。'
+      '选择后会先在当前作品目录 checkout 到该版本，以确保草稿正确。'
     );
   });
 
