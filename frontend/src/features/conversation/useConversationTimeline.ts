@@ -119,10 +119,14 @@ export function useConversationTimeline(
           return;
         }
         dispatch({ type: 'load_success', conversationId, detail });
+        // Imported history (external_session_id set) is read-only: contacting
+        // the agent runtime for authoritative controls would launch a session
+        // for a conversation the agent has never seen.
         const needsAuthoritativeZeroTurnControls =
-          detail.summary.message_count === 0n ||
-          ((detail.session_config_options?.length ?? 0) === 0 &&
-            !detail.session_modes);
+          !detail.summary.external_session_id &&
+          (detail.summary.message_count === 0n ||
+            ((detail.session_config_options?.length ?? 0) === 0 &&
+              !detail.session_modes));
         if (detail.summary.agent_id && needsAuthoritativeZeroTurnControls) {
           return conversationApi
             .ensureSessionControls(conversationId)
@@ -270,11 +274,7 @@ export function useConversationTimeline(
   }, [conversationId, hasDetail, loadDetail, reportLoadError]);
 
   useEffect(() => {
-    if (
-      transport.environment === 'desktop' ||
-      !conversationId ||
-      !hasDetail
-    ) {
+    if (transport.environment === 'desktop' || !conversationId || !hasDetail) {
       return;
     }
     let cancelled = false;
