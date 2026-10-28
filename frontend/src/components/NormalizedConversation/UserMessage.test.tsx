@@ -17,6 +17,7 @@ vi.mock('@/components/dialogs/wysiwyg/ImagePreviewDialog', () => ({
 
 vi.mock('@/components/ConfigProvider', () => ({
   useUserSystem: () => ({ capabilities: {} }),
+  useOptionalUserSystem: () => null,
 }));
 
 vi.mock('@/contexts/RetryUiContext', () => ({
@@ -119,7 +120,9 @@ describe('UserMessage', () => {
   });
 
   it('keeps agent mentions as chips with the real agent icon after send', () => {
-    render(<UserMessage content="Ask [&Codex](cinyuverse://agent/codex) next" />);
+    render(
+      <UserMessage content="Ask [&Codex](cinyuverse://agent/codex) next" />
+    );
 
     const chip = screen
       .getByText('&Codex')

@@ -211,16 +211,22 @@ function parseAgentMentionAt(
   source: string,
   start: number
 ): { token: SessionComposerStructuredToken; end: number } | null {
+  // Serialized form: [&Name](cinyuverse://agent/<kind>) — the URI prefix
+  // must be matched by its full length; a short slice never equals it.
+  const AGENT_URI_PREFIX = '(cinyuverse://agent/';
   if (source.slice(start, start + 2) !== '[&') return null;
   const namePart = readEscapedPart(source, start + 2, ']');
   if (
     !namePart ||
-    source.slice(namePart.end + 1, namePart.end + 16) !== '(cinyuverse://agent/'
+    source.slice(
+      namePart.end + 1,
+      namePart.end + 1 + AGENT_URI_PREFIX.length
+    ) !== AGENT_URI_PREFIX
   ) {
     return null;
   }
 
-  const kindStart = namePart.end + 16;
+  const kindStart = namePart.end + 1 + AGENT_URI_PREFIX.length;
   const kindEnd = source.indexOf(')', kindStart);
   if (kindEnd < 0 || kindEnd === kindStart) return null;
 
