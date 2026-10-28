@@ -1,0 +1,855 @@
+{
+  "source": "https://github.com/oscar-wang-xin/xin-skills",
+  "skills": [
+    {
+      "id": "xin-fanqie-style-baiyujing",
+      "book": "剑起白玉京",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "轻松沙雕仙侠",
+        "现代口语解构修仙",
+        "双线交织"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fanqie-style-diaodazhutian",
+      "book": "镇守百万年，我的徒弟吊打诸天",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "搞笑轻松",
+        "爽文碾压",
+        "师徒反差"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fanqie-style-difujiaowoxiaoxiansheng",
+      "book": "地府叫我小先生",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "悬疑灵异",
+        "北方乡土语言",
+        "民间传说考据"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fanqie-style-feishengshaletiandi",
+      "book": "危！刚飞升我就杀了天帝？",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "沙雕爽文",
+        "仙侠狼人杀",
+        "悬疑推理"
+      ],
+      "hasExamples": false
+    },
+    {
+      "id": "xin-fanqie-style-fengliuzongshi",
+      "book": "风流宗师，从五禽拳开始镇压帝女",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "苟道流",
+        "老头扮猪吃虎",
+        "杀伐果断"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fanqie-style-fenshi",
+      "book": "我靠焚尸超凡入圣",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "半文半白悬疑灵异",
+        "系统奖励升级",
+        "恐怖+冷幽默"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fanqie-style-gou",
+      "book": "每年加一点从山野村夫成仙界道祖",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "苟道流",
+        "长生苟王",
+        "延迟复仇"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fanqie-style-guishe",
+      "book": "诡舍",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "悬疑无限流",
+        "微惊悚求生",
+        "规则谜题"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fanqie-style-hanfeixiuxian",
+      "book": "谁让这个悍匪修仙的！",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "搞笑腹黑",
+        "土匪思维解构修仙",
+        "反差爽文"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fanqie-style-moshibianzhi",
+      "book": "我给末世主角们发编制",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "反套路",
+        "国家力量降维打击",
+        "冷幽默群像"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fanqie-style-shirizhongyan",
+      "book": "十日终焉",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "冷峻悬疑",
+        "死亡博弈",
+        "推理反转"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fanqie-style-yanyulou",
+      "book": "烟雨楼",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "传统玄幻扮猪吃虎",
+        "多视角",
+        "冷幽默"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fanqie-style-zhanshen",
+      "book": "我在精神病院学斩神",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "温馨日常",
+        "悬疑暗线",
+        "信息差"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fanqie-style-zhenliyijian",
+      "book": "真理，掌握在我一剑之内",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "冷峻黑暗复仇",
+        "锋利讽刺",
+        "热血燃"
+      ],
+      "hasExamples": false
+    },
+    {
+      "id": "xin-fanqie-style-zhenyaoguan",
+      "book": "从前有座镇妖关",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "黑色幽默",
+        "反差沙雕",
+        "都市高武"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fanqie-style-zhushenyuxi",
+      "book": "诸神愚戏",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "克系黑色幽默",
+        "神明末世",
+        "荒诞吐槽"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fanqie-style-busidishi",
+      "book": "不死帝师",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "长生流",
+        "时间差碾压",
+        "旁观式温情"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fanqie-style-wobushixishen",
+      "book": "我不是戏神",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "中式怪诞",
+        "诡异恐怖",
+        "冷幽默"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fanqie-style-yishoumicheng",
+      "book": "异兽迷城",
+      "author": "",
+      "category": "番茄小说风格",
+      "keywords": [
+        "都市克苏鲁",
+        "兽化生存",
+        "悬疑推演"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-gulong-style-7wuqi-quantou",
+      "book": "七种武器之拳头",
+      "author": "愤怒的小马",
+      "category": "古龙武侠风格",
+      "keywords": [
+        "热血浪子",
+        "黑色幽默",
+        "江湖残酷"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-gulong-style-chuliuxiangdashamo",
+      "book": "楚留香系列·大沙漠",
+      "author": "",
+      "category": "古龙武侠风格",
+      "keywords": [
+        "武侠悬疑",
+        "朋友情谊",
+        "冷幽默"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-gulong-style-duoqingjianke",
+      "book": "多情剑客无情剑",
+      "author": "",
+      "category": "古龙武侠风格",
+      "keywords": [
+        "苍凉浪漫",
+        "江湖豪情",
+        "个人悲歌"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-gulong-style-huanleyingxiong",
+      "book": "欢乐英雄",
+      "author": "",
+      "category": "古龙武侠风格",
+      "keywords": [
+        "轻松欢乐",
+        "底层温情",
+        "以弱制强"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-jinyong-style-bixuejian",
+      "book": "碧血剑",
+      "author": "",
+      "category": "金庸武侠风格",
+      "keywords": [
+        "金庸早期",
+        "传统武侠白描",
+        "家国悲慨"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-jinyong-style-lianchengjue",
+      "book": "连城诀",
+      "author": "",
+      "category": "金庸武侠风格",
+      "keywords": [
+        "阴冷反讽",
+        "老实人悲剧",
+        "余韵式收束"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-jinyong-style-ludingji",
+      "book": "鹿鼎记",
+      "author": "",
+      "category": "金庸武侠风格",
+      "keywords": [
+        "市井滑稽",
+        "反讽解构",
+        "韦小宝"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-jinyong-style-shediaoyingxiongzhuan",
+      "book": "射雕英雄传",
+      "author": "",
+      "category": "金庸武侠风格",
+      "keywords": [
+        "新武侠",
+        "家国恩义",
+        "少年成长"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-jinyong-style-shendiaoxialv",
+      "book": "神雕侠侣",
+      "author": "",
+      "category": "金庸武侠风格",
+      "keywords": [
+        "至情叙事",
+        "悲壮底色",
+        "情义恩怨"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-jinyong-style-tianlongbabu",
+      "book": "天龙八部",
+      "author": "",
+      "category": "金庸武侠风格",
+      "keywords": [
+        "多线群像",
+        "命运悲剧",
+        "悲喜交替"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-jinyong-style-xiakexing",
+      "book": "侠客行",
+      "author": "",
+      "category": "金庸武侠风格",
+      "keywords": [
+        "质朴敦厚",
+        "冷峻江湖",
+        "善意与凶险错位"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-jinyong-style-xiaoaojianghu",
+      "book": "笑傲江湖",
+      "author": "",
+      "category": "金庸武侠风格",
+      "keywords": [
+        "狂放不羁",
+        "权力倾轧",
+        "高喜剧浓度"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-jinyong-style-xueshanfeihu",
+      "book": "雪山飞狐",
+      "author": "",
+      "category": "金庸武侠风格",
+      "keywords": [
+        "罗生门结构",
+        "嵌套叙事",
+        "克制悲怆"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-jinyong-style-yitiantulongji",
+      "book": "倚天屠龙记",
+      "author": "",
+      "category": "金庸武侠风格",
+      "keywords": [
+        "悲壮侠义",
+        "旧白话武侠",
+        "义与不得已"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-huangyi-style-dajianshi",
+      "book": "大剑师传奇",
+      "author": "",
+      "category": "黄易风格",
+      "keywords": [
+        "第一人称玄幻",
+        "港台武侠",
+        "复仇热血"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-huangyi-style-datangshuanglongzhuan",
+      "book": "大唐双龙传",
+      "author": "",
+      "category": "黄易风格",
+      "keywords": [
+        "隋唐武侠",
+        "历史权谋",
+        "双男主逆袭"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-huangyi-style-posuixukong",
+      "book": "破碎虚空",
+      "author": "",
+      "category": "黄易风格",
+      "keywords": [
+        "黄易武侠风",
+        "道家哲思",
+        "苍凉恢宏"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-huangyi-style-shikonglangzu",
+      "book": "时空浪族",
+      "author": "",
+      "category": "黄易风格",
+      "keywords": [
+        "都市异能",
+        "预知梦境",
+        "港式商战"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-huangyi-style-shouxinghuigui",
+      "book": "兽性回归",
+      "author": "",
+      "category": "黄易风格",
+      "keywords": [
+        "科幻悬疑",
+        "理性克制",
+        "兽性撕扯"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-huangyi-style-xingjilangzi",
+      "book": "星际浪子",
+      "author": "",
+      "category": "黄易风格",
+      "keywords": [
+        "太空歌剧",
+        "黄易科幻",
+        "人性探索"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-huangyi-style-xunqinji",
+      "book": "寻秦记",
+      "author": "",
+      "category": "黄易风格",
+      "keywords": [
+        "穿越权谋",
+        "雄性爽文",
+        "战国香艳"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fenghuoxizhuhou-style-jianlai",
+      "book": "剑来",
+      "author": "烽火戏诸侯",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "市井烟火",
+        "冷幽默",
+        "哲理"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fenghuoxizhuhou-style-xuezhonghandaoxing",
+      "book": "雪中悍刀行",
+      "author": "烽火戏诸侯",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "市井江湖气",
+        "文人雅致",
+        "从容闲笔"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fennudexiangjiao-style-nitianwudi",
+      "book": "逆天武帝",
+      "author": "愤怒的香蕉",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "废柴逆袭",
+        "亲情温情",
+        "隐忍复仇"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fennudexiangjiao-style-yiyuqiushengriji",
+      "book": "异域求生日记",
+      "author": "愤怒的香蕉",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "温柔哀伤",
+        "哲学沉思",
+        "抒情"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-jiangnan-style-xiedu",
+      "book": "亵渎",
+      "author": "烟雨江南",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "暗黑欲望",
+        "权谋",
+        "反英雄"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-maoni-style-jiangye",
+      "book": "将夜",
+      "author": "猫腻",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "长句铺陈",
+        "文气克制",
+        "章末留白"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-aiqianshuidewuzei-style-guimizhizhu",
+      "book": "诡秘之主",
+      "author": "爱潜水的乌贼",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "克苏鲁",
+        "冷峻悬疑",
+        "黑色幽默"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-yuantong-style-yichangshengwu",
+      "book": "异常生物见闻录",
+      "author": "远瞳",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "轻松搞笑",
+        "吐槽",
+        "都市科幻"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-qingheyikan-style-chixinxuntian",
+      "book": "赤心巡天",
+      "author": "情何以堪",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "沉郁悲悯",
+        "侠气",
+        "苍凉"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-wangyu-style-fanrenxiuxianzhuan",
+      "book": "凡人修仙传",
+      "author": "忘语",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "冷静克制",
+        "写实",
+        "低对话高内心"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-apu-style-shanhaijingmima",
+      "book": "山海经密码",
+      "author": "阿菩",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "史诗苍凉",
+        "上古神话探秘",
+        "权谋博弈"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-chunjiedexiaolong-style-laoshiren",
+      "book": "捞尸人",
+      "author": "纯洁滴小龙",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "东北乡村年代传奇",
+        "灵异"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-ergen-style-qiumo",
+      "book": "求魔",
+      "author": "耳根",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "苍凉孤执",
+        "命运抗争",
+        "画面感"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-ergen-style-xianni",
+      "book": "仙逆",
+      "author": "耳根",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "逆天改命",
+        "坚韧沧桑",
+        "杀伐决断"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-fennudexiangjiao-style-yinsha",
+      "book": "隐杀",
+      "author": "愤怒的香蕉",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "杀手重生",
+        "轻松YY",
+        "冷面笑匠反差"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-jiangnan-style-yongyejunzhu",
+      "book": "永夜君王",
+      "author": "烟雨江南",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "暗黑残酷",
+        "绝境逆袭",
+        "末世科幻"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-jiyueren-style-xuanjianxianzu",
+      "book": "玄鉴仙族",
+      "author": "",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "家族修仙",
+        "代际传承",
+        "冷静克制"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-maibaoxiaolangjun-style-dafengdagengren",
+      "book": "大奉打更人",
+      "author": "卖报小郎君",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "探案",
+        "黑色幽默",
+        "现代社畜穿越"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-maoni-style-dadaochaotian",
+      "book": "大道朝天",
+      "author": "猫腻",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "剑修",
+        "智性视角",
+        "疏离诙谐"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-maoni-style-qingyunian",
+      "book": "庆余年",
+      "author": "猫腻",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "穿越权谋",
+        "庙堂江湖",
+        "范闲"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-rushuiyi-style-woqiangshen",
+      "book": "我枪神",
+      "author": "如水意",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "都市枪战",
+        "硬核写实",
+        "战友群像"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-wenchaogong-style-gouzailiangjiexiuxian",
+      "book": "苟在两界修仙",
+      "author": "文抄公",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "苟道流",
+        "两界穿越",
+        "理性克制"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-xiaoding-style-zhuxian",
+      "book": "诛仙",
+      "author": "萧鼎",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "古典仙侠",
+        "半文半白",
+        "张小凡"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-xionglanggou-style-meiqianxiushenmexian",
+      "book": "没钱修什么仙",
+      "author": "熊狼狗",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "科学修仙",
+        "都市无厘头"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-yanleisheng-style-tianxingjian",
+      "book": "天行健",
+      "author": "燕垒生",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "史诗战争",
+        "冷静克制",
+        "军旅厚重"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-yuantong-style-limingzhijian",
+      "book": "黎明之剑",
+      "author": "远瞳",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "基建种田",
+        "理工男吐槽",
+        "文明苍凉"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-yutingjun-style-huangtiancangtianyisi",
+      "book": "我名黄天苍天已死什么鬼",
+      "author": "玉庭君",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "历史穿越",
+        "沙雕玩梗",
+        "非系统修仙"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-zhangxiaohua-style-shishangdiyihunluan",
+      "book": "史上第一混乱",
+      "author": "张小花",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "反穿越",
+        "恶搞",
+        "历史人物现代"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-zhangxiaohua-style-wojiushiyaoguai",
+      "book": "我就是妖怪",
+      "author": "张小花",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "妖怪日常",
+        "贱萌吐槽",
+        "市井喜剧"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-zhouzi-style-qingshan",
+      "book": "青山",
+      "author": "会说话的肘子",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "灵气复苏",
+        "冷峻克制",
+        "孤独底色"
+      ],
+      "hasExamples": true
+    },
+    {
+      "id": "xin-zhouzi-style-yedemingmingshu",
+      "book": "夜的命名术",
+      "author": "会说话的肘子",
+      "category": "网络文学名家风格",
+      "keywords": [
+        "梦境穿越",
+        "平行世界",
+        "少年悲悯"
+      ],
+      "hasExamples": true
+    }
+  ]
+}

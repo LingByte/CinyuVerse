@@ -31,6 +31,7 @@ import {
   Puzzle,
   BookOpen,
   Library,
+  Brush,
 } from 'lucide-react';
 import {
   Tooltip,
@@ -373,6 +374,7 @@ function WorkspaceTabSwitcher() {
     { key: 'workspace', label: t('toolbar.workspace'), icon: Monitor },
     { key: 'overview', label: t('toolbar.overview'), icon: BookOpen },
     { key: 'library', label: t('toolbar.library'), icon: Library },
+    { key: 'styles', label: t('toolbar.styles'), icon: Brush },
   ];
 
   const handleTabSelect = useCallback(
@@ -385,7 +387,7 @@ function WorkspaceTabSwitcher() {
         return;
       }
 
-      if (tab === 'overview' || tab === 'library') {
+      if (tab === 'overview' || tab === 'library' || tab === 'styles') {
         // Workspace routes pin the active tab via routeTab, so these
         // overlays must leave the workspace route to become visible.
         navigate(paths.projectSessions(projectId));

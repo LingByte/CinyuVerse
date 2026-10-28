@@ -220,13 +220,26 @@ function cinyuverseClaudeMd(projectName: string): string {
     '- 文风参考 `.cinyuverse/style-sample.md`',
     '- 伏笔状态变更时同步更新 `.cinyuverse/hooks.md`',
     '',
+    '## 解读与讨论',
+    '',
+    '- 解读或评价正文时，每个论断都要给正文出处（章号或引文）；「文本里有的」',
+    '  和「你推测的」分开说',
+    '- 伏笔、铺垫、呼应只有在 `hooks.md`/`story-graph.json` 有对应条目，或正文',
+    '  已明示时才能认定，不得预测未入档的伏笔回收',
+    '- 作者质疑你的解读时，先回正文复核证据：站得住的坚持并给出处，站不住的',
+    '  承认并指出反例，不要只因为被反驳就改口',
+    '',
   ].join('\n');
 }
 
-function cinyuverseProjectJson(projectName: string): string {
+function cinyuverseProjectJson(
+  projectName: string,
+  projectDescription: string
+): string {
   return JSON.stringify(
     {
       bookName: projectName,
+      description: projectDescription.trim(),
       genre: '',
       tags: [],
       author: '',
@@ -487,14 +500,39 @@ const CINYUVERSE_STORY_GRAPH_JSON = JSON.stringify(
   2
 );
 
+// fileTreeApi has no exists command; a NotFound read error is the existence
+// probe. The author's metadata (project.json, writing-rules.md, …) is
+// hand-editable, so a scaffold pass on an existing project must never clobber
+// it — and a transient read failure must abort the scaffold instead of being
+// mistaken for "file missing".
+function isFileMissingError(err: unknown): boolean {
+  const message =
+    typeof err === 'string'
+      ? err
+      : typeof err === 'object' && err !== null
+        ? String((err as { message?: unknown }).message ?? '')
+        : '';
+  return message.startsWith('Not found:');
+}
+
+async function writeIfMissing(path: string, content: string): Promise<void> {
+  try {
+    await fileTreeApi.readFile(path);
+  } catch (err) {
+    if (!isFileMissingError(err)) throw err;
+    await writeTextFile(path, content);
+  }
+}
+
 /**
  * Create the `.cinyuverse/` metadata directory with template files.
  * Safe to call when the directory already exists — existing files are
  * never overwritten.
  */
-async function ensureCinyuverseScaffold(
+export async function ensureCinyuverseScaffold(
   repoPath: string,
-  projectName: string
+  projectName: string,
+  projectDescription = ''
 ): Promise<void> {
   const metaDir = joinLocalPath(repoPath, CINYUVERSE_DIR);
   const charactersDir = joinLocalPath(metaDir, 'characters');
@@ -511,55 +549,52 @@ async function ensureCinyuverseScaffold(
     fileTreeApi.createDirectory(chaptersDir),
   ]);
 
-  // Write template files — only if they don't already exist.
-  // writeTextFile overwrites, so we guard with a simple "best effort" approach:
-  // these are only called during project creation, so overwriting is acceptable.
   const writes: Array<Promise<void>> = [
-    writeTextFile(
+    writeIfMissing(
       joinLocalPath(metaDir, 'CLAUDE.md'),
       cinyuverseClaudeMd(projectName)
     ),
-    writeTextFile(
+    writeIfMissing(
       joinLocalPath(metaDir, 'project.json'),
-      cinyuverseProjectJson(projectName)
+      cinyuverseProjectJson(projectName, projectDescription)
     ),
-    writeTextFile(joinLocalPath(metaDir, 'outline.md'), CINYUVERSE_OUTLINE_MD),
-    writeTextFile(
+    writeIfMissing(joinLocalPath(metaDir, 'outline.md'), CINYUVERSE_OUTLINE_MD),
+    writeIfMissing(
       joinLocalPath(metaDir, 'world-view.md'),
       CINYUVERSE_WORLD_VIEW_MD
     ),
-    writeTextFile(
+    writeIfMissing(
       joinLocalPath(metaDir, 'writing-rules.md'),
       CINYUVERSE_WRITING_RULES_MD
     ),
-    writeTextFile(
+    writeIfMissing(
       joinLocalPath(metaDir, 'SolutionToWrite.md'),
       CINYUVERSE_SOLUTION_TO_WRITE_MD
     ),
-    writeTextFile(
+    writeIfMissing(
       joinLocalPath(metaDir, 'pipeline.md'),
       CINYUVERSE_PIPELINE_MD
     ),
-    writeTextFile(joinLocalPath(metaDir, 'hooks.md'), CINYUVERSE_HOOKS_MD),
-    writeTextFile(
+    writeIfMissing(joinLocalPath(metaDir, 'hooks.md'), CINYUVERSE_HOOKS_MD),
+    writeIfMissing(
       joinLocalPath(metaDir, 'current-state.md'),
       CINYUVERSE_CURRENT_STATE_MD
     ),
-    writeTextFile(
+    writeIfMissing(
       joinLocalPath(metaDir, 'chapter-summaries.md'),
       CINYUVERSE_CHAPTER_SUMMARIES_MD
     ),
-    writeTextFile(
+    writeIfMissing(
       joinLocalPath(metaDir, 'style-sample.md'),
       CINYUVERSE_STYLE_SAMPLE_MD
     ),
-    writeTextFile(
+    writeIfMissing(
       joinLocalPath(metaDir, 'story-graph.json'),
       CINYUVERSE_STORY_GRAPH_JSON
     ),
-    writeTextFile(joinLocalPath(humanizerDir, 'SKILL.md'), humanizerSkillMd),
-    writeTextFile(joinLocalPath(aigcCheckDir, 'SKILL.md'), aigcCheckSkillMd),
-    writeTextFile(
+    writeIfMissing(joinLocalPath(humanizerDir, 'SKILL.md'), humanizerSkillMd),
+    writeIfMissing(joinLocalPath(aigcCheckDir, 'SKILL.md'), aigcCheckSkillMd),
+    writeIfMissing(
       joinLocalPath(repoPath, '.env.example'),
       CINYUVERSE_ENV_EXAMPLE
     ),
@@ -701,8 +736,13 @@ const ProjectFormDialogImpl = NiceModal.create<ProjectFormDialogProps>(
 
       await Promise.all(writes);
 
-      // Scaffold .cinyuverse/ novel metadata directory.
-      await ensureCinyuverseScaffold(repoPath, projectName.trim());
+      // Scaffold .cinyuverse/ novel metadata directory. The description is
+      // the author's story brief — templates treat it as binding intent.
+      await ensureCinyuverseScaffold(
+        repoPath,
+        projectName.trim(),
+        projectDescription
+      );
     };
 
     const createProjectRecord = async (

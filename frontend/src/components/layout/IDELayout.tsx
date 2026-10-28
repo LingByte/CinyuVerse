@@ -156,6 +156,12 @@ const LazyNovelLibrary = lazy(() =>
   }))
 );
 
+const LazyWritingStyles = lazy(() =>
+  import('@/components/panels/WritingStylePanel').then((module) => ({
+    default: module.WritingStylePanel,
+  }))
+);
+
 function getLeftGroup(api: DockviewApi): DockviewGroup | undefined {
   return (
     api.getGroup(GROUP_IDS.LEFT) ??
@@ -1376,6 +1382,25 @@ export function IDELayout({
                       }
                     >
                       <LazyNovelLibrary />
+                    </Suspense>
+                  </ErrorBoundary>
+                </div>
+              )}
+
+              {effectiveActiveTab === 'styles' && (
+                <div className="styles-overlay absolute inset-0 z-10">
+                  <ErrorBoundary label="WritingStyles">
+                    <Suspense
+                      fallback={
+                        <div className="flex h-full w-full items-center justify-center p-6 text-sm">
+                          <div className="workspace-loading-panel flex items-center gap-3 px-4 py-3">
+                            <div className="h-4 w-4 animate-spin rounded-full border border-primary border-t-transparent" />
+                            <span>Loading Styles...</span>
+                          </div>
+                        </div>
+                      }
+                    >
+                      <LazyWritingStyles />
                     </Suspense>
                   </ErrorBoundary>
                 </div>

@@ -3,13 +3,33 @@ import NiceModal, { type NiceModalHocProps } from '@ebay/nice-modal-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@tauri-apps/plugin-fs', () => ({
+  writeTextFile: vi.fn(),
+}));
+
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return {
+    ...actual,
+    fileTreeApi: {
+      ...actual.fileTreeApi,
+      createDirectory: vi.fn(),
+      readFile: vi.fn(),
+    },
+  };
+});
+
+import { writeTextFile } from '@tauri-apps/plugin-fs';
+import { fileTreeApi } from '@/lib/api';
 
 import {
   CINYUVERSE_ENV_EXAMPLE,
   CINYUVERSE_PIPELINE_MD,
   CINYUVERSE_SOLUTION_TO_WRITE_MD,
   CINYUVERSE_WRITING_RULES_MD,
+  ensureCinyuverseScaffold,
   ProjectFormDialog,
   type ProjectFormDialogProps,
 } from './ProjectFormDialog';
@@ -40,7 +60,7 @@ describe('ProjectFormDialog', () => {
     renderDialog();
 
     const descriptionInput = await screen.findByRole('textbox', {
-      name: '项目简介（可选，用于 README）',
+      name: '作品简介（可选，写入 README 与创作设定）',
     });
 
     expect(descriptionInput.tagName).toBe('TEXTAREA');
@@ -54,7 +74,7 @@ describe('ProjectFormDialog', () => {
     const { container } = renderDialog();
 
     const nameInput = await screen.findByRole('textbox', {
-      name: '项目名称',
+      name: '作品名称',
     });
     const locationPreview = screen.getByRole('textbox', {
       name: '创建位置',
@@ -89,7 +109,7 @@ describe('ProjectFormDialog', () => {
     await screen.findByRole('heading', { name: '选择文件夹' });
 
     const folderPreview = screen.getByRole('textbox', {
-      name: '项目文件夹',
+      name: '作品文件夹',
     });
     const folderButton = screen.getByRole('button', { name: '选择文件夹' });
     const folderField = folderPreview.closest('.astryx-text-input');
@@ -145,5 +165,65 @@ describe('ProjectFormDialog', () => {
     expect(CINYUVERSE_ENV_EXAMPLE).toContain('.gitignore');
     expect(CINYUVERSE_ENV_EXAMPLE).toContain('aigc-check');
     expect(CINYUVERSE_ENV_EXAMPLE).not.toMatch(/ZHUQUE_API_KEY=\S/);
+  });
+});
+
+describe('ensureCinyuverseScaffold', () => {
+  const repoPath = 'C:/books/demo';
+
+  beforeEach(() => {
+    vi.mocked(writeTextFile).mockReset().mockResolvedValue(undefined);
+    vi.mocked(fileTreeApi.createDirectory)
+      .mockReset()
+      .mockResolvedValue(undefined);
+    vi.mocked(fileTreeApi.readFile).mockReset();
+  });
+
+  it('writes project.json carrying the author description', async () => {
+    vi.mocked(fileTreeApi.readFile).mockRejectedValue(
+      new Error('Not found: file does not exist')
+    );
+
+    await ensureCinyuverseScaffold(repoPath, '星河舰队', '少年驾驶星舰远航');
+
+    const projectJsonCall = vi
+      .mocked(writeTextFile)
+      .mock.calls.find(([path]) => String(path).endsWith('project.json'));
+    expect(projectJsonCall).toBeTruthy();
+    const payload = JSON.parse(String(projectJsonCall![1]));
+    expect(payload.bookName).toBe('星河舰队');
+    expect(payload.description).toBe('少年驾驶星舰远航');
+  });
+
+  it('scaffolds CLAUDE.md with the interpretation evidence rules', async () => {
+    vi.mocked(fileTreeApi.readFile).mockRejectedValue(
+      new Error('Not found: file does not exist')
+    );
+
+    await ensureCinyuverseScaffold(repoPath, '星河舰队', '少年驾驶星舰远航');
+
+    const claudeMdCall = vi
+      .mocked(writeTextFile)
+      .mock.calls.find(([path]) => String(path).endsWith('CLAUDE.md'));
+    expect(claudeMdCall).toBeTruthy();
+    const body = String(claudeMdCall![1]);
+    expect(body).toContain('## 解读与讨论');
+    expect(body).toContain('不得预测未入档的伏笔回收');
+    expect(body).toContain('不要只因为被反驳就改口');
+  });
+
+  it('never overwrites an existing metadata file', async () => {
+    vi.mocked(fileTreeApi.readFile).mockImplementation(async (path) => {
+      if (String(path).endsWith('project.json')) return '{"bookName":"旧书"}';
+      throw new Error('Not found: file does not exist');
+    });
+
+    await ensureCinyuverseScaffold(repoPath, '新书', '新简介');
+
+    const writtenPaths = vi
+      .mocked(writeTextFile)
+      .mock.calls.map(([path]) => String(path));
+    expect(writtenPaths.some((p) => p.endsWith('project.json'))).toBe(false);
+    expect(writtenPaths.some((p) => p.endsWith('writing-rules.md'))).toBe(true);
   });
 });

@@ -125,6 +125,7 @@
     "workspace": "草稿",
     "overview": "概览",
     "library": "书库",
+    "styles": "写作风格skill",
     "toggleSessionList": "显示/隐藏创作会话列表",
     "toggleSessionMonitor": "显示/隐藏创作会话监控区",
     "toggleSessionExecution": "显示/隐藏创作会话执行区",
@@ -415,19 +416,21 @@
     "nameDialog": {
       "generate-story-graph": {
         "title": "作品书名",
-        "description": "此操作需要书名；留空或取消将使用「未命名作品」。",
+        "description": "确认后开始生成故事图；清空书名则使用「未命名作品」。",
         "placeholder": "例如：星河舰队"
       },
       "init-foundation": {
         "title": "作品书名",
-        "description": "此操作需要书名；留空或取消将使用「未命名作品」。",
+        "description": "确认后开始生成作品基础；清空书名则使用「未命名作品」。",
         "placeholder": "例如：星河舰队"
       },
       "create-character": {
         "title": "角色名",
         "description": "输入要创建的角色名（必填）；确认后生成角色卡并写入 .cinyuverse/characters/。",
         "placeholder": "例如：林渊"
-      }
+      },
+      "intentLabel": "作者意图（可选）",
+      "intentPlaceholder": "主线走向、结局、必须出现或回避的元素；留空则由 AI 自行发挥"
     },
     "guideTitle": "创作向导",
     "guideOptional": "可选",
@@ -465,5 +468,28 @@
     "edgeAlternative": "备选",
     "edgeCharacterArc": "角色弧",
     "edgeItemFlow": "物品流"
+  },
+  "styleSkills": {
+    "skillCount": "{{count}} 个文风 skill",
+    "headerHint": "导入后写入 .cinyuverse/style-sample.md，与「提炼参考文风」等效",
+    "searchPlaceholder": "搜索书名、作者、分类、关键词...",
+    "distillTitle": "提炼文风 · 参考库（.cinyuverse/references/）",
+    "distillAll": "提炼全部",
+    "distillSelected": "提炼所选（{{count}}）",
+    "referencesEmpty": "参考库为空：先从「书库」导入参考小说，或在下方导入写作风格 skill，再回到这里提炼",
+    "loading": "加载中...",
+    "loadErrorTitle": "加载失败",
+    "noMatches": "没有匹配的风格",
+    "categoryCount": "{{category}}（{{count}}）",
+    "selectHint": "从左侧选择一个文风 skill 查看十维风格规范",
+    "authorPrefix": "作者: ",
+    "importing": "导入中...",
+    "alreadyStaged": "已在参考库",
+    "importAction": "导入文风到参考库",
+    "previewLoading": "加载预览...",
+    "loadFailed": "加载失败: {{message}}",
+    "importNoRoot": "导入失败: 未找到作品目录",
+    "importStaged": "已将《{{book}}》暂存到 .cinyuverse/references/，提炼文风时可选用",
+    "importFailed": "导入失败: {{message}}"
   }
 }

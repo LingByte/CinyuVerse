@@ -7,7 +7,12 @@ import { paths } from '@/lib/paths';
  * by every session-jump entry point.
  */
 
-export type FocusSurface = 'workspace' | 'kanban' | 'overview' | 'library';
+export type FocusSurface =
+  | 'workspace'
+  | 'kanban'
+  | 'overview'
+  | 'library'
+  | 'styles';
 
 export interface ProjectSessionFocus {
   projectId: string;

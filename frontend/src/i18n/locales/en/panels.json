@@ -125,6 +125,7 @@
     "workspace": "Volume",
     "overview": "Overview",
     "library": "Library",
+    "styles": "Style Skills",
     "toggleSessionList": "Toggle writing session list",
     "toggleSessionMonitor": "Toggle writing session monitor",
     "toggleSessionExecution": "Toggle writing session execution",
@@ -415,19 +416,21 @@
     "nameDialog": {
       "generate-story-graph": {
         "title": "Book name",
-        "description": "This action needs a book name; leave empty or cancel to use \"Untitled Work\".",
+        "description": "Confirm to generate the story graph; clear the name to use \"Untitled Work\".",
         "placeholder": "e.g. Dune"
       },
       "init-foundation": {
         "title": "Book name",
-        "description": "This action needs a book name; leave empty or cancel to use \"Untitled Work\".",
+        "description": "Confirm to generate the story foundation; clear the name to use \"Untitled Work\".",
         "placeholder": "e.g. Dune"
       },
       "create-character": {
         "title": "Character name",
         "description": "Enter the character's name (required); the card will be written to .cinyuverse/characters/.",
         "placeholder": "e.g. Lin Yuan"
-      }
+      },
+      "intentLabel": "Author intent (optional)",
+      "intentPlaceholder": "Plot direction, ending, elements to include or avoid; leave empty to let the agent decide"
     },
     "guideTitle": "Creation guide",
     "guideOptional": "optional",
@@ -465,5 +468,28 @@
     "edgeAlternative": "Alternative",
     "edgeCharacterArc": "Character arc",
     "edgeItemFlow": "Item flow"
+  },
+  "styleSkills": {
+    "skillCount": "{{count}} style skills",
+    "headerHint": "Imported skills feed the style distill task; output lands in .cinyuverse/style-sample.md",
+    "searchPlaceholder": "Search book, author, category, keywords…",
+    "distillTitle": "Distill style · references (.cinyuverse/references/)",
+    "distillAll": "Distill all",
+    "distillSelected": "Distill selected ({{count}})",
+    "referencesEmpty": "References are empty: import novels from the Library or style skills below, then distill here",
+    "loading": "Loading…",
+    "loadErrorTitle": "Failed to load",
+    "noMatches": "No matching styles",
+    "categoryCount": "{{category}} ({{count}})",
+    "selectHint": "Select a style skill on the left to view its style spec",
+    "authorPrefix": "Author: ",
+    "importing": "Importing…",
+    "alreadyStaged": "Already in references",
+    "importAction": "Import style to references",
+    "previewLoading": "Loading preview…",
+    "loadFailed": "Failed to load: {{message}}",
+    "importNoRoot": "Import failed: project directory not found",
+    "importStaged": "Staged《{{book}}》into .cinyuverse/references/ for style distillation",
+    "importFailed": "Import failed: {{message}}"
   }
 }

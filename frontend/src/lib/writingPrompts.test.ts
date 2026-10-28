@@ -101,6 +101,12 @@ describe('writingPrompts', () => {
     expect(prompt).toContain('第十节 · 参考片段锚点');
   });
 
+  it('memo scene breakdown mandates a kinetic scene per chapter', () => {
+    const prompt = buildWritingPrompt('plan-chapter', { chapterNumber: 5 });
+    expect(prompt).toContain('高感官密度的动态场景');
+    expect(prompt).toContain('禁止全章只由静态对话与对峙构成');
+  });
+
   it('write-beat carries the five-item archive chain', () => {
     const prompt = buildWritingPrompt('write-beat', {
       beatId: 'beat-005',
@@ -133,6 +139,22 @@ describe('writingPrompts', () => {
     });
     expect(prompt).toContain('星河舰队');
     expect(prompt).toContain('科幻');
+  });
+
+  it('init-foundation binds the project.json description as story intent', () => {
+    const prompt = buildWritingPrompt('init-foundation', {
+      bookName: '测试书',
+    });
+    expect(prompt).toContain('`description` 字段');
+    expect(prompt).toContain('围绕它展开');
+  });
+
+  it('generate-story-graph carries the same description contract', () => {
+    const prompt = buildWritingPrompt('generate-story-graph', {
+      bookName: '测试书',
+    });
+    expect(prompt).toContain('`description` 非空时');
+    expect(prompt).toContain('创作意图');
   });
 
   it('getWritingPrompt returns the template', () => {
@@ -237,6 +259,98 @@ describe('style rhythm baseline', () => {
       rule.constraint.includes('开头 500 字内禁用')
     );
     expect(openingRule).toBeTruthy();
+  });
+
+  it('style rhythm rules cap anaphora chains, subject runs and refrains', () => {
+    const anaphoraRule = STYLE_RHYTHM_RULES.find((rule) =>
+      rule.constraint.includes('同一主语带同一动词')
+    );
+    expect(anaphoraRule?.constraint).toContain('连排不超过 2 句');
+    expect(anaphoraRule?.audit).toBeTruthy();
+    const subjectRule = STYLE_RHYTHM_RULES.find((rule) =>
+      rule.constraint.includes('连续以同一主语开头')
+    );
+    expect(subjectRule?.constraint).toContain('不超过 4 句');
+    const refrainRule = STYLE_RHYTHM_RULES.find((rule) =>
+      rule.constraint.includes('模板句')
+    );
+    expect(refrainRule?.constraint).toContain('原样复现不超过 2 次');
+    // The Zhuque-flagged sentence shapes are listed as forbidden patterns.
+    expect(STYLE_RHYTHM_FORBIDDEN_PATTERNS).toContain(
+      '「他想着X。他想着Y。他想着Z。」式同主语同动词连排'
+    );
+    expect(STYLE_RHYTHM_FORBIDDEN_PATTERNS).toContain(
+      '「他知道这件事他不该继续往下想」式模板句全章复用'
+    );
+  });
+
+  it('style rhythm rules ban duplicated scenes and dialogue echo chains', () => {
+    const duplicationRule = STYLE_RHYTHM_RULES.find((rule) =>
+      rule.constraint.includes('同一场景、同一事件或同一信息点全章只叙述一次')
+    );
+    expect(duplicationRule?.constraint).toContain('重复段落必须删除');
+    const echoRule = STYLE_RHYTHM_RULES.find((rule) =>
+      rule.constraint.includes('回声式重复同一词语')
+    );
+    expect(echoRule?.constraint).toContain('同一回声全章不超过 3 处');
+    const silenceRule = STYLE_RHYTHM_RULES.find((rule) =>
+      rule.constraint.includes('式空白回应')
+    );
+    expect(silenceRule?.constraint).toContain('每个场景不超过 2 处');
+    expect(silenceRule?.constraint).toContain('连续 6 轮没有新信息');
+    expect(STYLE_RHYTHM_FORBIDDEN_PATTERNS).toContain(
+      '「那可不。」「够了。」式多人对白同词回声链'
+    );
+    expect(STYLE_RHYTHM_FORBIDDEN_PATTERNS).toContain(
+      '「长史不说话。李将军不说话。副将不说话。」式空白回应连排'
+    );
+    expect(STYLE_RHYTHM_FORBIDDEN_PATTERNS).toContain(
+      '「在 ch03 末尾那句」式章号、写作规划与元语言泄漏进正文'
+    );
+    expect(STYLE_RHYTHM_FORBIDDEN_PATTERNS).toContain(
+      '同一场景或信息点被叙述两遍（重写残留的双版本）'
+    );
+  });
+
+  it('style rhythm rules cap frame-level refrain patterns', () => {
+    const frameRule = STYLE_RHYTHM_RULES.find((rule) =>
+      rule.constraint.includes('同一句式开头框架')
+    );
+    expect(frameRule?.constraint).toContain('全章不超过 3 处');
+    expect(frameRule?.constraint).toContain('分布层面');
+    expect(frameRule?.audit).toBeTruthy();
+  });
+
+  it('plan-chapter injects the live rhythm thresholds over stale rule files', () => {
+    const prompt = buildWritingPrompt('plan-chapter', { chapterNumber: 6 });
+    expect(prompt).toContain('第七节红线必须逐条纳入下列最新节奏阈值');
+    expect(prompt).toContain('以本清单为准');
+    for (const rule of STYLE_RHYTHM_RULES) {
+      expect(prompt).toContain(rule.constraint);
+    }
+  });
+
+  it('write-chapter self-check includes the duplicated-scene sweep and reported counts', () => {
+    const prompt = buildWritingPrompt('write-chapter', { chapterNumber: 1 });
+    expect(prompt).toContain('通读');
+    expect(prompt).toContain('删除重复叙述的场景');
+    expect(prompt).toContain('交付回复中逐项列出实测计数');
+  });
+
+  it('humanize-chapter merges duplicated scenes and breaks echo chains first', () => {
+    const prompt = buildWritingPrompt('humanize-chapter', { chapterNumber: 5 });
+    expect(prompt).toContain('同一场景写两遍');
+    expect(prompt).toContain('只保留一版');
+    expect(prompt).toContain('回声式重复同一词语');
+    expect(prompt).toContain('改成带实质信息的回应');
+  });
+
+  it('distill-style appends the rhythm guardrails to the style sample', () => {
+    const prompt = buildWritingPrompt('distill-style', { guidance: '' });
+    expect(prompt).toContain('节奏执行原则');
+    expect(prompt).toContain('统计倾向');
+    expect(prompt).toContain('同主语同动词');
+    expect(prompt).toContain('不用纯动作循环推进章节');
   });
 });
 

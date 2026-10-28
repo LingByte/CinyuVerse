@@ -72,6 +72,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { OverviewSessionSlot } from '@/components/panels/OverviewSessionSlot';
 // The JSON file format uses arrays for characters/hooks, while the SQLite
 // model uses JSON strings. We use a local type that matches the file format.
@@ -875,6 +877,7 @@ export function NovelOverviewPanel() {
   const [manualBookName, setManualBookName] = useState<string | null>(null);
   const [bookNameDialogOpen, setBookNameDialogOpen] = useState(false);
   const [bookNameInput, setBookNameInput] = useState('');
+  const [bookNameIntent, setBookNameIntent] = useState('');
   const [bookNameAction, setBookNameAction] = useState<
     'generate-story-graph' | 'init-foundation' | 'create-character'
   >('generate-story-graph');
@@ -1277,19 +1280,19 @@ export function NovelOverviewPanel() {
     | 'create-character';
 
   const fillNameAction = useCallback(
-    (action: NameAction, name?: string) => {
+    (action: NameAction, name?: string, guidance?: string) => {
       const tpl = getWritingPrompt(action);
       if (!tpl) return;
       if (action === 'create-character') {
         if (!name?.trim()) return;
         void fillPromptIntoSession(
-          tpl.build({ characterName: name.trim(), guidance: '' })
+          tpl.build({ characterName: name.trim(), guidance: guidance ?? '' })
         );
         return;
       }
       const prompt = tpl.build({
         bookName: name || undefined,
-        guidance: '',
+        guidance: guidance ?? '',
       });
       void fillPromptIntoSession(prompt);
     },
@@ -1298,23 +1301,16 @@ export function NovelOverviewPanel() {
 
   const runNameAction = useCallback(
     (action: NameAction) => {
-      if (action === 'create-character') {
-        // A card is named after its file — always ask, never reuse the
-        // book name.
-        setBookNameAction(action);
-        setBookNameInput('');
-        setBookNameDialogOpen(true);
-        return;
-      }
-      if (!resolvedBookName.trim()) {
-        setBookNameAction(action);
-        setBookNameInput('');
-        setBookNameDialogOpen(true);
-        return;
-      }
-      fillNameAction(action, resolvedBookName);
+      // Always route through the dialog: the intent field is the author's
+      // only chance to steer the plot before the agent drafts it.
+      setBookNameAction(action);
+      setBookNameInput(
+        action === 'create-character' ? '' : resolvedBookName.trim()
+      );
+      setBookNameIntent('');
+      setBookNameDialogOpen(true);
     },
-    [resolvedBookName, fillNameAction]
+    [resolvedBookName]
   );
 
   const handleGenerateGraph = useCallback(() => {
@@ -1323,19 +1319,20 @@ export function NovelOverviewPanel() {
 
   const handleBookNameConfirm = useCallback(() => {
     const name = bookNameInput.trim();
+    const intent = bookNameIntent.trim();
     setBookNameDialogOpen(false);
+    setBookNameIntent('');
     if (name && bookNameAction !== 'create-character') {
       setManualBookName(name);
     }
-    fillNameAction(bookNameAction, name);
-  }, [bookNameInput, bookNameAction, fillNameAction]);
+    fillNameAction(bookNameAction, name, intent);
+  }, [bookNameInput, bookNameIntent, bookNameAction, fillNameAction]);
 
   // 取消或留空：书名类操作回退模板默认「未命名作品」继续；创建角色则中止。
   const handleBookNameCancel = useCallback(() => {
     setBookNameDialogOpen(false);
-    if (bookNameAction !== 'create-character') {
-      fillNameAction(bookNameAction);
-    }
+    setBookNameIntent('');
+    fillNameAction(bookNameAction);
   }, [bookNameAction, fillNameAction]);
 
   const handleInferBeat = useCallback(() => {
@@ -1930,6 +1927,19 @@ export function NovelOverviewPanel() {
               if (e.key === 'Enter') handleBookNameConfirm();
             }}
           />
+          <div className="space-y-1.5">
+            <Label htmlFor="book-name-intent">
+              {t('panels:overview.nameDialog.intentLabel')}
+            </Label>
+            <Textarea
+              id="book-name-intent"
+              value={bookNameIntent}
+              onChange={(e) => setBookNameIntent(e.target.value)}
+              placeholder={t('panels:overview.nameDialog.intentPlaceholder')}
+              rows={3}
+              className="resize-none"
+            />
+          </div>
           <DialogFooter>
             <Button variant="ghost" onClick={handleBookNameCancel}>
               {t('common:cancel')}

@@ -108,15 +108,75 @@ export const STYLE_RHYTHM_RULES: StyleRhythmRule[] = [
     constraint: '悬念揭示、反转等关键节点必须用连贯长句叙述，禁止单句成段堆叠',
     audit: '揭示/反转段落中的单句成段堆叠处数（阈值：0）',
   },
+  {
+    constraint:
+      '同一主语带同一动词的句式（如「他想着……」「他看着……」）连排不超过 2 句，全章这类连排不超过 2 组',
+    audit:
+      '同主语同动词句式连排：最长连排句数与出现组数（阈值：单组 2 句，全章 2 组）',
+  },
+  {
+    constraint:
+      '连续以同一主语开头的句子不超过 4 句；叙述段句首在人物名、动作、环境之间轮换',
+    audit: '连续同一主语开头的最长句串（阈值：4 句）',
+  },
+  {
+    constraint:
+      '同一模板句（refrain）全章原样复现不超过 2 次，含轻度变体合计不超过 4 次；需要重复氛围时改写措辞',
+    audit: '各模板句原样复现次数与含变体合计（阈值：原样 2 次，含变体 4 次）',
+  },
+  {
+    constraint:
+      '多个人物的对白不得回声式重复同一词语或短句（如「那可不」「够了」「大将军令是令」）；同一回声全章不超过 3 处',
+    audit:
+      '对白回声：同一词语/短句在多角色对白中被重复的处数（阈值：每种回声全章 3 处）',
+  },
+  {
+    constraint:
+      '同一场景、同一事件或同一信息点全章只叙述一次；重写或修订残留的重复段落必须删除',
+    audit: '重复叙述：内容高度相似的段落/场景组数（阈值：0）',
+  },
+  {
+    constraint:
+      '「X不说话。」「X没说话。」式空白回应每个场景不超过 2 处，不得作为场景推进的主要手段；对话不得空转——连续 6 轮没有新信息、动作或转折就收束场景',
+    audit:
+      '各场景空白回应处数与无增量对话的最长轮数（阈值：空白回应 2 处/场景，空转 6 轮）',
+  },
+  {
+    constraint:
+      '同一句式开头框架（如「他心想——」「补丁手机在怀里震了一下」「电量依旧是……」）全章不超过 3 处；框架是分布层面的复现，逐句看合法、连起来就是指纹，重复时必须改写句式',
+    audit: '各句式开头框架在全章的使用次数（阈值：每种框架全章 3 处）',
+  },
 ];
 
 // 从复测报告中提炼的真实超标句式，写作 prompt 原样列出让模型避开。
 export const STYLE_RHYTHM_FORBIDDEN_PATTERNS: string[] = [
   '「像X」「仿佛X」式明喻串讲',
-  '「一呼。一应。」「一呼。一吸。」式对仗断行',
+  '「一呼。一应。」「一呼。一吸。」式对仗断行，以及「啃饼的啃饼，磨刀的磨刀」式句内对偶连用',
   '「不X，不Y，不Z」三项排比',
   '「他愣住了。」「人呢。」「喂。」式单句悬念独立成段',
+  '「他想着X。他想着Y。他想着Z。」式同主语同动词连排',
+  '「他知道这件事他不该继续往下想」式模板句全章复用',
+  '「那可不。」「够了。」式多人对白同词回声链',
+  '「长史不说话。李将军不说话。副将不说话。」式空白回应连排',
+  '同一场景或信息点被叙述两遍（重写残留的双版本）',
+  '「在 ch03 末尾那句」式章号、写作规划与元语言泄漏进正文',
 ];
+
+// Injected as the closing section of every style-sample.md (distilled or
+// skill-imported). Style specs are statistical tendencies; detectors key on
+// the mechanical uniformity that literal per-sentence imitation produces, so
+// the sample itself must carry the anti-uniformity contract.
+export const STYLE_SAMPLE_GUARDRAILS_SECTION = {
+  heading: '## 节奏执行原则',
+  lines: [
+    '以上风格特征是统计倾向，不是逐句复刻的模板；执行时必须保留活人感的变化：',
+    '- 句长抖动：连续短句不超过 5 句，到限就合并短句或插入一个长句',
+    '- 同主语同动词的句式（「他想着……」式）连排不超过 2 句，到限换主语、换动词或并入上一句',
+    '- 连续以同一主语开头的句子不超过 4 句；叙述段句首在人物名、动作、环境之间轮换',
+    '- 同一模板句（refrain）全章原样复现不超过 2 次；需要重复氛围时改写措辞',
+    '- 信息优先由对话承载，不用纯动作循环推进章节',
+  ],
+};
 
 // ---------------------------------------------------------------------------
 // Ten-section chapter memo spec — the pre-writing contract. Shared by
@@ -127,7 +187,7 @@ export const STYLE_RHYTHM_FORBIDDEN_PATTERNS: string[] = [
 export const MEMO_TEN_SECTIONS: string[] = [
   '第一节 · 章节定位：五幕结构中的位置 / 本章唯一目标（1-2 个核心问题）/ 不写（本章不应出现的元素，含属于后续章节的内容）/ 与前章末段的连续性',
   '第二节 · 出场角色与戏份：表格（角色 | 戏份 | 在场方式 | 对话配额），控制角色数量与对话预算，防止独白扛信息',
-  '第三节 · 场景分镜：按时间顺序列 A/B/C 场景，每个场景含 时间（精确到小时或时辰）/ 地点（具体到建筑、房间、巷口）/ 画面（镜头感、视觉锚点）/ 必要信息（本场景必须揭示的伏笔或设定）',
+  '第三节 · 场景分镜：按时间顺序列 A/B/C 场景，每个场景含 时间（精确到小时或时辰）/ 地点（具体到建筑、房间、巷口）/ 画面（镜头感、视觉锚点）/ 必要信息（本场景必须揭示的伏笔或设定）；每章至少安排一个高感官密度的动态场景（追逐、劳作、打斗、手艺活、赶路等身体在动的戏），禁止全章只由静态对话与对峙构成——静态双人对话章是 AIGC 检测的最高危形态',
   '第四节 · 核心情绪曲线：表格（节拍 | 情绪），按场景逐段标注；情绪外化优先于情绪宣告',
   '第五节 · 对话策略（防 AIGC 硬判）：逐场景列必含对话，指定角色必须说出至少 1 句带具体信息的话、做出至少 1 个违反常识的举动——信息由对话承担，不落入独白',
   '第六节 · 关键物品 / 锚点：表格（物品 | 出现位置 | 处理方式），首次确立的细节描述（材质、纹样、损伤）在后续章节保持一致',
@@ -152,7 +212,8 @@ const initFoundation: WritingPromptTemplate = {
       '',
       '## 任务',
       '',
-      '1. 读取 `.cinyuverse/project.json` 了解已有设定',
+      '1. 读取 `.cinyuverse/project.json` 了解已有设定；其 `description` 字段是作者',
+      '   给出的作品简介，非空时世界观与大纲必须围绕它展开，不得自行另起炉灶',
       `2. 根据题材「${input.genre ?? '未指定'}」生成以下内容：`,
       '   - **故事圣经**：核心设定、力量体系、世界观框架，写入 `.cinyuverse/world-view.md`',
       '   - **卷大纲**：第一卷的章节结构（至少 10 章），每章用三句话描述主要事件，写入 `.cinyuverse/outline.md`',
@@ -219,6 +280,9 @@ const planChapter: WritingPromptTemplate = {
         : '2. 本章为第一章，第一节「与前章的连续性」写「无（开篇）」',
       '3. 读取 `.cinyuverse/` 下的大纲、章节摘要、伏笔池、当前状态、角色卡、',
       '   `writing-rules.md` 与 `SolutionToWrite.md`（第七节红线从这里整合）',
+      '4. 第七节红线必须逐条纳入下列最新节奏阈值——`writing-rules.md` 是建项时',
+      '   生成的，可能落后于本清单；两者不一致时以本清单为准：',
+      ...STYLE_RHYTHM_RULES.map((rule) => `   - ${rule.constraint}`),
       '',
       '## 输出：十节标准化备忘录',
       '',
@@ -279,7 +343,9 @@ const writeChapter: WritingPromptTemplate = {
       '',
       ...STYLE_RHYTHM_FORBIDDEN_PATTERNS.map((pattern) => `- ${pattern}`),
       '',
-      '写入文件前逐项自查（单句成段处数、排比处数、明喻数、开头 500 字内容），超标先自行修订再交付。',
+      '写入文件前逐项自查（单句成段处数、排比处数、明喻数、开头 500 字内容），并通读',
+      '全文删除重复叙述的场景——重写残留的双版本必须合并为一版；',
+      '交付回复中逐项列出实测计数，超标先自行修订再交付。',
       '',
       `将正文写入 \`chapters/chapter-${padded}.md\``,
       input.guidance ? `\n## 作者指导\n\n${input.guidance}` : '',
@@ -657,15 +723,20 @@ const humanizeChapter: WritingPromptTemplate = {
       '2. 读取 `.cinyuverse/skills/humanizer-chinese/SKILL.md`——这是中文去 AI 味的完整方法论。',
       '   若该文件不存在，向用户说明需先把 humanizer-chinese 的 SKILL.md 放入',
       '   `.cinyuverse/skills/humanizer-chinese/`（新建项目会自动生成），不要凭印象改写。',
-      '3. 按 SKILL.md 的「通用要点」与小说最相关的模式执行，重点是「节奏三件套」',
+      '3. 通读全文先做两类结构修复：',
+      '   - 重写/修订可能残留「同一场景写两遍」的重复段落——逐段比对，内容高度相似的',
+      '     段落只保留一版并把细节合并进去；',
+      '   - 多人对白回声式重复同一词语的链（如「那可不」「够了」连拽数轮）每组只保留',
+      '     一处，其余改成带实质信息的回应。',
+      '4. 按 SKILL.md 的「通用要点」与小说最相关的模式执行，重点是「节奏三件套」',
       '   （SKILL.md §12 排比对仗堆砌、§20 均匀节奏、§23 单句断句造势——检测权重最高的',
       '   特征组）以及 §29-31 标点模式',
-      `4. 若存在 \`.cinyuverse/aigc/chapter-${padded}.json\` 检测报告，优先整段重写其中`,
+      `5. 若存在 \`.cinyuverse/aigc/chapter-${padded}.json\` 检测报告，优先整段重写其中`,
       '   label≠0（AI / 疑似 AI）的段落——那是检测器实测的高危段，改写时按序号与引文定位；',
       '   报告对应旧稿，只用于定位，不据此删改情节',
-      '5. 读取 `.cinyuverse/writing-rules.md` 的「文风节奏」阈值，改写结果必须全部达标：',
+      '6. 读取 `.cinyuverse/writing-rules.md` 的「文风节奏」阈值，改写结果必须全部达标：',
       ...STYLE_RHYTHM_RULES.map((rule) => `   - ${rule.constraint}`),
-      '6. 参照 `.cinyuverse/SolutionToWrite.md` 的五档可检测性与硬指标定位高危段落：',
+      '7. 参照 `.cinyuverse/SolutionToWrite.md` 的五档可检测性与硬指标定位高危段落：',
       '   优先改写自问自答独白与数字流水账；文件缺失则按 SKILL.md 通用要点执行',
       '',
       '## 改写原则（来自 SKILL.md，必须遵守）',
@@ -825,7 +896,9 @@ const distillStyle: WritingPromptTemplate = {
       '',
       '1. 读取 `.cinyuverse/references/` 下的参考作品。目录缺失或为空时，直接',
       '   说明没有可分析的参考作品并停止，不要凭空编造文风。',
-      '2. 跨作品归纳共性（而不是罗列每部作品的差异），覆盖以下维度：',
+      '   作者补充若指定了参考作品清单，只读取清单内的文件，忽略其余文件。',
+      '2. 按参考范围提炼：多部作品时跨作品归纳共性（而不是罗列每部作品的差异），',
+      '   只有一部作品时直接提炼该作品的文风，不套用跨作品归纳。覆盖以下维度：',
       '   - 叙事视角与人称',
       '   - 句式节奏（长短句比例、段落密度、标点习惯）',
       '   - 描写密度与手法（动作 / 环境 / 心理描写的配比）',
@@ -846,7 +919,9 @@ const distillStyle: WritingPromptTemplate = {
       '## 代表性摘录',
       '> （原文短段，标注出处文件名）',
       '```',
-      '5. 若 `.cinyuverse/style-sample.md` 已有手贴内容，保留原有摘录并与提炼',
+      '5. 在文件末尾追加「节奏执行原则」一节，逐条写入以下内容——风格规范是统计倾向，必须防止写作时被逐句机械复刻：',
+      ...STYLE_SAMPLE_GUARDRAILS_SECTION.lines.map((line) => `   ${line}`),
+      '6. 若 `.cinyuverse/style-sample.md` 已有手贴内容，保留原有摘录并与提炼',
       '   结果合并，不要直接覆盖丢弃。',
       input.guidance ? `\n## 作者补充\n\n${input.guidance}` : '',
     ]
@@ -876,7 +951,8 @@ const generateStoryGraph: WritingPromptTemplate = {
       '## 任务',
       '',
       '1. 读取以下文件了解已有设定（缺失或仍是空模板的跳过，不要臆测内容）：',
-      '   - `.cinyuverse/project.json` — 书籍信息',
+      '   - `.cinyuverse/project.json` — 书籍信息与作者简介（`description` 非空时',
+      '     是必须遵循的创作意图，节拍图的主线走向不得偏离它）',
       '   - `.cinyuverse/world-view.md` — 世界观设定',
       '   - `.cinyuverse/outline.md` — 大纲',
       '   - `.cinyuverse/hooks.md` — 伏笔池',
@@ -1122,7 +1198,8 @@ const writeBeat: WritingPromptTemplate = {
       ...STYLE_RHYTHM_RULES.map((rule) => `  - ${rule.constraint}`),
       '- 禁止句式示例（原样避开，也不要换汤不换药地复刻）：',
       ...STYLE_RHYTHM_FORBIDDEN_PATTERNS.map((pattern) => `  - ${pattern}`),
-      '- 写入文件前按节奏基线逐项自查，超标先自行修订再交付',
+      '- 写入文件前按节奏基线逐项自查，并通读全文删除重复叙述的场景——重写残留的双版本',
+      '  必须合并为一版；交付回复中逐项列出实测计数，超标先自行修订再交付',
       input.guidance ? `\n## 作者补充\n\n${input.guidance}` : '',
     ]
       .filter(Boolean)
