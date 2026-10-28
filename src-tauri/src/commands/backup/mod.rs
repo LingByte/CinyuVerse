@@ -611,8 +611,3 @@ pub async fn backup_restore_stage(
         requires_reload: true,
     })
 }
-
-#[tauri::command]
-pub async fn backup_cancel(_op_id: Option<String>) -> Result<(), AppError> {
-    Ok(())
-}

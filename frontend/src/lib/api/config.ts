@@ -371,9 +371,6 @@ export const backupApi = {
       payload,
     });
   },
-  cancel: async (opId?: string | null): Promise<void> => {
-    return backendCall<void>('backup_cancel', { opId: opId ?? null });
-  },
 };
 
 export interface WebServiceConfig {

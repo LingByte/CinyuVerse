@@ -6,8 +6,7 @@ import { DESKTOP_SHELL_COMMANDS, HOST_COMMANDS } from 'shared/hostCommands';
 const FRONTEND_ROOT = join(import.meta.dirname, '../..');
 const CALL_PATTERN =
   /(?:backendCall|tauriInvoke|\.call|callApplicationCommand|invokeAsResult)(?:<[^>]*>)?\(\s*(?:[^,]+,\s*)?['"]([a-z][a-z0-9_]*)['"]/g;
-const SUBSCRIBE_PATTERN =
-  /subscribeCommand:\s*['"]([a-z][a-z0-9_]*)['"]/g;
+const SUBSCRIBE_PATTERN = /subscribeCommand:\s*['"]([a-z][a-z0-9_]*)['"]/g;
 const BARE_CALL_PATTERN =
   /(?<![.\w])call(?:<[^>]*>)?\(\s*['"]([a-z][a-z0-9_]*)['"]/g;
 
@@ -15,6 +14,9 @@ function walkTsFiles(dir: string, files: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     if (
       entry === 'node_modules' ||
+      // The e2e journey harness intercepts its fixture commands with a
+      // client-side fake transport; they are not product host commands.
+      entry === 'e2e' ||
       entry.endsWith('.test.ts') ||
       entry.endsWith('.test.tsx')
     ) {
@@ -40,7 +42,11 @@ describe('Host command contract', () => {
     const used = new Set<string>();
     for (const file of walkTsFiles(FRONTEND_ROOT)) {
       const source = readFileSync(file, 'utf8');
-      for (const pattern of [CALL_PATTERN, SUBSCRIBE_PATTERN, BARE_CALL_PATTERN]) {
+      for (const pattern of [
+        CALL_PATTERN,
+        SUBSCRIBE_PATTERN,
+        BARE_CALL_PATTERN,
+      ]) {
         pattern.lastIndex = 0;
         let match: RegExpExecArray | null;
         while ((match = pattern.exec(source))) {

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use db::models::{
     project::{CreateProject, Project, SearchResult, UpdateProject},
-    project_repo::{CreateProjectRepo, ProjectRepo},
+    project_repo::CreateProjectRepo,
     repo::Repo,
 };
 use services::services::{file_search::SearchQuery, project::ProjectServiceError};
@@ -351,23 +351,6 @@ pub async fn delete_project_repository(
             );
             Err(AppError::NotFound("Repository not found".to_string()))
         }
-        Err(e) => Err(AppError::Internal(e.to_string())),
-    }
-}
-
-#[tauri::command]
-pub async fn get_project_repository(
-    state: tauri::State<'_, AppState>,
-    project_id: Uuid,
-    repo_id: Uuid,
-) -> Result<ProjectRepo, AppError> {
-    match ProjectRepo::find_by_project_and_repo(&state.deployment.db().pool, project_id, repo_id)
-        .await
-    {
-        Ok(Some(project_repo)) => Ok(project_repo),
-        Ok(None) => Err(AppError::NotFound(
-            "Repository not found in project".to_string(),
-        )),
         Err(e) => Err(AppError::Internal(e.to_string())),
     }
 }

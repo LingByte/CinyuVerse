@@ -102,17 +102,6 @@ fn task_status_to_session_status(status: &db::models::task::TaskStatus) -> Sessi
 // --- Commands ---
 
 #[tauri::command]
-pub async fn get_tasks(
-    state: tauri::State<'_, AppState>,
-    project_id: Uuid,
-) -> Result<Vec<TaskWithAttemptStatus>, AppError> {
-    let tasks =
-        Task::find_by_project_id_with_attempt_status(&state.deployment.db().pool, project_id)
-            .await?;
-    Ok(tasks)
-}
-
-#[tauri::command]
 pub async fn get_task(state: tauri::State<'_, AppState>, task_id: Uuid) -> Result<Task, AppError> {
     let task = Task::find_by_id(&state.deployment.db().pool, task_id)
         .await?

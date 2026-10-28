@@ -690,7 +690,6 @@ pub fn run(cef_bootstrap: Result<CefBootstrap, String>) {
         commands::backup::backup_create,
         commands::backup::backup_inspect,
         commands::backup::backup_restore_stage,
-        commands::backup::backup_cancel,
         commands::web_service::get_web_service_config,
         commands::web_service::update_web_service_config,
         commands::web_service::get_web_server_status,
