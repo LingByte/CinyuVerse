@@ -70,14 +70,12 @@ type SessionAttentionPayload = ProjectSessionTarget & {
 function buildTrackedProjectIds(
   currentProjectId: string | undefined,
   openProjectIds: string[],
-  projectsById: Record<string, { id: string }>,
-  includeAllProjects: boolean
+  projectsById: Record<string, { id: string }>
 ) {
   return Array.from(
     new Set([
       ...(currentProjectId ? [currentProjectId] : []),
       ...openProjectIds,
-      ...(includeAllProjects ? Object.keys(projectsById) : []),
     ])
   ).filter((trackedProjectId) => Boolean(projectsById[trackedProjectId]));
 }
@@ -372,7 +370,6 @@ export function ProjectWindowManager() {
   const openProjectIds = useWindowProjectsStore(
     (state) => state.openProjectIds
   );
-  const railVisible = useWindowProjectsStore((state) => state.railVisible);
   const pruneProjectState = useWindowProjectsStore(
     (state) => state.pruneProjectState
   );
@@ -419,35 +416,13 @@ export function ProjectWindowManager() {
       return [];
     }
 
-    return buildTrackedProjectIds(
-      projectId,
-      openProjectIds,
-      projectsById,
-      false
-    );
+    return buildTrackedProjectIds(projectId, openProjectIds, projectsById);
   }, [openProjectIds, projectId, projectsById, shouldManageProjectWindows]);
-
-  const effectiveTrackedProjectIds = useMemo(() => {
-    if (!shouldManageProjectWindows) {
-      return trackedProjectIds;
-    }
-
-    return railVisible
-      ? buildTrackedProjectIds(projectId, openProjectIds, projectsById, true)
-      : trackedProjectIds;
-  }, [
-    openProjectIds,
-    projectId,
-    projectsById,
-    railVisible,
-    shouldManageProjectWindows,
-    trackedProjectIds,
-  ]);
 
   return (
     <>
       <ProjectNotificationBridge />
-      {effectiveTrackedProjectIds.map((trackedProjectId) => (
+      {trackedProjectIds.map((trackedProjectId) => (
         <ProjectActivityTracker
           key={trackedProjectId}
           projectId={trackedProjectId}

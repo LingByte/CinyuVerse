@@ -22,7 +22,6 @@ export function ProjectWindowStatusSummary() {
     (state) => state.projectSnapshots
   );
   const projectAlerts = useWindowProjectsStore((state) => state.projectAlerts);
-  const railVisible = useWindowProjectsStore((state) => state.railVisible);
   const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
 
   const statusItems = useMemo(() => {
@@ -64,7 +63,7 @@ export function ProjectWindowStatusSummary() {
     projectsById,
   ]);
 
-  if (railVisible || statusItems.length === 0) {
+  if (statusItems.length === 0) {
     return null;
   }
 

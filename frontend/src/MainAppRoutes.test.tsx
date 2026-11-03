@@ -44,10 +44,6 @@ vi.mock('@/components/layout/IDEWorkspaceRoute', async () => {
   };
 });
 
-vi.mock('@/components/layout/ProjectRail', () => ({
-  ProjectRail: () => <aside data-testid="project-rail" />,
-}));
-
 vi.mock('@/pages/settings/SettingsLayout', async () => {
   const React = await vi.importActual<typeof import('react')>('react');
   const { Outlet } =
@@ -152,15 +148,6 @@ function renderAt(pathname: string) {
 }
 
 describe('MainAppRoutes', () => {
-  it.each([
-    '/local-projects/project-1',
-    '/local-projects/project-1/workspaces/workspace-1/sessions/session-1',
-  ])('mounts one shared project rail on %s', (pathname) => {
-    renderAt(pathname);
-
-    expect(screen.getAllByTestId('project-rail')).toHaveLength(1);
-  });
-
   it('renders project routes through the standard legacy layout', () => {
     renderAt('/local-projects/project-1');
 
@@ -192,7 +179,6 @@ describe('MainAppRoutes', () => {
 
     expect(await screen.findByTestId('settings-agents')).toBeInTheDocument();
     expect(screen.getByTestId('settings-layout')).toBeInTheDocument();
-    expect(screen.queryByTestId('project-rail')).not.toBeInTheDocument();
   });
 
   it('redirects the standalone devices page to remote connection', async () => {
@@ -209,7 +195,6 @@ describe('MainAppRoutes', () => {
 
     expect(await screen.findByTestId('plugins-page')).toBeInTheDocument();
     expect(screen.getByTestId('settings-layout')).toBeInTheDocument();
-    expect(screen.queryByTestId('project-rail')).not.toBeInTheDocument();
   });
 
   it('keeps the settings layout around an independent plugin detail page', async () => {
@@ -217,7 +202,6 @@ describe('MainAppRoutes', () => {
 
     expect(await screen.findByTestId('plugin-detail-page')).toBeInTheDocument();
     expect(screen.getByTestId('settings-layout')).toBeInTheDocument();
-    expect(screen.queryByTestId('project-rail')).not.toBeInTheDocument();
   });
 
   it('keeps the settings layout around a marketplace plugin detail page', async () => {

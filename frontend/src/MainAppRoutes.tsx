@@ -3,7 +3,6 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { LegacyDesignScope } from '@/components/legacy-design/LegacyDesignScope';
 import { NormalLayout } from '@/components/layout/NormalLayout';
-import { ProjectRail } from '@/components/layout/ProjectRail';
 import { Loader } from '@/components/ui/loader';
 import {
   loadAgentSettings,
@@ -103,15 +102,12 @@ const WebServiceSettings = lazyNamed(
 function MainLegacyScope({
   children,
   className,
-  showProjectRail = false,
 }: {
   children: ReactNode;
   className?: string;
-  showProjectRail?: boolean;
 }) {
   return (
     <LegacyDesignScope className={className}>
-      {showProjectRail ? <ProjectRail /> : null}
       <Suspense fallback={<RouteFallback />}>{children}</Suspense>
     </LegacyDesignScope>
   );
@@ -135,7 +131,7 @@ export function MainAppRoutes() {
 
       <Route
         element={
-          <MainLegacyScope showProjectRail>
+          <MainLegacyScope>
             <IDEWorkspaceRoute />
           </MainLegacyScope>
         }
@@ -210,7 +206,7 @@ export function MainAppRoutes() {
 
       <Route
         element={
-          <MainLegacyScope showProjectRail>
+          <MainLegacyScope>
             <NormalLayout />
           </MainLegacyScope>
         }

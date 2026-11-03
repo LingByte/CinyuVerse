@@ -29,7 +29,6 @@ import { useOpenProjectInEditor } from '@/hooks/useOpenProjectInEditor';
 import { OpenInIdeButton } from '@/components/ide/OpenInIdeButton';
 import { useProjectRepos } from '@/hooks';
 import { useProjects } from '@/hooks/useProjects';
-import { ProjectRailToggleButton } from '@/components/layout/ProjectRailToggleButton';
 import { useProjectSwitcher } from '@/hooks/useProjectSwitcher';
 
 const INTERNAL_NAV = [
@@ -134,7 +133,6 @@ export function Navbar() {
             <Link to="/local-projects">
               <Logo size="window" />
             </Link>
-            <ProjectRailToggleButton />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button

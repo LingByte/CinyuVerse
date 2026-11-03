@@ -13,7 +13,9 @@ export function deriveProjectVisualState(
   snapshot: ProjectActivitySnapshot,
   alert?: ProjectActivityAlert
 ): ProjectActivityVisualState {
-  if (snapshot.isLoading || snapshot.hasRunning) {
+  // Only in-flight sessions should spin. Query/stream bootstrap (`isLoading`)
+  // is transient and must not keep the rail monogram flashing.
+  if (snapshot.hasRunning) {
     return 'loading';
   }
 

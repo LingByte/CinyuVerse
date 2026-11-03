@@ -65,7 +65,6 @@ import { useRepoBranches } from '@/hooks/useRepoBranches';
 import { useWorkspaceBranchStatus } from '@/hooks/useWorkspaceBranchStatus';
 import { resolveDefaultProjectWorkspace } from '@/lib/workspaceDefault';
 import { WorktreeSelector } from '@/components/layout/WorktreeSelector';
-import { ProjectRailToggleButton } from '@/components/layout/ProjectRailToggleButton';
 import { useProjectSwitcher } from '@/hooks/useProjectSwitcher';
 import {
   contributionMetadata,
@@ -300,7 +299,6 @@ export function WorkspaceBranchControls({
       role="group"
       aria-label="Workspace and target branches"
     >
-      <ProjectRailToggleButton />
       {showCanvasListToggle ? <CanvasSessionListToggleButton /> : null}
       {isWorkspaceTab ? <WorktreeSelector /> : null}
       {workspaceId ? <BranchStatusBadge workspaceId={workspaceId} /> : null}

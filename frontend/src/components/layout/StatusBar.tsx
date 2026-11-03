@@ -1,4 +1,3 @@
-import { useProject } from '@/contexts/ProjectContext';
 import { useUserSystem } from '@/components/ConfigProvider';
 import { APP_NAME } from '@/lib/branding';
 import { ProjectWindowStatusSummary } from '@/components/layout/ProjectWindowStatusSummary';
@@ -8,7 +7,6 @@ import { BackgroundTaskCountBadge } from '@/components/layout/BackgroundTaskCoun
 import { UpdateAvailableBadge } from '@/components/layout/UpdateAvailableBadge';
 import { AgentStatusMenu } from '@/components/layout/AgentStatusMenu';
 import { useAgentManagement } from '@/features/agent-management';
-import { useWindowProjectsStore } from '@/stores/useWindowProjectsStore';
 import {
   contributionMetadata,
   usePluginHostContributions,
@@ -18,10 +16,8 @@ import { useBackendTransport } from '@/lib/transport';
 import { useMemo } from 'react';
 
 export function StatusBar() {
-  const { project } = useProject();
   const { config } = useUserSystem();
   const { state: agentManagementState } = useAgentManagement();
-  const railVisible = useWindowProjectsStore((state) => state.railVisible);
   const statusItems = usePluginHostContributions('status').slice(0, 3);
   const transport = useBackendTransport();
   const pluginApi = useMemo(
@@ -32,11 +28,7 @@ export function StatusBar() {
   return (
     <div className="workspace-divider-top flex h-6 shrink-0 select-none items-center justify-between bg-secondary px-2 text-[11px] text-secondary-foreground">
       <div className="min-w-0 pr-2">
-        {railVisible ? (
-          project && <span className="truncate opacity-90">{project.name}</span>
-        ) : (
-          <ProjectWindowStatusSummary />
-        )}
+        <ProjectWindowStatusSummary />
       </div>
 
       <div className="flex items-center gap-2">

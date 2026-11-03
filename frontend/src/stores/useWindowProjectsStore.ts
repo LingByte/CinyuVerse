@@ -50,14 +50,11 @@ interface ProjectFocusRequest {
 }
 
 interface WindowProjectsState {
-  railVisible: boolean;
   openProjectIds: string[];
   lastRouteByProject: Record<string, string>;
   projectSnapshots: Record<string, ProjectActivitySnapshot>;
   projectAlerts: Record<string, ProjectActivityAlert | undefined>;
   focusRequests: Record<string, ProjectFocusRequest | undefined>;
-  setRailVisible: (visible: boolean) => void;
-  toggleRailVisible: () => void;
   ensureProjectOpen: (projectId: string) => void;
   rememberProjectRoute: (projectId: string, route: string) => void;
   setProjectSnapshot: (
@@ -76,7 +73,6 @@ interface WindowProjectsState {
 }
 
 type PersistedWindowProjectsState = {
-  railVisible?: boolean;
   openProjectIds?: string[];
   lastRouteByProject?: Record<string, string>;
   projectSnapshots?: Record<string, ProjectActivitySnapshot>;
@@ -160,18 +156,11 @@ function filterRecordByProjectIds<T>(
 export const useWindowProjectsStore = create<WindowProjectsState>()(
   persist(
     (set, get) => ({
-      railVisible: false,
       openProjectIds: [],
       lastRouteByProject: {},
       projectSnapshots: {},
       projectAlerts: {},
       focusRequests: {},
-      setRailVisible: (visible) =>
-        set((state) =>
-          state.railVisible === visible ? state : { railVisible: visible }
-        ),
-      toggleRailVisible: () =>
-        set((state) => ({ railVisible: !state.railVisible })),
       ensureProjectOpen: (projectId) =>
         set((state) => {
           const nextOpenProjectIds = [
@@ -316,7 +305,6 @@ export const useWindowProjectsStore = create<WindowProjectsState>()(
         }),
       resetProjectWindowState: () =>
         set({
-          railVisible: false,
           openProjectIds: [],
           lastRouteByProject: {},
           projectSnapshots: {},
@@ -349,7 +337,7 @@ export const useWindowProjectsStore = create<WindowProjectsState>()(
     }),
     {
       name: 'cinyuverse-window-projects',
-      version: 4,
+      version: 6,
       migrate: (persistedState: unknown) => {
         const state = (persistedState ?? {}) as PersistedWindowProjectsState;
         const normalizedLastRouteByProject = Object.fromEntries(
@@ -359,10 +347,23 @@ export const useWindowProjectsStore = create<WindowProjectsState>()(
         );
 
         return {
-          railVisible: false,
           openProjectIds: state.openProjectIds ?? [],
           lastRouteByProject: normalizedLastRouteByProject,
-          projectSnapshots: state.projectSnapshots ?? {},
+          // Drop ephemeral activity flags from older persisted snapshots so a
+          // previous isLoading/hasRunning value cannot revive a stuck spinner.
+          projectSnapshots: Object.fromEntries(
+            Object.entries(state.projectSnapshots ?? {}).map(
+              ([id, snapshot]) => [
+                id,
+                {
+                  ...snapshot,
+                  isLoading: false,
+                  hasRunning: false,
+                  runningCount: 0,
+                },
+              ]
+            )
+          ),
           projectAlerts: state.projectAlerts ?? {},
           focusRequests: {},
         };
@@ -370,13 +371,17 @@ export const useWindowProjectsStore = create<WindowProjectsState>()(
       partialize: (state) => ({
         openProjectIds: state.openProjectIds,
         lastRouteByProject: state.lastRouteByProject,
-        // runningCount reflects live in-flight sessions, which never survive an
-        // app restart — persist it as 0 so the status-bar count badge doesn't show
-        // a phantom count on the next launch before trackers reload (P3-5).
+        // Live activity never survives an app restart. Persist idle flags so
+        // the rail cannot show a phantom spinner before trackers reload.
         projectSnapshots: Object.fromEntries(
           Object.entries(state.projectSnapshots).map(([id, snapshot]) => [
             id,
-            { ...snapshot, runningCount: 0 },
+            {
+              ...snapshot,
+              isLoading: false,
+              hasRunning: false,
+              runningCount: 0,
+            },
           ])
         ),
         projectAlerts: state.projectAlerts,

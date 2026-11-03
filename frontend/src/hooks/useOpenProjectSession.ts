@@ -40,13 +40,9 @@ export function useOpenProjectSession() {
   const requestProjectFocus = useWindowProjectsStore(
     (state) => state.requestProjectFocus
   );
-  const setRailVisible = useWindowProjectsStore(
-    (state) => state.setRailVisible
-  );
 
   return useCallback(
     ({ projectId, workspaceId, sessionId }: ProjectSessionTarget) => {
-      setRailVisible(true);
       ensureProjectOpen(projectId);
       requestProjectFocus(projectId, {
         workspaceId,
@@ -61,6 +57,6 @@ export function useOpenProjectSession() {
         navigate(paths.projectSessions(projectId));
       }
     },
-    [ensureProjectOpen, navigate, requestProjectFocus, setRailVisible]
+    [ensureProjectOpen, navigate, requestProjectFocus]
   );
 }

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 /**
  * liquid-glass-react renders a WebGL shader surface that jsdom cannot run.
  * Render its children inside a marker div (same shape as the per-file mocks
- * used by BranchInfoHeader/ProjectRail tests) so components like
+ * used by BranchInfoHeader tests) so components like
  * SettingsActionBar stay testable. Imported from vitest.setup.ts so every
  * test file gets the mock automatically.
  */
