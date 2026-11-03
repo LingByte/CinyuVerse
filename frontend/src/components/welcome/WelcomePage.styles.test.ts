@@ -24,9 +24,11 @@ function declarationsFor(selector: string) {
 }
 
 describe('welcome project surfaces', () => {
-  it('describes Cinyuverse as a super Agent Coding platform', () => {
-    expect(zhCNApp.welcomePage.tagline).toBe('超级 Agent Coding 平台');
-    expect(enApp.welcomePage.tagline).toBe('Super Agent Coding Platform');
+  it('describes Cinyuverse as an AI-native novel creation platform', () => {
+    expect(zhCNApp.welcomePage.tagline).toBe('AI 原生小说创作平台');
+    expect(enApp.welcomePage.tagline).toBe(
+      'AI-native novel creation platform'
+    );
   });
 
   it('uses the requested light background on the home page', () => {

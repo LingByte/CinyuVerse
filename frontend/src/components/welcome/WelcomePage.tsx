@@ -1,22 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, GitBranch, Loader2, Plus, Settings } from 'lucide-react';
+import { FolderOpen, Loader2, Plus, Settings } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useProjectRepos } from '@/hooks';
 import { ProjectFormDialog } from '@/components/dialogs/projects/ProjectFormDialog';
-import { CloneRepoDialog } from '@/components/dialogs/projects/CloneRepoDialog';
 import { ConfirmDialog } from '@/components/dialogs/shared/ConfirmDialog';
 import { APP_NAME } from '@/lib/branding';
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
-import { projectsApi, settingsWindowApi } from '@/lib/api';
+import { desktopApi, projectsApi, settingsWindowApi } from '@/lib/api';
 import {
   PROJECT_DELETE_CONFIRM_CLASSNAME,
   PROJECT_DELETE_CONFIRM_STYLE,
 } from '@/lib/projectDeleteUi';
-import { ProjectRailToggleButton } from '@/components/layout/ProjectRailToggleButton';
 import { toast } from '@/components/ui/toast';
 
 function WelcomeSection({
@@ -77,22 +75,46 @@ function RecentProjectItem({
   const { data: repos } = useProjectRepos(project.id);
   const repoPath = repos?.[0]?.path ?? '';
 
+  const handleOpenFolder = useCallback(
+    async (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!repoPath) {
+        return;
+      }
+      try {
+        await desktopApi.revealInFileManager(repoPath);
+      } catch (error) {
+        console.error('Failed to reveal project folder:', error);
+      }
+    },
+    [repoPath]
+  );
+
   return (
-    <button
-      onClick={onClick}
-      onContextMenu={onContextMenu}
-      className="group flex w-full items-center gap-3 rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/60"
-      title={t('welcomePage.recentProjectTooltip')}
-    >
-      <span className="truncate font-medium text-foreground transition-colors">
+    <div className="group flex w-full items-center gap-2 rounded px-2 py-1.5 transition-colors hover:bg-muted/60">
+      <button
+        type="button"
+        onClick={onClick}
+        onContextMenu={onContextMenu}
+        className="min-w-0 flex-1 truncate text-left text-sm font-medium text-foreground"
+        title={t('welcomePage.recentProjectTooltip')}
+      >
         {project.name}
-      </span>
+      </button>
       {repoPath ? (
-        <span className="flex-1 truncate text-right text-xs text-muted-foreground">
-          {repoPath}
-        </span>
+        <button
+          type="button"
+          onClick={(event) => void handleOpenFolder(event)}
+          className="flex max-w-[55%] shrink-0 items-center gap-1.5 rounded px-1 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          title={t('welcomePage.openProjectFolder')}
+          aria-label={t('welcomePage.openProjectFolder')}
+        >
+          <span className="truncate text-right">{repoPath}</span>
+          <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-70" />
+        </button>
       ) : null}
-    </button>
+    </div>
   );
 }
 
@@ -148,25 +170,6 @@ export function WelcomePage() {
     const result = await ProjectFormDialog.show({ autoOpenFolderPicker: true });
     if (result?.status === 'saved' && result.project) {
       navigate(`/local-projects/${result.project.id}/sessions`);
-    }
-  };
-
-  const handleCloneRepo = async () => {
-    const result = await CloneRepoDialog.show();
-    if (result.status !== 'cloned') {
-      return;
-    }
-    const name = result.repo.display_name || result.repo.name;
-    try {
-      const project = await projectsApi.create({
-        name,
-        repositories: [{ display_name: name, git_repo_path: result.repo.path }],
-      });
-      navigate(`/local-projects/${project.id}/sessions`);
-    } catch (error) {
-      toast.error(
-        t('welcomePage.createProjectFailed', { error: String(error) })
-      );
     }
   };
 
@@ -262,18 +265,15 @@ export function WelcomePage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
-            <ProjectRailToggleButton />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => settingsWindowApi.open()}
-              aria-label="Settings"
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => settingsWindowApi.open()}
+            aria-label="Settings"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
         </div>
 
         <WelcomeSection title={t('welcomePage.startSection')}>
@@ -286,11 +286,6 @@ export function WelcomePage() {
             icon={FolderOpen}
             label={t('welcomePage.selectFolder')}
             onClick={handleOpenFolder}
-          />
-          <WelcomeAction
-            icon={GitBranch}
-            label={t('welcomePage.cloneRepo')}
-            onClick={handleCloneRepo}
           />
         </WelcomeSection>
 

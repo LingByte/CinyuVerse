@@ -123,12 +123,12 @@
     "startSection": "开始",
     "createNewProject": "创建新作品",
     "selectFolder": "选择文件夹",
-    "cloneRepo": "克隆作品集",
     "recentProjects": "最近作品",
     "loadingProjects": "加载作品中...",
     "noProjects": "暂无作品，创建一个开始使用吧。",
     "open": "打开",
-    "tagline": "超级 Agent Coding 平台"
+    "openProjectFolder": "在访达中打开作品目录",
+    "tagline": "AI 原生小说创作平台"
   },
   "webConnect": {
     "formLabel": "连接到 Cinyuverse",

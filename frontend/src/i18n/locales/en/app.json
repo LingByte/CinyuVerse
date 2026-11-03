@@ -123,12 +123,12 @@
     "startSection": "Get Started",
     "createNewProject": "Create New Novel",
     "selectFolder": "Select Folder",
-    "cloneRepo": "Clone Library",
     "recentProjects": "Recent Novels",
     "loadingProjects": "Loading novels...",
     "noProjects": "No novels yet. Create one to get started.",
     "open": "Open",
-    "tagline": "Super Agent Coding Platform"
+    "openProjectFolder": "Reveal novel folder in file manager",
+    "tagline": "AI-native novel creation platform"
   },
   "webConnect": {
     "formLabel": "Connect to Cinyuverse",
