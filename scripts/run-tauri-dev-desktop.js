@@ -10,6 +10,7 @@ const { getPorts } = require('./setup-dev-environment');
 const GENERATED_TAURI_DEV_CONFIG = 'src-tauri/tauri.dev.generated.conf.json';
 const WORKSPACE_ROOT = path.join(__dirname, '..');
 const SQLX_OFFLINE_DIR = path.join(WORKSPACE_ROOT, 'crates', 'db', '.sqlx');
+const ROOT_ENV_FILE = path.join(WORKSPACE_ROOT, '.env');
 const LOCAL_ENV_FILE = path.join(WORKSPACE_ROOT, '.env.local');
 const DESKTOP_DEV_IDENTITY = {
   deepLinkScheme: 'cinyuverse-dev',
@@ -46,7 +47,10 @@ function runCommand(command, args, options = {}) {
 }
 
 function createCargoLeanDevEnv(ports, baseEnv = process.env) {
-  const env = applyLocalEnvFile(LOCAL_ENV_FILE, baseEnv);
+  const env = applyLocalEnvFile(
+    LOCAL_ENV_FILE,
+    applyLocalEnvFile(ROOT_ENV_FILE, baseEnv)
+  );
   return withNativeBuildEnv({
     ...env,
     CARGO_INCREMENTAL: env.CARGO_INCREMENTAL || '0',

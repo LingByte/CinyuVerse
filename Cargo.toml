@@ -20,7 +20,7 @@ members = [
     "crates/review",
     "crates/plugins",
     "crates/plugin-sdk",
-    "crates/qiniu-storage",
+    "crates/tomato-library",
     "crates/tool-runtime",
     "crates/artifacts",
     "crates/automation",

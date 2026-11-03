@@ -552,7 +552,6 @@ pub fn run(cef_bootstrap: Result<CefBootstrap, String>) {
         });
 
         app.manage(state);
-        app.manage(commands::qiniu::QiniuState::default());
         {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -697,14 +696,15 @@ pub fn run(cef_bootstrap: Result<CefBootstrap, String>) {
         commands::web_service::start_web_server,
         commands::web_service::stop_web_server,
         commands::web_service::probe_web_service_port,
-        commands::qiniu::qiniu_get_config,
-        commands::qiniu::qiniu_set_config,
-        commands::qiniu::qiniu_list_novels,
-        commands::qiniu::qiniu_list_chapters,
-        commands::qiniu::qiniu_download_book,
-        commands::qiniu::qiniu_download_text,
-        commands::qiniu::qiniu_upload_text,
-        commands::qiniu::qiniu_delete,
+        commands::tomato::library_get_settings,
+        commands::tomato::library_set_settings,
+        commands::tomato::library_list_local,
+        commands::tomato::library_search,
+        commands::tomato::library_preview,
+        commands::tomato::library_download,
+        commands::tomato::library_read_local,
+        commands::tomato::library_reveal_local,
+        commands::tomato::library_open_local,
         commands::web_service::generate_web_service_token,
         commands::web_service::create_host_device_pairing,
         commands::web_service::list_host_devices,
