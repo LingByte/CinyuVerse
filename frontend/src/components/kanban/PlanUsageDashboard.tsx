@@ -28,12 +28,7 @@ import {
 // The Claude usage endpoint is rate limited; keep probes to one per 3 minutes.
 const PLAN_USAGE_STALE_TIME_MS = 180_000;
 
-const PLAN_CAPABLE_AGENT_IDS = [
-  'claude_code',
-  'codex',
-  'grok',
-  'cursor',
-] as const;
+const PLAN_CAPABLE_AGENT_IDS = ['claude_code', 'codex', 'grok'] as const;
 
 type PlanCapableAgentId = (typeof PLAN_CAPABLE_AGENT_IDS)[number];
 
@@ -41,7 +36,6 @@ const SUBSCRIPTION_MODES: Record<PlanCapableAgentId, string> = {
   claude_code: 'official_subscription',
   codex: 'chatgpt_subscription',
   grok: 'subscription',
-  cursor: 'subscription',
 };
 
 const UNAVAILABLE_REASON_KEYS: Record<PlanUsageUnavailableReason, string> = {
@@ -56,7 +50,6 @@ const PLAN_COPY: Record<PlanCapableAgentId, { title: string; source: string }> =
     claude_code: { title: 'claudeTitle', source: 'claudeSource' },
     codex: { title: 'codexTitle', source: 'codexSource' },
     grok: { title: 'grokTitle', source: 'grokSource' },
-    cursor: { title: 'cursorTitle', source: 'cursorSource' },
   };
 
 function isPlanCapableAgentId(agentId: string): agentId is PlanCapableAgentId {

@@ -13,7 +13,8 @@
 //! `qa_mock` — the `executor_key` form already persisted in `sessions.agent_type`.
 //! `Serialize` / `Display` / `FromStr` / sqlx all emit this single canonical form.
 //! The retired Gemini CLI identity (`gemini`) is accepted on read and maps to
-//! `antigravity`.
+//! `antigravity`. Retired product Agents (`cursor`, `pi`, `cline`, `qoder`)
+//! remain readable for historical sessions but are no longer Agent Bar entries.
 //!
 //! ## Read leniency (zero data migration, ADR-0002)
 //!
@@ -77,11 +78,20 @@ impl AgentKind {
         AgentKind::QaMock,
     ];
 
-    /// Product Agents in Agent Bar order. Excludes `QaMock`.
+    /// Product Agents in Agent Bar order. Excludes `QaMock` and retired
+    /// identities that remain only for historical session reads
+    /// (`Cursor`, `Pi`, `Cline`, `Qoder`).
     pub fn built_in_bar_order() -> impl Iterator<Item = AgentKind> {
-        Self::ALL
-            .into_iter()
-            .filter(|kind| *kind != AgentKind::QaMock)
+        Self::ALL.into_iter().filter(|kind| {
+            !matches!(
+                kind,
+                AgentKind::QaMock
+                    | AgentKind::Cursor
+                    | AgentKind::Pi
+                    | AgentKind::Cline
+                    | AgentKind::Qoder
+            )
+        })
     }
 
     /// The canonical snake_case key (what `Serialize` / `Display` / sqlx emit).

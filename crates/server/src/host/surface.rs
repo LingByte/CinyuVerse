@@ -473,14 +473,6 @@ impl ServerApplicationDomains {
                 )
                 .await
             }
-            DomainCommand::CursorModelCatalog => {
-                super::native_commands::dispatch_model_catalog(
-                    &self.pool,
-                    "cursor_model_catalog",
-                    args,
-                )
-                .await
-            }
             DomainCommand::KimiModelCatalog => {
                 super::native_commands::dispatch_model_catalog(
                     &self.pool,
@@ -566,9 +558,6 @@ impl ServerApplicationDomains {
             DomainCommand::GrokPlugins => {
                 super::native_commands::dispatch_grok_plugins(&self.pool).await
             }
-            DomainCommand::PiPlugins => {
-                super::native_commands::dispatch_pi_plugins(&self.pool).await
-            }
             DomainCommand::OpenCodePluginList => {
                 super::native_commands::dispatch_opencode_plugin_list(&self.pool).await
             }
@@ -583,12 +572,6 @@ impl ServerApplicationDomains {
             }
             DomainCommand::GrokPluginRemove => {
                 super::native_commands::dispatch_grok_plugin_remove(&self.pool, args).await
-            }
-            DomainCommand::PiPluginAdd => {
-                super::native_commands::dispatch_pi_plugin_add(&self.pool, args).await
-            }
-            DomainCommand::PiPluginRemove => {
-                super::native_commands::dispatch_pi_plugin_remove(&self.pool, args).await
             }
             DomainCommand::OpenCodePluginAdd => {
                 super::native_commands::dispatch_opencode_plugin_add(&self.pool, args).await
@@ -646,18 +629,6 @@ impl ServerApplicationDomains {
                     .await?,
                 )
                 .await
-            }
-            DomainCommand::PiConfiguration => {
-                super::native_commands::dispatch_pi_configuration(&self.pool).await
-            }
-            DomainCommand::PiCredentialsSave => {
-                super::native_commands::dispatch_pi_credentials_save(&self.pool, args).await
-            }
-            DomainCommand::PiRuntimeSave => {
-                super::native_commands::dispatch_pi_runtime_save(&self.pool, args).await
-            }
-            DomainCommand::PiCommandValidate => {
-                super::native_commands::dispatch_pi_command_validate(args).await
             }
             other => Err(ApplicationError::not_found(format!(
                 "command `{}` is not registered",

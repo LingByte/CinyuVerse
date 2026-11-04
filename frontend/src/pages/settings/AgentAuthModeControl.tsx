@@ -767,8 +767,6 @@ function agentDisplayName(agentId: AgentId) {
       return 'Pi';
     case 'openclaw':
       return 'OpenClaw';
-    case 'cursor':
-      return 'Cursor';
     case 'qoder':
       return 'Qoder';
     default:

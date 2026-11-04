@@ -142,7 +142,6 @@ describe('PlanUsageDashboard', () => {
           agent('codex', 'Codex', false),
           agent('grok', 'Grok', true, 'account'),
           agent('gemini', 'Gemini'),
-          agent('cursor', 'Cursor', false),
         ],
       },
     });

@@ -14,8 +14,6 @@ mod codex_auth;
 mod community_acp_presets;
 pub mod contribution_capability;
 pub mod conversation;
-mod cursor_ask;
-mod cursor_auth;
 pub mod delegation_inject;
 pub mod distribution;
 pub mod elicitation;
@@ -111,7 +109,6 @@ pub use conversation::{
     TurnBlockedReason, TurnRole, TurnUsage, cap_json_value, cap_preview_bytes,
     cap_timeline_preview_fields, cap_timeline_row_preview_fields,
 };
-pub use cursor_auth::cursor_account_token;
 pub use delegation_inject::{
     CompanionCapabilities, CompanionInjection, CompanionInjectionContext, CompanionInjectionList,
     DelegationInjector, InjectedMcpServer, InjectedRemoteMcpServer, InjectedRemoteMcpTransport,

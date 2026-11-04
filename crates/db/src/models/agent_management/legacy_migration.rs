@@ -51,6 +51,7 @@ impl LegacyAgentMigration {
             > 0;
         if complete {
             ensure_current_built_ins(&mut transaction).await?;
+            purge_retired_product_agents(&mut transaction).await?;
             apply_built_in_bar_order_v2(&mut transaction).await?;
             transaction.commit().await?;
             return Ok(());
@@ -94,6 +95,7 @@ impl LegacyAgentMigration {
             .await?;
         }
         ensure_current_built_ins(&mut transaction).await?;
+        purge_retired_product_agents(&mut transaction).await?;
         apply_built_in_bar_order_v2(&mut transaction).await?;
 
         sqlx::query(
@@ -143,6 +145,35 @@ async fn ensure_current_built_ins(
             .await?;
         }
         AgentSetting::ensure_row(&mut **transaction, agent_id).await?;
+    }
+    Ok(())
+}
+
+async fn purge_retired_product_agents(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+) -> Result<(), sqlx::Error> {
+    // Cursor / Pi / Cline / Qoder are no longer product Agents. Drop leftover
+    // membership / settings / install rows so Settings and the Agent Bar stay
+    // clean even if the SQL migration has not run yet on this data directory.
+    for agent_id in ["cursor", "pi", "cline", "qoder"] {
+        for template in [
+            "DELETE FROM agent_session_default WHERE agent_id = ?",
+            "DELETE FROM agent_config_binding WHERE agent_id = ?",
+            "DELETE FROM agent_install_operation WHERE agent_id = ?",
+            "DELETE FROM agent_install_lock WHERE agent_id = ?",
+            "DELETE FROM agent_diagnostic WHERE agent_id = ?",
+            "DELETE FROM agent_probe WHERE agent_id = ?",
+            "DELETE FROM agent_installation WHERE agent_id = ?",
+            "DELETE FROM agent_user_definition WHERE agent_id = ?",
+            "DELETE FROM agent_capability_catalog WHERE agent_type = ?",
+            "DELETE FROM agent_setting WHERE agent_type = ?",
+            "DELETE FROM agent_membership WHERE agent_id = ?",
+        ] {
+            sqlx::query(template)
+                .bind(agent_id)
+                .execute(&mut **transaction)
+                .await?;
+        }
     }
     Ok(())
 }

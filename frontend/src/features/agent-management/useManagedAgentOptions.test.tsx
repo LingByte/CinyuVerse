@@ -13,11 +13,11 @@ vi.mock('@/features/agents/useSelectableAgents', () => ({
       settingsFeatures: ['native_mcp'],
     },
     {
-      agentId: 'pi',
-      displayName: 'Pi',
+      agentId: 'hermes',
+      displayName: 'Hermes',
       enabled: false,
       runnable: false,
-      settingsFeatures: ['pi_configuration'],
+      settingsFeatures: ['authentication_mode'],
     },
     {
       agentId: 'custom.agent',
@@ -48,7 +48,7 @@ describe('useManagedAgentOptions', () => {
     const { result } = renderHook(() => useManagedAgentOptions());
     expect(result.current.map((option) => option.value)).toEqual([
       'codex',
-      'pi',
+      'hermes',
       'custom.agent',
     ]);
   });

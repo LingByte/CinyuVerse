@@ -72,15 +72,12 @@ describe('describeWindowLabel', () => {
     });
   });
 
-  it('maps grok and cursor window ids', () => {
+  it('maps grok window ids', () => {
     expect(describeWindowLabel(window({ id: 'weekly' }))).toEqual({
       key: 'windowWeekly',
     });
     expect(describeWindowLabel(window({ id: 'monthly' }))).toEqual({
       key: 'windowMonthly',
-    });
-    expect(describeWindowLabel(window({ id: 'cursor_models' }))).toEqual({
-      key: 'windowCursorModels',
     });
     expect(describeWindowLabel(window({ id: 'other_models' }))).toEqual({
       key: 'windowOtherModels',

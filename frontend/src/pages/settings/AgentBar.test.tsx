@@ -60,7 +60,7 @@ describe('AgentBar', () => {
         agents={[
           agent('claude_code', 'Claude Code', 0),
           agent('codex', 'Codex', 1),
-          agent('pi', 'Pi', 2),
+          agent('opencode', 'OpenCode', 2),
         ]}
         selectedAgentId="claude_code"
         registryOpen={false}
@@ -74,12 +74,16 @@ describe('AgentBar', () => {
       key: 'ArrowLeft',
       altKey: true,
     });
-    expect(onReorder).toHaveBeenCalledWith(['codex', 'claude_code', 'pi']);
+    expect(onReorder).toHaveBeenCalledWith([
+      'codex',
+      'claude_code',
+      'opencode',
+    ]);
     expect(
       screen
         .getAllByRole('button')
         .map((control) => control.getAttribute('aria-label'))
-    ).toEqual(['Codex', 'Claude Code', 'Pi', '添加 Agent']);
+    ).toEqual(['Codex', 'Claude Code', 'OpenCode', '添加 Agent']);
   });
 
   it('navigates on a plain pointer click (no drag) on an agent icon', () => {
@@ -113,7 +117,7 @@ describe('AgentBar', () => {
           agent('claude_code', 'Claude Code', 0),
           agent('codex', 'Codex', 1),
           agent('opencode', 'OpenCode', 2),
-          agent('pi', 'Pi', 3),
+          agent('grok', 'Grok', 3),
           agent('vendor.agent', 'Vendor Agent', 4, false),
         ]}
         selectedAgentId="codex"
@@ -131,7 +135,7 @@ describe('AgentBar', () => {
       'Claude Code',
       'Codex',
       'OpenCode',
-      'Pi',
+      'Grok',
       'Vendor Agent',
       '添加 Agent',
     ]);
@@ -155,9 +159,9 @@ describe('AgentBar', () => {
         <AgentBar
           agents={[
             {
-              ...agent('cline', 'Cline', 0),
-              icon_light: '/agents/cline.svg',
-              icon_dark: '/agents/cline.svg',
+              ...agent('opencode', 'OpenCode', 0),
+              icon_light: '/agents/opencode.svg',
+              icon_dark: '/agents/opencode.svg',
             },
             {
               ...agent('hermes', 'Hermes Agent', 1),
@@ -174,11 +178,6 @@ describe('AgentBar', () => {
               icon_light: '/agents/grok.svg',
               icon_dark: '/agents/grok.svg',
             },
-            {
-              ...agent('cursor', 'Cursor', 4),
-              icon_light: '/agents/cursor-light.svg',
-              icon_dark: '/agents/cursor-dark.svg',
-            },
           ]}
           selectedAgentId="hermes"
           registryOpen={false}
@@ -190,7 +189,7 @@ describe('AgentBar', () => {
     );
 
     try {
-      for (const name of ['Cline', 'CodeBuddy', 'Grok']) {
+      for (const name of ['OpenCode', 'CodeBuddy', 'Grok']) {
         const artwork = screen
           .getByRole('button', { name })
           .querySelector('img');
@@ -206,19 +205,7 @@ describe('AgentBar', () => {
       expect(getComputedStyle(hermesArtwork!).width).toBe('28px');
       expect(getComputedStyle(hermesArtwork!).height).toBe('28px');
 
-      const cursorArtwork = screen
-        .getByRole('button', { name: 'Cursor' })
-        .querySelector('img');
-      expect(getComputedStyle(cursorArtwork!).width).toBe('24px');
-      expect(getComputedStyle(cursorArtwork!).height).toBe('24px');
-
-      for (const name of [
-        'Cline',
-        'Hermes Agent',
-        'CodeBuddy',
-        'Grok',
-        'Cursor',
-      ]) {
+      for (const name of ['OpenCode', 'Hermes Agent', 'CodeBuddy', 'Grok']) {
         const button = screen.getByRole('button', { name });
         const frame = button.querySelector('.agent-management-brand-icon');
         const artwork = button.querySelector('img');

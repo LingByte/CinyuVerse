@@ -1449,7 +1449,6 @@ async fn structured_json_fields_enforce_their_native_container_shapes() {
 
     for (agent, field, value) in [
         ("pi", "pi_custom_providers", r#"["not-an-object"]"#),
-        ("cursor", "cursor_allow_rules", r#"{"not":"an-array"}"#),
         (
             "antigravity",
             "antigravity_permissions",
@@ -1582,7 +1581,7 @@ unknown_setting = "preserve-me"
 }
 
 #[tokio::test]
-async fn hermes_yaml_dotenv_and_cursor_json_fields_round_trip() {
+async fn hermes_yaml_dotenv_fields_round_trip() {
     let filesystem = Arc::new(MemoryNativeFileSystem::default());
     let provider = NativeConfigProvider::bundled(filesystem.clone(), PathBuf::from("/home/user"));
     let hermes = AgentId::parse("hermes").unwrap();
@@ -1640,37 +1639,6 @@ async fn hermes_yaml_dotenv_and_cursor_json_fields_round_trip() {
     assert!(env.contains("# user comment"));
     assert!(env.contains("export UNRELATED='value with spaces'"));
     assert!(env.contains("OPENAI_API_KEY = \"new-key\" # provider key"));
-
-    let cursor = AgentId::parse("cursor").unwrap();
-    let cursor_initial = provider.read(&cursor, false).await.unwrap();
-    provider
-        .save(
-            &cursor,
-            NativeConfigPatch {
-                base_field_revisions: cursor_initial
-                    .fields
-                    .iter()
-                    .map(|field| (field.field_id.clone(), field.revision.clone()))
-                    .collect(),
-                values: BTreeMap::from([(
-                    "cursor_allow_rules".to_string(),
-                    Some(r#"["Shell(git status)", "Read"]"#.to_string()),
-                )]),
-            },
-            false,
-        )
-        .await
-        .unwrap();
-    let cursor_config: serde_json::Value = serde_json::from_slice(
-        filesystem
-            .files
-            .lock()
-            .unwrap()
-            .get(&PathBuf::from("/home/user/.cursor/cli-config.json"))
-            .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(cursor_config["permissions"]["allow"][1], "Read");
 }
 
 #[tokio::test]

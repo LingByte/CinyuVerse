@@ -25,8 +25,6 @@ import {
   layoutConfigFields,
 } from './CodexQuickSettings';
 import { AgentSectionHeading } from './SettingsSection';
-import { PiConfigurationPanel } from './PiConfigurationPanel';
-import { PiProviderBuilder } from './PiProviderBuilder';
 import { SettingsActionBar } from './SettingsUi';
 import { containsCjk, humanizeIdentifier } from './agentConfigLabels';
 
@@ -110,14 +108,12 @@ export function AgentConfigurationAndDiagnostics({
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [dirty, setDirty] = useState<Record<string, boolean>>({});
   const [rawDirty, setRawDirty] = useState<Record<string, boolean>>({});
-  const [childDirty, setChildDirty] = useState<Record<string, boolean>>({});
   const [configExpanded, setConfigExpanded] = useState(true);
 
   useEffect(() => {
     setDrafts(draftsFromConfig(config));
     setDirty({});
     setRawDirty({});
-    setChildDirty({});
   }, [config]);
 
   const surfaceFields = useMemo(
@@ -141,7 +137,6 @@ export function AgentConfigurationAndDiagnostics({
       ),
     [config, fieldSurface, visibleFields]
   );
-  const showRuntimeSurfaces = fieldSurface !== 'authentication';
   const showFileEditor = fieldSurface !== 'authentication';
   const fieldsDisabled = saving || locked;
   const changedFields =
@@ -154,28 +149,13 @@ export function AgentConfigurationAndDiagnostics({
     (field) => !field.secret || (drafts[field.id] ?? '').length > 0
   );
   useEffect(() => {
-    onDirtyChange?.(
-      canSave ||
-        Object.values(rawDirty).some(Boolean) ||
-        Object.values(childDirty).some(Boolean)
-    );
-  }, [canSave, childDirty, onDirtyChange, rawDirty]);
+    onDirtyChange?.(canSave || Object.values(rawDirty).some(Boolean));
+  }, [canSave, onDirtyChange, rawDirty]);
   const updateRawDirty = useCallback((path: string, isDirty: boolean) => {
     setRawDirty((current) =>
       current[path] === isDirty ? current : { ...current, [path]: isDirty }
     );
   }, []);
-  const updateChildDirty = useCallback((surface: string, isDirty: boolean) => {
-    setChildDirty((current) =>
-      current[surface] === isDirty
-        ? current
-        : { ...current, [surface]: isDirty }
-    );
-  }, []);
-  const updatePiConfigurationDirty = useCallback(
-    (isDirty: boolean) => updateChildDirty('pi-configuration', isDirty),
-    [updateChildDirty]
-  );
 
   const updateDraft = (fieldId: string, value: string) => {
     setDrafts((current) => {
@@ -298,13 +278,6 @@ export function AgentConfigurationAndDiagnostics({
               </p>
             ) : (
               <>
-                {showRuntimeSurfaces &&
-                config.settings_features.includes('pi_configuration') ? (
-                  <PiConfigurationPanel
-                    disabled={fieldsDisabled}
-                    onDirtyChange={updatePiConfigurationDirty}
-                  />
-                ) : null}
                 {fieldSurface === 'authentication' ? (
                   <div className="agent-config-groups">
                     {groups.map(([path, fields]) => (
@@ -393,12 +366,10 @@ function ConfigField({
 }) {
   const { t, i18n } = useTranslation('settings');
   const inputId = `agent-config-${field.id}`;
-  const labelId = `${inputId}-label`;
   const english = i18n.resolvedLanguage?.startsWith('en') ?? false;
   const label = english ? humanizeIdentifier(field.id) : field.label;
   const wide =
     field.kind === 'json' ||
-    field.id === 'pi_custom_providers' ||
     field.id === 'grok_custom_model_id';
   const placeholder =
     field.secret && field.present
@@ -407,22 +378,10 @@ function ConfigField({
   return (
     <div className={`agent-config-field${wide ? ' is-wide' : ''}`}>
       <div className="agent-config-field-label">
-        {field.id === 'pi_custom_providers' ? (
-          <span id={labelId}>{label}</span>
-        ) : (
-          <label htmlFor={inputId}>{label}</label>
-        )}
+        <label htmlFor={inputId}>{label}</label>
       </div>
       <div className="agent-config-field-control">
-        {field.id === 'pi_custom_providers' ? (
-          <div id={inputId} aria-labelledby={labelId} role="group">
-            <PiProviderBuilder
-              value={value}
-              disabled={saving}
-              onChange={onChange}
-            />
-          </div>
-        ) : field.kind === 'json' ? (
+        {field.kind === 'json' ? (
           <textarea
             id={inputId}
             aria-label={label}
@@ -717,15 +676,6 @@ const CODEX_GRANULAR_APPROVAL_FIELDS = [
   'codex_approval_mcp',
 ];
 
-const PI_STRUCTURED_CONFIGURATION_FIELDS = new Set([
-  'pi_anthropic_api_key',
-  'pi_openai_api_key',
-  'pi_google_api_key',
-  'pi_opencode_api_key',
-  'pi_default_provider',
-  'pi_default_model',
-  'pi_custom_providers',
-]);
 
 function fieldSurfaceOf(
   field: AgentNativeConfigFieldView
@@ -754,11 +704,6 @@ function filterVisibleFields(
         !CODEX_GRANULAR_APPROVAL_FIELDS.includes(field.id) ||
         granular ||
         field.present
-    );
-  }
-  if (config?.settings_features.includes('pi_configuration')) {
-    return fields.filter(
-      (field) => !PI_STRUCTURED_CONFIGURATION_FIELDS.has(field.id)
     );
   }
   if (!fields.some((field) => field.id === 'hermes_provider')) return fields;

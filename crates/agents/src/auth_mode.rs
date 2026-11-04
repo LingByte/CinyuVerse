@@ -46,9 +46,6 @@ const ANTIGRAVITY_ALL_AUTH_ENV: &[&str] = &[
 const GROK_MODES: &[&str] = &["subscription", "api_key", "custom", "model_provider"];
 const GROK_CREDENTIAL_MODES: &[&str] = &["api_key"];
 const GROK_SCRUB_ENV: &[&str] = &["XAI_API_KEY"];
-const CURSOR_MODES: &[&str] = &["subscription", "custom"];
-const CURSOR_CREDENTIAL_MODES: &[&str] = &["custom"];
-const CURSOR_SCRUB_ENV: &[&str] = &["CURSOR_API_KEY", "CURSOR_API_BASE_URL"];
 const DSH_MODES: &[&str] = &["deepseek", "custom"];
 const DSH_CREDENTIAL_MODES: &[&str] = &["deepseek", "custom"];
 const DSH_OFFICIAL_SCRUB_ENV: &[&str] = &["DEEPSEEK_BASE_URL"];
@@ -77,14 +74,6 @@ pub fn built_in_auth_mode_policy(agent_id: &AgentId) -> Option<BuiltInAuthModePo
             modes: GROK_MODES,
             credential_modes: GROK_CREDENTIAL_MODES,
             subscription_scrub_env: GROK_SCRUB_ENV,
-            default_mode: "subscription",
-        }),
-        "cursor" => Some(BuiltInAuthModePolicy {
-            mode_env: "CURSOR_AUTH_MODE",
-            credential_env: "CURSOR_API_KEY",
-            modes: CURSOR_MODES,
-            credential_modes: CURSOR_CREDENTIAL_MODES,
-            subscription_scrub_env: CURSOR_SCRUB_ENV,
             default_mode: "subscription",
         }),
         "deepseek_harness" => Some(BuiltInAuthModePolicy {
@@ -119,14 +108,6 @@ pub fn built_in_auth_mode_policy(agent_id: &AgentId) -> Option<BuiltInAuthModePo
             subscription_scrub_env: &[],
             default_mode: "official_subscription",
         }),
-        "cline" => Some(BuiltInAuthModePolicy {
-            mode_env: "CLINE_AUTH_MODE",
-            credential_env: "CLINE_API_KEY",
-            modes: CLINE_MODES,
-            credential_modes: CLINE_CREDENTIAL_MODES,
-            subscription_scrub_env: &[],
-            default_mode: "official_subscription",
-        }),
         "codebuddy" => Some(BuiltInAuthModePolicy {
             mode_env: "CODEBUDDY_AUTH_MODE",
             credential_env: "CODEBUDDY_API_KEY",
@@ -135,14 +116,6 @@ pub fn built_in_auth_mode_policy(agent_id: &AgentId) -> Option<BuiltInAuthModePo
             subscription_scrub_env: &[],
             default_mode: "official_subscription",
         }),
-        "pi" => Some(BuiltInAuthModePolicy {
-            mode_env: "PI_AUTH_MODE",
-            credential_env: "PI_API_KEY",
-            modes: PI_MODES,
-            credential_modes: &[],
-            subscription_scrub_env: &[],
-            default_mode: "model_provider",
-        }),
         "openclaw" => Some(BuiltInAuthModePolicy {
             mode_env: "OPENCLAW_AUTH_MODE",
             credential_env: "OPENCLAW_API_KEY",
@@ -150,14 +123,6 @@ pub fn built_in_auth_mode_policy(agent_id: &AgentId) -> Option<BuiltInAuthModePo
             credential_modes: &[],
             subscription_scrub_env: &[],
             default_mode: "model_provider",
-        }),
-        "qoder" => Some(BuiltInAuthModePolicy {
-            mode_env: "QODER_AUTH_MODE",
-            credential_env: "QODER_PERSONAL_ACCESS_TOKEN",
-            modes: QODER_MODES,
-            credential_modes: &[],
-            subscription_scrub_env: &[],
-            default_mode: "official_subscription",
         }),
         _ => None,
     }
@@ -169,11 +134,7 @@ const HERMES_MODES: &[&str] = &["official_subscription", "official_api", "model_
 const HERMES_CREDENTIAL_MODES: &[&str] = &["official_api"];
 const KIMI_MODES: &[&str] = &["official_subscription", "official_api", "model_provider"];
 const KIMI_CREDENTIAL_MODES: &[&str] = &["official_api"];
-const CLINE_MODES: &[&str] = &["official_subscription", "official_api", "model_provider"];
-const CLINE_CREDENTIAL_MODES: &[&str] = &["official_api"];
 const CODEBUDDY_MODES: &[&str] = &["official_subscription"];
-const QODER_MODES: &[&str] = &["official_subscription"];
-const PI_MODES: &[&str] = &["model_provider"];
 const OPENCLAW_MODES: &[&str] = &["model_provider"];
 
 pub fn auth_mode_kind(agent_id: &AgentId, mode: &str) -> AgentAuthModeKind {
@@ -182,7 +143,6 @@ pub fn auth_mode_kind(agent_id: &AgentId, mode: &str) -> AgentAuthModeKind {
         ("grok" | "deepseek_harness" | "kimi_code", "custom") => AgentAuthModeKind::Provider,
         ("claude_code", "official_api" | "custom") => AgentAuthModeKind::OfficialApi,
         ("codex", "api_key") => AgentAuthModeKind::OfficialApi,
-        ("cursor", "custom") => AgentAuthModeKind::OfficialApi,
         ("deepseek_harness", "deepseek") => AgentAuthModeKind::OfficialApi,
         ("grok", "api_key") => AgentAuthModeKind::OfficialApi,
         (id, "gemini-api-key" | "agent-platform") if AgentKind::Antigravity.matches_id(id) => {
@@ -259,7 +219,6 @@ pub fn native_uses_custom_endpoint(agent_id: &AgentId, snapshot: &NativeConfigSn
         "claude_code" => snapshot.field_text("anthropic_base_url"),
         "grok" => snapshot.field_text("grok_base_url"),
         "kimi_code" => snapshot.field_text("kimi_base_url"),
-        "cline" => snapshot.field_text("cline_base_url"),
         "hermes" => snapshot.field_text("hermes_base_url"),
         "codex" => snapshot.field_text("codex_openai_base_url"),
         _ => None,
@@ -303,7 +262,6 @@ pub fn official_api_url(agent_id: &AgentId, mode: &str) -> Option<&'static str> 
             Some("https://generativelanguage.googleapis.com")
         }
         ("kimi_code", "official_api") => Some("https://api.moonshot.ai/v1"),
-        ("cline", "official_api") => Some("https://api.cline.bot"),
         ("hermes", "official_api") => Some("https://inference-api.nousresearch.com/v1"),
         _ => None,
     }
@@ -338,9 +296,6 @@ pub fn apply_built_in_auth_mode_policy(agent_id: &AgentId, env: &mut HashMap<Str
     let mode = resolved_auth_mode(agent_id, policy, env);
     for key in auth_mode_scrubbed_env_keys(agent_id, mode) {
         env.remove(*key);
-    }
-    if agent_id.as_str() == "cursor" {
-        env.remove("CURSOR_API_BASE_URL");
     }
 }
 
@@ -380,12 +335,10 @@ pub fn auth_mode_credential_env(agent_id: &AgentId, mode: &str) -> Option<&'stat
         (id, "gemini-api-key") if AgentKind::Antigravity.matches_id(id) => Some("GEMINI_API_KEY"),
         ("claude_code", "official_api" | "custom") => Some("ANTHROPIC_API_KEY"),
         ("grok", "api_key") => Some("XAI_API_KEY"),
-        ("cursor", "custom") => Some("CURSOR_API_KEY"),
         ("deepseek_harness", "deepseek" | "custom") => Some("DEEPSEEK_API_KEY"),
         ("opencode", "official_api") => Some("OPENCODE_API_KEY"),
         ("hermes", "official_api") => Some("NOUS_API_KEY"),
         ("kimi_code", "official_api") => Some("KIMI_API_KEY"),
-        ("cline", "official_api") => Some("CLINE_API_KEY"),
         _ => None,
     }
 }
@@ -403,9 +356,6 @@ fn auth_mode_scrubbed_env_keys(agent_id: &AgentId, mode: &str) -> &'static [&'st
         ],
         (id, "agent-platform") if AgentKind::Antigravity.matches_id(id) => &["GEMINI_API_KEY"],
         ("grok", "subscription" | "custom" | "model_provider") => GROK_SCRUB_ENV,
-        ("cursor", "subscription") => built_in_auth_mode_policy(agent_id)
-            .map(|policy| policy.subscription_scrub_env)
-            .unwrap_or_default(),
         ("deepseek_harness", "deepseek") => DSH_OFFICIAL_SCRUB_ENV,
         _ => &[],
     }
@@ -418,22 +368,6 @@ pub fn apply_built_in_launch_argument_policy(
 ) {
     let mut prefix = Vec::new();
     match agent_id.as_str() {
-        "cursor" => {
-            if env
-                .get("CURSOR_FORCE")
-                .map(|value| value.trim())
-                .is_some_and(|value| value == "1" || value.eq_ignore_ascii_case("true"))
-            {
-                prefix.push("--force".to_string());
-            }
-            if let Some(model) = env
-                .get("CURSOR_MODEL")
-                .map(|value| value.trim())
-                .filter(|value| !value.is_empty())
-            {
-                prefix.extend(["--model".to_string(), model.to_string()]);
-            }
-        }
         "grok" => {
             prefix.push("--no-auto-update".to_string());
             let mode = env
@@ -501,13 +435,6 @@ pub fn apply_built_in_launch_policy(
                 "true".to_string(),
             );
         }
-        // pi-acp only advertises embedded-context support behind this switch.
-        "pi" => {
-            env.insert(
-                "PI_ACP_ENABLE_EMBEDDED_CONTEXT".to_string(),
-                "true".to_string(),
-            );
-        }
         _ => {}
     }
     apply_built_in_launch_argument_policy(agent_id, env, args);
@@ -546,7 +473,7 @@ mod tests {
     };
 
     #[test]
-    fn codex_and_pi_force_required_acp_capability_environment() {
+    fn codex_forces_required_acp_capability_environment() {
         let mut codex = HashMap::from([(
             "DISABLE_MCP_CONFIG_FILTERING".to_string(),
             "false".to_string(),
@@ -557,10 +484,6 @@ mod tests {
             &mut Vec::new(),
         );
         assert_eq!(codex["DISABLE_MCP_CONFIG_FILTERING"], "true");
-
-        let mut pi = HashMap::new();
-        apply_built_in_launch_policy(&AgentId::parse("pi").unwrap(), &mut pi, &mut Vec::new());
-        assert_eq!(pi["PI_ACP_ENABLE_EMBEDDED_CONTEXT"], "true");
     }
 
     #[test]
@@ -604,7 +527,6 @@ mod tests {
     fn product_kinds_separate_subscription_official_api_and_provider() {
         let claude = AgentId::parse("claude_code").unwrap();
         let grok = AgentId::parse("grok").unwrap();
-        let cursor = AgentId::parse("cursor").unwrap();
         let opencode = AgentId::parse("opencode").unwrap();
         let dsh = AgentId::parse("deepseek_harness").unwrap();
 
@@ -626,10 +548,6 @@ mod tests {
         );
         assert_eq!(auth_mode_kind(&grok, "custom"), AgentAuthModeKind::Provider);
         assert_eq!(
-            auth_mode_kind(&cursor, "custom"),
-            AgentAuthModeKind::OfficialApi
-        );
-        assert_eq!(
             auth_mode_kind(&opencode, "official_subscription"),
             AgentAuthModeKind::Subscription
         );
@@ -641,29 +559,10 @@ mod tests {
             official_api_url(&claude, "official_api"),
             Some("https://api.anthropic.com")
         );
-        assert_eq!(official_api_url(&cursor, "custom"), None);
-
-        let qoder = AgentId::parse("qoder").unwrap();
-        assert_eq!(
-            auth_mode_kind(&qoder, "official_subscription"),
-            AgentAuthModeKind::Subscription
-        );
-        assert_eq!(official_api_url(&qoder, "official_subscription"), None);
     }
 
     #[test]
-    fn cursor_and_grok_launch_knobs_become_root_arguments() {
-        let mut cursor_args = vec!["acp".to_string()];
-        apply_built_in_launch_argument_policy(
-            &AgentId::parse("cursor").unwrap(),
-            &HashMap::from([
-                ("CURSOR_FORCE".to_string(), "1".to_string()),
-                ("CURSOR_MODEL".to_string(), "composer-1".to_string()),
-            ]),
-            &mut cursor_args,
-        );
-        assert_eq!(cursor_args, ["--force", "--model", "composer-1", "acp"]);
-
+    fn grok_launch_knobs_become_root_arguments() {
         let mut grok_args = vec!["agent".to_string(), "stdio".to_string()];
         apply_built_in_launch_argument_policy(
             &AgentId::parse("grok").unwrap(),

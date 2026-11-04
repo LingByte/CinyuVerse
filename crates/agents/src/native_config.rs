@@ -713,7 +713,6 @@ fn finalize_special_native_shape(
     finalize_claude_shape(document, patch)?;
     finalize_codex_shape(document, patch)?;
     finalize_grok_shape(document, patch)?;
-    finalize_cursor_shape(document, patch)?;
     finalize_kimi_shape(document, patch)
 }
 
@@ -874,22 +873,6 @@ fn finalize_grok_shape(
         == Some("cinyuverse")
     {
         remove_value_at_path(document, &["models", "default"]);
-    }
-    Ok(())
-}
-
-fn finalize_cursor_shape(
-    document: &mut Value,
-    patch: &NativeConfigPatch,
-) -> Result<(), NativeConfigError> {
-    for (field, path) in [
-        ("cursor_allow_rules", &["permissions", "allow"][..]),
-        ("cursor_deny_rules", &["permissions", "deny"][..]),
-    ] {
-        if !patch.values.contains_key(field) {
-            continue;
-        }
-        normalize_json_string_array(document, path, field)?;
     }
     Ok(())
 }

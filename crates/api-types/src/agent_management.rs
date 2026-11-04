@@ -659,69 +659,6 @@ pub struct AgentModelProviderImportRequest {
     pub source_ids: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct PiCustomProviderView {
-    pub id: String,
-    pub base_url: String,
-    pub api: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct PiRuntimeConfigurationView {
-    pub mode: String,
-    pub command: String,
-    pub config_dir: String,
-    pub session_dir: String,
-    pub trust_workspace: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct PiConfigurationView {
-    pub default_provider: String,
-    pub default_model: String,
-    pub thinking_level: String,
-    pub credential_present: bool,
-    pub auth_providers: Vec<String>,
-    pub custom_providers: Vec<PiCustomProviderView>,
-    pub runtime: PiRuntimeConfigurationView,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct PiCredentialsSaveRequest {
-    pub provider: String,
-    pub model: String,
-    #[serde(alias = "thinkingLevel")]
-    pub thinking_level: Option<String>,
-    #[serde(alias = "apiKey")]
-    pub api_key: Option<String>,
-    #[serde(alias = "customBaseUrl")]
-    pub custom_base_url: Option<String>,
-    #[serde(alias = "customApi")]
-    pub custom_api: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct PiRuntimeSaveRequest {
-    pub mode: String,
-    pub command: String,
-    pub config_dir: String,
-    pub session_dir: String,
-    pub trust_workspace: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct PiCommandValidationView {
-    pub found: bool,
-    pub resolved_path: Option<String>,
-    pub version: Option<String>,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export, rename_all = "snake_case")]
@@ -842,23 +779,6 @@ pub struct GrokPluginView {
 pub struct GrokPluginSummaryView {
     pub home: String,
     pub plugins: Vec<GrokPluginView>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct PiPluginView {
-    pub source: String,
-    pub name: String,
-    pub version: Option<String>,
-    pub kind: String,
-    pub path: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct PiPluginSummaryView {
-    pub home: String,
-    pub plugins: Vec<PiPluginView>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1016,13 +936,11 @@ pub enum AgentSettingsFeature {
     ModelCatalog,
     ReusableModelProviders,
     CodexModelCatalog,
-    PiConfiguration,
     OpenCodeProviders,
     OpenCodePlugins,
     DshProviders,
     DshPlugins,
     GrokPlugins,
-    PiPlugins,
     NativeMcp,
     NativeSkills,
 }

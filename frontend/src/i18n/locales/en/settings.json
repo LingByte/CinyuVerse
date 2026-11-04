@@ -1729,7 +1729,6 @@
     "authModeOpenAiKey": "OpenAI API Key",
     "authModeXaiKey": "xAI API Key",
     "authModeCustomEndpoint": "Custom model endpoint",
-    "authModeCursorKey": "Cursor API Key",
     "authModeUnknown": "Authentication mode",
     "authDescUnknown": "Use the authentication policy declared by this Agent.",
     "authDescCodexSubscription": "Use the official Codex device-code login and disable conflicting API Key and Cinyuverse Provider novelions.",
@@ -1737,13 +1736,10 @@
     "authDescCodexOfficialApi": "Use an official OpenAI API key. The endpoint cannot be changed.",
     "authDescCodexKey": "Authenticate non-interactively with OPENAI_API_KEY.",
     "authDescGrokSubscription": "Subscription mode does not pass XAI_API_KEY to the process.",
-    "authDescCursorSubscription": "Subscription mode clears CURSOR_API_KEY and the legacy API Base URL.",
     "authDescGrokOfficialApi": "Use an official xAI API key. The endpoint cannot be changed.",
     "authDescGrokProvider": "Use a custom endpoint from Grok native configuration.",
     "authDescGrokKey": "Authenticate non-interactively with XAI_API_KEY.",
     "authDescGrokCustom": "Use the custom model endpoint and credentials in ~/.grok/config.toml.",
-    "authDescCursorOfficialApi": "Use a Cursor Dashboard API key. Custom URLs are not supported.",
-    "authDescCursorKey": "Use a Cursor Dashboard API Key for browserless environments.",
     "authDescClaudeSubscription": "Use the official Claude subscription login and remove conflicting endpoint credentials.",
     "authModeOfficialApi": "Official API",
     "authDescClaudeOfficialApi": "Use an Anthropic API key and the three default models. The endpoint cannot be changed.",
@@ -2156,12 +2152,6 @@
           "description": "Run the official OpenCode sign-out flow."
         }
       },
-      "cline": {
-        "login": {
-          "label": "Sign in to Cline",
-          "description": "Run the official Cline authentication flow."
-        }
-      },
       "hermes": {
         "setup": {
           "label": "Run Hermes Setup",
@@ -2178,12 +2168,6 @@
           "description": "Run the official CodeBuddy sign-in flow."
         }
       },
-      "qoder": {
-        "login": {
-          "label": "Sign in to Qoder",
-          "description": "Open a browser to complete Qoder account sign-in."
-        }
-      },
       "kimi_code": {
         "login": {
           "label": "Sign in to Kimi Code",
@@ -2194,12 +2178,6 @@
           "description": "Remove the local Kimi Code account writing session."
         }
       },
-      "pi": {
-        "login": {
-          "label": "Configure a Pi Provider",
-          "description": "Start Pi and use /login in the terminal to connect a Provider."
-        }
-      },
       "grok": {
         "login": {
           "label": "Sign in to Grok",
@@ -2208,20 +2186,6 @@
         "logout": {
           "label": "Sign out of Grok",
           "description": "Remove the local Grok account writing session."
-        }
-      },
-      "cursor": {
-        "login": {
-          "label": "Sign in to Cursor",
-          "description": "Sign in with a Cursor subscription account."
-        },
-        "logout": {
-          "label": "Sign out of Cursor",
-          "description": "Remove the local Cursor Agent account writing session."
-        },
-        "subscription": {
-          "label": "Manage Cursor subscription",
-          "description": "Open the official Cursor plan page."
         }
       }
     },

@@ -572,9 +572,8 @@ mod tests {
             "claude_code",
             "antigravity",
             "grok",
-            "cursor",
             "deepseek_harness",
-            "qoder",
+            "codebuddy",
         ] {
             let agent_id = AgentId::parse(agent).unwrap();
             let policy = agents::built_in_auth_mode_policy(&agent_id).unwrap();
@@ -586,22 +585,6 @@ mod tests {
                 assert_eq!(option.credential_required, option.credential_env.is_some());
             }
         }
-    }
-
-    #[test]
-    fn qoder_auth_options_are_subscription_only() {
-        let agent_id = AgentId::parse("qoder").unwrap();
-        let policy = agents::built_in_auth_mode_policy(&agent_id).unwrap();
-        let options = project_auth_mode_options(&agent_id, policy.modes);
-        assert_eq!(options.len(), 1);
-        assert_eq!(options[0].value, "official_subscription");
-        assert_eq!(options[0].kind, api_types::AgentAuthModeKind::Subscription);
-        assert!(!options[0].credential_required);
-        assert!(options[0].credential_env.is_none());
-        assert_eq!(
-            options[0].description_key,
-            "agents.authDescQoderSubscription"
-        );
     }
 
     #[test]
@@ -1394,20 +1377,11 @@ wire_api = "responses"
             .account_evidence
             .as_ref()
             .unwrap();
-        let pi = catalog
-            .profile(&AgentId::parse("pi").unwrap())
-            .unwrap()
-            .account_evidence
-            .as_ref()
-            .unwrap();
 
         assert!(!opencode.matches(&serde_json::json!({
             "anthropic": {"type": "api", "key": "local"}
         })));
-        assert!(!pi.matches(&serde_json::json!({
-            "anthropic": {"type": "api_key", "key": "local"}
-        })));
-        assert!(pi.matches(&serde_json::json!({
+        assert!(opencode.matches(&serde_json::json!({
             "anthropic": {"type": "oauth", "access": "token"}
         })));
     }
@@ -1564,49 +1538,6 @@ base_url = "https://example.test/v1"
         assert!(validate_native_config_patch(&request("80")).is_ok());
         assert!(validate_native_config_patch(&request("101")).is_err());
         assert!(validate_native_config_patch(&request("invalid")).is_err());
-    }
-
-    #[tokio::test]
-    async fn native_launch_preferences_preserve_unrelated_agent_environment() {
-        let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::query(
-            r#"CREATE TABLE agent_setting (
-                agent_type TEXT PRIMARY KEY,
-                env_json TEXT,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )"#,
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        sqlx::query("INSERT INTO agent_setting (agent_type, env_json) VALUES ('cursor', ?)")
-            .bind(r#"{"UNRELATED":"keep"}"#)
-            .execute(&pool)
-            .await
-            .unwrap();
-        let temp = tempfile::tempdir().unwrap();
-        let cursor_home = temp.path().join(".cursor");
-        tokio::fs::create_dir_all(&cursor_home).await.unwrap();
-        tokio::fs::write(
-            cursor_home.join("cli-config.json"),
-            br#"{"cinyuverse":{"model":"composer-1","force":true}}"#,
-        )
-        .await
-        .unwrap();
-
-        sync_native_launch_preferences(&pool, &AgentId::parse("cursor").unwrap(), temp.path())
-            .await
-            .unwrap();
-
-        let env_json: String =
-            sqlx::query_scalar("SELECT env_json FROM agent_setting WHERE agent_type = 'cursor'")
-                .fetch_one(&pool)
-                .await
-                .unwrap();
-        let env: serde_json::Value = serde_json::from_str(&env_json).unwrap();
-        assert_eq!(env["UNRELATED"], "keep");
-        assert_eq!(env["CURSOR_MODEL"], "composer-1");
-        assert_eq!(env["CURSOR_FORCE"], "1");
     }
 
     #[tokio::test]
@@ -2385,7 +2316,6 @@ use server::{
             remove_opencode_provider_state, set_opencode_provider_enabled, slug_provider_id,
             validate_opencode_provider_id,
         },
-        pi_configuration, pi_plugins,
     },
 };
 #[path = "agent_management/environment_diagnostics.rs"]
@@ -2445,9 +2375,8 @@ use api_types::{
     CodexModelCatalogConfigView, DshPluginSummaryView, DshProviderDiscoverRequest,
     DshProviderModelView, DshProviderSaveRequest, DshProvidersView, GrokPluginSummaryView,
     OpenCodePluginStatus, OpenCodePluginSummaryView, OpenCodeProviderCatalogView,
-    OpenCodeProviderConnectRequest, OpenCodeProviderConnectionsView, PiCommandValidationView,
-    PiConfigurationView, PiCredentialsSaveRequest, PiPluginSummaryView, PiRuntimeSaveRequest,
-    UserAgentDefinitionRequest, UserAgentDefinitionView,
+    OpenCodeProviderConnectRequest, OpenCodeProviderConnectionsView, UserAgentDefinitionRequest,
+    UserAgentDefinitionView,
 };
 use chrono::{Duration, Utc};
 use conversations::{invalidate_open_capability_catalog, refresh_open_capability_catalog};
@@ -3761,41 +3690,9 @@ async fn discover_profile_acp_launch(
 }
 
 async fn discover_profile_local_runtime(
-    pool: &sqlx::SqlitePool,
+    _pool: &sqlx::SqlitePool,
     profile: &agents::BuiltInProfile,
 ) -> anyhow::Result<LocalRuntimeEvidence> {
-    let candidate = profile
-        .external_candidates
-        .iter()
-        .find(|candidate| {
-            matches!(
-                candidate.component,
-                ProfileComponent::AgentRuntime | ProfileComponent::CombinedRuntime
-            )
-        })
-        .ok_or_else(|| anyhow::anyhow!("Profile does not declare a local Runtime candidate"))?;
-
-    if profile.agent_id.as_str() == "pi" && candidate.component == ProfileComponent::AgentRuntime {
-        let configured_env_json = sqlx::query_scalar::<_, Option<String>>(
-            "SELECT env_json FROM agent_setting WHERE agent_type = ?",
-        )
-        .bind(profile.agent_id.as_str())
-        .fetch_optional(pool)
-        .await?
-        .flatten();
-        let configured_env = parse_agent_env(configured_env_json.as_deref())?;
-        if let Some(command) = configured_env
-            .get("PI_ACP_PI_COMMAND")
-            .map(String::as_str)
-            .map(str::trim)
-            .filter(|command| !command.is_empty())
-        {
-            let executable = pi_configuration::resolve_command(command)
-                .ok_or_else(|| anyhow::anyhow!("custom Pi Runtime `{command}` was not found"))?;
-            return probe_resolved_local_runtime_candidate(candidate, executable).await;
-        }
-    }
-
     let mut last_error = None;
     for candidate in profile.external_candidates.iter().filter(|candidate| {
         matches!(
@@ -6301,9 +6198,6 @@ async fn detect_account_login(
     agent_id: &AgentId,
     environment: &HashMap<String, String>,
 ) -> bool {
-    if agent_id.as_str() == "cursor" {
-        return agents::cursor_account_token().await.is_some();
-    }
     let Some(bytes) = read_account_evidence_bytes(home, agent_id, environment).await else {
         return false;
     };
@@ -9167,29 +9061,6 @@ pub async fn codex_poll_device_code(
 }
 
 #[tauri::command]
-pub async fn cursor_model_catalog(
-    state: tauri::State<'_, AppState>,
-) -> Result<AgentModelCatalogView, AgentManagementErrorView> {
-    let agent_id = AgentId::parse("cursor").expect("built-in id");
-    let env = read_agent_environment(&state.deployment.db().pool, &agent_id).await?;
-    let program =
-        resolve_management_program(&state.deployment.db().pool, &agent_id, "cursor-agent", &env)
-            .await
-            .ok_or_else(|| {
-                management_error(
-                    AgentManagementErrorCode::InvalidState,
-                    "未找到 cursor-agent；请先安装或修复 Cursor。",
-                    Some(agent_id.clone()),
-                )
-            })?;
-    model_catalogs::cursor(&program, env.get("CURSOR_API_KEY").map(String::as_str))
-        .await
-        .map_err(|message| {
-            management_error(AgentManagementErrorCode::Internal, message, Some(agent_id))
-        })
-}
-
-#[tauri::command]
 pub async fn kimi_model_catalog(
     base_url: String,
     api_key: String,
@@ -9666,56 +9537,6 @@ pub async fn agent_model_provider_import(
     .map_err(internal_error)
 }
 
-#[tauri::command]
-pub async fn pi_configuration(
-    app: AppHandle,
-    state: tauri::State<'_, AppState>,
-) -> Result<PiConfigurationView, AgentManagementErrorView> {
-    let home = app.path().home_dir().map_err(internal_error)?;
-    pi_configuration::load(&state.deployment.db().pool, &home)
-        .await
-        .map_err(internal_error)
-}
-
-#[tauri::command]
-pub async fn pi_credentials_save(
-    app: AppHandle,
-    state: tauri::State<'_, AppState>,
-    request: PiCredentialsSaveRequest,
-) -> Result<PiConfigurationView, AgentManagementErrorView> {
-    let home = app.path().home_dir().map_err(internal_error)?;
-    let result = pi_configuration::save_credentials(&state.deployment.db().pool, &home, request)
-        .await
-        .map_err(internal_error)?;
-    let agent_id = AgentId::parse("pi").expect("built-in id");
-    state
-        .agent_runtime
-        .mark_agent_sessions_config_stale(&agent_id, "Pi Provider 配置已更改")
-        .await;
-    Ok(result)
-}
-
-#[tauri::command]
-pub async fn pi_runtime_save(
-    state: tauri::State<'_, AppState>,
-    request: PiRuntimeSaveRequest,
-) -> Result<(), AgentManagementErrorView> {
-    pi_configuration::save_runtime(&state.deployment.db().pool, request)
-        .await
-        .map_err(internal_error)?;
-    let agent_id = AgentId::parse("pi").expect("built-in id");
-    state
-        .agent_runtime
-        .mark_agent_sessions_config_stale(&agent_id, "Pi Runtime 配置已更改")
-        .await;
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn pi_command_validate(command: String) -> PiCommandValidationView {
-    pi_configuration::validate_command(&command).await
-}
-
 fn dsh_agent_id() -> AgentId {
     AgentId::parse("deepseek_harness").expect("built-in id")
 }
@@ -9901,69 +9722,6 @@ pub async fn dsh_plugin_remove(
 
 fn grok_agent_id() -> AgentId {
     AgentId::parse("grok").expect("built-in id")
-}
-
-fn pi_agent_id() -> AgentId {
-    AgentId::parse("pi").expect("built-in id")
-}
-
-#[tauri::command]
-pub async fn pi_plugins(
-    app: AppHandle,
-    state: tauri::State<'_, AppState>,
-) -> Result<PiPluginSummaryView, AgentManagementErrorView> {
-    let home = app.path().home_dir().map_err(internal_error)?;
-    pi_plugins::list_plugins(&state.deployment.db().pool, &home)
-        .await
-        .map_err(internal_error)
-}
-
-#[tauri::command]
-pub async fn pi_plugin_add(
-    app: AppHandle,
-    state: tauri::State<'_, AppState>,
-    spec: String,
-) -> Result<PiPluginSummaryView, AgentManagementErrorView> {
-    let agent_id = pi_agent_id();
-    let home = app.path().home_dir().map_err(internal_error)?;
-    let result = pi_plugins::add_plugin(&state.deployment.db().pool, &home, &spec)
-        .await
-        .map_err(|message| {
-            management_error(
-                AgentManagementErrorCode::InvalidState,
-                message,
-                Some(agent_id.clone()),
-            )
-        })?;
-    state
-        .agent_runtime
-        .mark_agent_sessions_config_stale(&agent_id, "Pi 插件已更改")
-        .await;
-    Ok(result)
-}
-
-#[tauri::command]
-pub async fn pi_plugin_remove(
-    app: AppHandle,
-    state: tauri::State<'_, AppState>,
-    spec: String,
-) -> Result<PiPluginSummaryView, AgentManagementErrorView> {
-    let agent_id = pi_agent_id();
-    let home = app.path().home_dir().map_err(internal_error)?;
-    let result = pi_plugins::remove_plugin(&state.deployment.db().pool, &home, &spec)
-        .await
-        .map_err(|message| {
-            management_error(
-                AgentManagementErrorCode::InvalidState,
-                message,
-                Some(agent_id.clone()),
-            )
-        })?;
-    state
-        .agent_runtime
-        .mark_agent_sessions_config_stale(&agent_id, "Pi 插件已更改")
-        .await;
-    Ok(result)
 }
 
 #[tauri::command]
@@ -11288,14 +11046,6 @@ fn auth_mode_translation_keys(agent_id: &AgentId, mode: &str) -> (&'static str, 
         ("grok", "custom" | "model_provider") => {
             ("agents.authModeProvider", "agents.authDescGrokProvider")
         }
-        ("cursor", "subscription") => (
-            "agents.authModeSubscription",
-            "agents.authDescCursorSubscription",
-        ),
-        ("cursor", "custom") => (
-            "agents.authModeOfficialApi",
-            "agents.authDescCursorOfficialApi",
-        ),
         ("deepseek_harness", "deepseek") => {
             ("agents.authModeOfficialApi", "agents.authDescDeepseekApi")
         }
@@ -11334,24 +11084,11 @@ fn auth_mode_translation_keys(agent_id: &AgentId, mode: &str) -> (&'static str, 
         ("kimi_code", "model_provider") => {
             ("agents.authModeProvider", "agents.authDescKimiProvider")
         }
-        ("cline", "official_subscription") => (
-            "agents.authModeOfficialSubscription",
-            "agents.authDescClineSubscription",
-        ),
-        ("cline", "official_api") => (
-            "agents.authModeOfficialApi",
-            "agents.authDescClineOfficialApi",
-        ),
-        ("cline", "model_provider") => ("agents.authModeProvider", "agents.authDescClineProvider"),
         ("codebuddy", "official_subscription") => (
             "agents.authModeOfficialSubscription",
             "agents.authDescCodebuddySubscription",
         ),
-        ("qoder", "official_subscription") => (
-            "agents.authModeOfficialSubscription",
-            "agents.authDescQoderSubscription",
-        ),
-        ("pi" | "openclaw", "model_provider") => {
+        ("openclaw", "model_provider") => {
             ("agents.authModeProvider", "agents.authDescGenericProvider")
         }
         _ => ("agents.authModeUnknown", "agents.authDescUnknown"),
@@ -11735,15 +11472,6 @@ where
         return Err(operation_error);
     }
     Ok(())
-}
-
-async fn write_json_document(
-    path: &Path,
-    value: &serde_json::Value,
-    sensitive: bool,
-) -> Result<(), AgentManagementErrorView> {
-    let bytes = serde_json::to_vec_pretty(value).map_err(internal_error)?;
-    write_bytes_document(path, &bytes, sensitive).await
 }
 
 #[tauri::command]
@@ -12468,10 +12196,8 @@ pub async fn agent_management_config_write(
         resolve_native_account_login(&home, &request.agent_id, &agent_env).await;
     let kimi_fields = (request.agent_id.as_str() == "kimi_code").then(|| request.fields.clone());
     let grok_fields = (request.agent_id.as_str() == "grok").then(|| request.fields.clone());
-    let sync_launch_preferences = matches!(
-        request.agent_id.as_str(),
-        "cursor" | "grok" | "openclaw" | "codebuddy"
-    );
+    let sync_launch_preferences =
+        matches!(request.agent_id.as_str(), "grok" | "openclaw" | "codebuddy");
     let provider = NativeConfigProvider::with_environment(
         Arc::new(TokioNativeFileSystem),
         home.clone(),
@@ -12692,10 +12418,7 @@ pub async fn agent_management_config_file_write(
             .map_err(|error| map_native_config_save_error(&request.agent_id, error))?;
         refresh_native_file_rollback_expected(&mut file_rollback).await?;
 
-        if matches!(
-            request.agent_id.as_str(),
-            "cursor" | "grok" | "openclaw" | "codebuddy"
-        ) {
+        if matches!(request.agent_id.as_str(), "grok" | "openclaw" | "codebuddy") {
             sync_native_launch_preferences(&state.deployment.db().pool, &request.agent_id, &home)
                 .await?;
         }
@@ -12807,38 +12530,6 @@ async fn sync_native_launch_preferences(
     .flatten();
     let mut env = parse_agent_env(env_json.as_deref()).map_err(internal_error)?;
     let updates = match agent_id.as_str() {
-        "cursor" => {
-            let config_dir = env
-                .get("CURSOR_CONFIG_DIR")
-                .filter(|value| !value.trim().is_empty())
-                .map(PathBuf::from)
-                .or_else(|| {
-                    std::env::var_os("CURSOR_CONFIG_DIR")
-                        .filter(|value| !value.is_empty())
-                        .map(PathBuf::from)
-                })
-                .unwrap_or_else(|| home.join(".cursor"));
-            let config = read_json_object_or_empty(&config_dir.join("cli-config.json")).await?;
-            vec![
-                (
-                    "CURSOR_MODEL",
-                    config
-                        .pointer("/cinyuverse/model")
-                        .and_then(serde_json::Value::as_str)
-                        .map(str::trim)
-                        .filter(|value| !value.is_empty())
-                        .map(str::to_string),
-                ),
-                (
-                    "CURSOR_FORCE",
-                    config
-                        .pointer("/cinyuverse/force")
-                        .and_then(serde_json::Value::as_bool)
-                        .filter(|enabled| *enabled)
-                        .map(|_| "1".to_string()),
-                ),
-            ]
-        }
         "grok" => {
             let config_dir = env
                 .get("GROK_HOME")

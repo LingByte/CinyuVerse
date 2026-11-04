@@ -48,9 +48,6 @@ const api = vi.hoisted(() => ({
   dshProviders: vi.fn(),
   dshPlugins: vi.fn(),
   grokPlugins: vi.fn(),
-  piPlugins: vi.fn(),
-  piConfiguration: vi.fn(),
-  validatePiCommand: vi.fn(),
   modelProviders: vi.fn(),
   clearDiagnostics: vi.fn(),
 }));
@@ -227,38 +224,6 @@ describe('AgentSettings', () => {
           marketplace: null,
         },
       ],
-    });
-    api.piPlugins.mockResolvedValue({
-      home: '/tmp/.pi/agent',
-      plugins: [
-        {
-          source: 'npm:pi-package-manager',
-          name: 'pi-package-manager',
-          version: null,
-          kind: 'npm',
-          path: null,
-        },
-      ],
-    });
-    api.piConfiguration.mockResolvedValue({
-      default_provider: 'anthropic',
-      default_model: 'claude-sonnet-4',
-      thinking_level: 'medium',
-      credential_present: true,
-      auth_providers: ['anthropic'],
-      custom_providers: [],
-      runtime: {
-        mode: 'default',
-        command: '',
-        config_dir: '',
-        session_dir: '',
-        trust_workspace: true,
-      },
-    });
-    api.validatePiCommand.mockResolvedValue({
-      found: true,
-      resolved_path: '/usr/bin/pi',
-      version: 'pi 0.1',
     });
     api.modelProviders.mockResolvedValue({
       agent_id: 'codex',
@@ -756,132 +721,6 @@ describe('AgentSettings', () => {
     await user.click(plugins);
     expect(
       await screen.findByRole('button', { name: 'ponytail' })
-    ).toBeVisible();
-  });
-
-  it('places Pi plugins in a collapsed section and Provider form in authentication', async () => {
-    api.bar.mockResolvedValue([
-      {
-        agent_id: 'pi',
-        display_name: 'Pi',
-        description: 'Pi coding agent',
-        icon_light: null,
-        icon_dark: null,
-        icon_svg: null,
-        source: 'built_in_profile',
-        built_in: true,
-        retired: false,
-        enabled: true,
-        position: 0,
-        lifecycle: 'ready',
-        authentication: 'api_key',
-        runtime_version: null,
-        acp_version: '0.0.33',
-        active_operation: null,
-        rollback_available: false,
-        settings_features: [
-          'authentication_mode',
-          'reusable_model_providers',
-          'pi_configuration',
-          'pi_plugins',
-        ],
-      },
-    ]);
-    api.readConfig.mockResolvedValue({
-      agent_id: 'pi',
-      available: true,
-      settings_features: [
-        'authentication_mode',
-        'reusable_model_providers',
-        'pi_configuration',
-        'pi_plugins',
-      ],
-      path: '/tmp/.pi/agent/settings.json',
-      paths: ['/tmp/.pi/agent/settings.json'],
-      fields: [
-        {
-          id: 'pi_custom_providers',
-          label: '自定义 Provider',
-          description: 'Pi models.json 的 providers 对象',
-          kind: 'json',
-          options: [],
-          secret: false,
-          path: '/tmp/.pi/agent/models.json',
-          present: true,
-          value: '{}',
-          masked_value: null,
-          revision: 'rev',
-          surface: 'configuration',
-        },
-        {
-          id: 'pi_theme',
-          label: '终端主题',
-          description: 'Pi 内置终端主题',
-          kind: 'select',
-          options: [
-            { value: 'dark', label: '深色' },
-            { value: 'light', label: '浅色' },
-          ],
-          secret: false,
-          path: '/tmp/.pi/agent/settings.json',
-          present: true,
-          value: 'dark',
-          masked_value: null,
-          revision: 'rev',
-          surface: 'configuration',
-        },
-      ],
-      files: [],
-      applies_to_next_session: true,
-    });
-    api.modelProviders.mockResolvedValue({
-      agent_id: 'pi',
-      providers: [],
-      bound_provider_id: null,
-    });
-    api.authMode.mockResolvedValue({
-      agent_id: 'pi',
-      mode: 'model_provider',
-      modes: ['model_provider'],
-      options: [
-        {
-          value: 'model_provider',
-          kind: 'provider',
-          label_key: 'agents.authModeProvider',
-          description_key: 'agents.authDescPiProvider',
-          credential_env: null,
-          credential_required: false,
-          native_config_field_id: null,
-          official_api_url: null,
-        },
-      ],
-      credential_env: 'PI_API_KEY',
-      credential_present: true,
-    });
-    const user = userEvent.setup();
-    render(<AgentSettings />);
-
-    const auth = await screen.findByRole('region', { name: '鉴权管理' });
-    const providerHeading = await screen.findByRole('heading', {
-      name: '模型供应商',
-    });
-    expect(providerHeading).toBeVisible();
-    expect(await screen.findByText('暂未识别到供应商')).toBeVisible();
-    expect(
-      (await screen.findAllByRole('button', { name: '新建供应商' }))[0]
-    ).toBeVisible();
-    expect(screen.getByRole('button', { name: '从外部导入' })).toBeVisible();
-    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
-    expect(auth).toContainElement(providerHeading);
-
-    const configuration = screen.getByRole('region', { name: '配置管理' });
-    expect(configuration).toHaveTextContent('Pi Runtime');
-
-    const plugins = screen.getByRole('button', { name: '插件' });
-    expect(plugins).toHaveAttribute('aria-expanded', 'false');
-    await user.click(plugins);
-    expect(
-      await screen.findByRole('button', { name: 'pi-package-manager' })
     ).toBeVisible();
   });
 
@@ -1417,9 +1256,9 @@ describe('AgentSettings', () => {
   it('refreshes login status after a terminal account flow finishes', async () => {
     const user = userEvent.setup();
     const loggedOut = {
-      agent_id: 'cursor',
-      display_name: 'Cursor',
-      description: 'Cursor ACP',
+      agent_id: 'grok',
+      display_name: 'Grok',
+      description: 'Grok ACP',
       icon_light: null,
       icon_dark: null,
       icon_svg: null,
@@ -1442,7 +1281,7 @@ describe('AgentSettings', () => {
     };
     api.bar.mockResolvedValue([loggedOut]);
     api.readConfig.mockResolvedValue({
-      agent_id: 'cursor',
+      agent_id: 'grok',
       available: false,
       settings_features: ['authentication_mode'],
       path: null,
@@ -1452,9 +1291,9 @@ describe('AgentSettings', () => {
       applies_to_next_session: true,
     });
     api.authMode.mockResolvedValue({
-      agent_id: 'cursor',
+      agent_id: 'grok',
       mode: 'subscription',
-      credential_env: 'CURSOR_API_KEY',
+      credential_env: 'XAI_API_KEY',
       credential_present: false,
       modes: ['subscription', 'custom'],
       options: [
@@ -1462,7 +1301,7 @@ describe('AgentSettings', () => {
           value: 'subscription',
           kind: 'subscription',
           label_key: 'agents.authModeSubscription',
-          description_key: 'agents.authDescCursorSubscription',
+          description_key: 'agents.authDescGrokSubscription',
           credential_env: null,
           native_config_field_id: null,
           credential_required: false,
@@ -1470,23 +1309,23 @@ describe('AgentSettings', () => {
         {
           value: 'custom',
           kind: 'official_api',
-          label_key: 'agents.authModeCursorKey',
-          description_key: 'agents.authDescCursorKey',
-          credential_env: 'CURSOR_API_KEY',
+          label_key: 'agents.authModeXaiKey',
+          description_key: 'agents.authDescGrokKey',
+          credential_env: 'XAI_API_KEY',
           native_config_field_id: null,
           credential_required: true,
         },
       ],
     });
     api.actions.mockResolvedValue({
-      agent_id: 'cursor',
+      agent_id: 'grok',
       actions: [
         {
           id: 'login',
-          label: '登录 Cursor',
-          description: '使用 Cursor 订阅账号登录',
-          label_key: 'agents.managementAction.cursor.login.label',
-          description_key: 'agents.managementAction.cursor.login.description',
+          label: '登录 Grok',
+          description: '使用 SuperGrok 或 X Premium+ 账号登录',
+          label_key: 'agents.managementAction.grok.login.label',
+          description_key: 'agents.managementAction.grok.login.description',
           kind: 'login',
           available: true,
           unavailable_reason: null,
@@ -1497,14 +1336,14 @@ describe('AgentSettings', () => {
     api.runAction.mockImplementation(async () => {
       api.bar.mockResolvedValue([loggedIn]);
       api.accountFlow.mockResolvedValue({
-        agent_id: 'cursor',
+        agent_id: 'grok',
         action_id: 'login',
         status: 'succeeded',
         exit_code: 0,
         authentication: 'account',
       });
       return {
-        agent_id: 'cursor',
+        agent_id: 'grok',
         action_id: 'login',
         launched: true,
       };
@@ -1512,18 +1351,16 @@ describe('AgentSettings', () => {
 
     render(<AgentSettings />);
     expect(await screen.findByText('暂未登录')).toBeVisible();
-    await user.click(
-      await screen.findByRole('button', { name: '登录 Cursor' })
-    );
+    await user.click(await screen.findByRole('button', { name: '登录 Grok' }));
     await waitFor(() =>
-      expect(api.runAction).toHaveBeenCalledWith('cursor', 'login')
+      expect(api.runAction).toHaveBeenCalledWith('grok', 'login')
     );
-    await waitFor(() => expect(api.accountFlow).toHaveBeenCalledWith('cursor'));
+    await waitFor(() => expect(api.accountFlow).toHaveBeenCalledWith('grok'));
     await waitFor(() =>
       expect(screen.getByText('已通过账号登录')).toBeVisible()
     );
-    expect(api.preflight).toHaveBeenCalledWith('cursor', 'authentication');
-    expect(api.accountFlow).toHaveBeenCalledWith('cursor');
+    expect(api.preflight).toHaveBeenCalledWith('grok', 'authentication');
+    expect(api.accountFlow).toHaveBeenCalledWith('grok');
   });
 
   it('updates ACP preflight items and toasts when an update finishes', async () => {

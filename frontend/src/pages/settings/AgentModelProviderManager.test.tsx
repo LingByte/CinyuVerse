@@ -6,7 +6,6 @@ import { ConfirmDialog } from '@/components/dialogs/shared/ConfirmDialog';
 import { agentManagementApi } from '@/features/agent-management';
 
 import { AgentModelProviderManager } from './AgentModelProviderManager';
-import { pickAstryxOption } from './agentSettingsTestUtils';
 
 vi.mock('@/components/dialogs/shared/ConfirmDialog', () => ({
   ConfirmDialog: { show: vi.fn() },
@@ -112,93 +111,6 @@ describe('AgentModelProviderManager', () => {
     );
   });
 
-  it('creates a Pi custom provider with wire protocol', async () => {
-    const user = userEvent.setup();
-    vi.mocked(agentManagementApi.modelProviders).mockResolvedValue({
-      agent_id: 'pi',
-      providers: [],
-      bound_provider_id: null,
-    });
-    vi.mocked(agentManagementApi.saveModelProvider).mockResolvedValue({
-      agent_id: 'pi',
-      providers: [{ ...gateway, agent_id: 'pi' }],
-      bound_provider_id: null,
-    });
-    render(
-      <AgentModelProviderManager agentId="pi" disabled={false} embedded />
-    );
-
-    expect(
-      await screen.findByRole('heading', { name: '模型供应商' })
-    ).toBeVisible();
-    expect(screen.getByText('暂未识别到供应商')).toBeVisible();
-    expect(
-      screen.getAllByRole('button', { name: '新建供应商' })[0]
-    ).toBeVisible();
-    expect(screen.getByRole('button', { name: '从外部导入' })).toBeVisible();
-    await user.click(screen.getByRole('button', { name: '从外部导入' }));
-    expect(
-      screen.getByRole('menuitem', { name: '从当前配置导入' })
-    ).toBeVisible();
-    expect(
-      screen.getByRole('menuitem', { name: '从 CC Switch 导入' })
-    ).toBeVisible();
-
-    await user.click(screen.getAllByRole('button', { name: '新建供应商' })[0]);
-    await user.type(screen.getByLabelText('Provider 名称'), 'Gateway');
-    await user.type(
-      screen.getByLabelText('Provider API URL'),
-      'https://gateway.example/v1'
-    );
-    await user.type(screen.getByLabelText('Provider API Key'), 'secret');
-    await user.type(screen.getByLabelText('Provider 模型'), 'private-model');
-    await pickAstryxOption(
-      user,
-      screen.getByLabelText('接入协议'),
-      'anthropic-messages'
-    );
-    await user.click(screen.getByRole('button', { name: '创建 Provider' }));
-
-    expect(agentManagementApi.saveModelProvider).toHaveBeenCalledWith({
-      id: null,
-      name: 'Gateway',
-      agent_id: 'pi',
-      api_url: 'https://gateway.example/v1',
-      api_key: 'secret',
-      model: '{"id":"private-model","api":"anthropic-messages"}',
-    });
-  });
-
-  it('lists a native Pi provider with the same actions as other providers', async () => {
-    vi.mocked(agentManagementApi.modelProviders).mockResolvedValue({
-      agent_id: 'pi',
-      providers: [
-        {
-          id: 'private',
-          name: 'private',
-          agent_id: 'pi',
-          api_url: 'https://private.example/v1',
-          model: 'private-model',
-          api_key: 'sk-pi',
-          credential_present: true,
-          bound: true,
-          managed: true,
-        },
-      ],
-      bound_provider_id: 'private',
-    });
-    render(
-      <AgentModelProviderManager agentId="pi" disabled={false} embedded />
-    );
-    expect(
-      await screen.findByRole('heading', { name: '模型供应商' })
-    ).toBeVisible();
-    expect(await screen.findByText('private')).toBeVisible();
-    expect(screen.getByRole('button', { name: '已启用' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '编辑 private' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: '删除 private' })).toBeDisabled();
-    expect(screen.queryByText('暂未识别到供应商')).not.toBeInTheDocument();
-  });
 
   it('copies a provider card without the API key', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);

@@ -73,8 +73,6 @@ use api_types::{
     OpenCodePluginSummaryView, OpenCodePluginView, OpenCodeProviderCatalogSource,
     OpenCodeProviderCatalogView, OpenCodeProviderConnectRequest, OpenCodeProviderConnectionView,
     OpenCodeProviderConnectionsView, OpenCodeProviderModelRequest, OpenCodeProviderModelView,
-    PiCommandValidationView, PiConfigurationView, PiCredentialsSaveRequest, PiCustomProviderView,
-    PiPluginSummaryView, PiPluginView, PiRuntimeConfigurationView, PiRuntimeSaveRequest,
     UserAgentDefinitionRequest, UserAgentDefinitionView, UserAgentDistributionKind,
     UserAgentDistributionView, UserAgentEnvironmentVariableView, UserAgentIntegrityKind,
 };
@@ -333,6 +331,7 @@ const DESKTOP_SHELL_COMMANDS: &[&str] = &[
     "open_repo_in_editor",
     "open_settings_window",
     "open_workspace_in_editor",
+    "path_exists",
     "probe_web_service_port",
     "remove_saved_host_tunnel",
     "reveal_in_file_manager",
@@ -472,6 +471,15 @@ fn removed_declarations() -> &'static std::collections::BTreeSet<&'static str> {
             "QwenCode",
             "RepoReviewContext",
             "ReviewRequest",
+            // Pi coding agent was retired; drop its settings contract.
+            "PiCommandValidationView",
+            "PiConfigurationView",
+            "PiCredentialsSaveRequest",
+            "PiCustomProviderView",
+            "PiPluginSummaryView",
+            "PiPluginView",
+            "PiRuntimeConfigurationView",
+            "PiRuntimeSaveRequest",
         ])
     })
 }
@@ -578,12 +586,6 @@ fn replacement_declarations() -> BTreeMap<String, String> {
     insert_declaration::<AgentModelProviderImportPreviewView>(&mut decls);
     insert_declaration::<AgentModelProviderImportRequest>(&mut decls);
     insert_declaration::<AgentModelProviderSaveRequest>(&mut decls);
-    insert_declaration::<PiCustomProviderView>(&mut decls);
-    insert_declaration::<PiRuntimeConfigurationView>(&mut decls);
-    insert_declaration::<PiConfigurationView>(&mut decls);
-    insert_declaration::<PiCredentialsSaveRequest>(&mut decls);
-    insert_declaration::<PiRuntimeSaveRequest>(&mut decls);
-    insert_declaration::<PiCommandValidationView>(&mut decls);
     insert_declaration::<DshProviderKind>(&mut decls);
     insert_declaration::<DshProviderModelView>(&mut decls);
     insert_declaration::<DshCatalogProviderView>(&mut decls);
@@ -596,8 +598,6 @@ fn replacement_declarations() -> BTreeMap<String, String> {
     insert_declaration::<DshPluginSummaryView>(&mut decls);
     insert_declaration::<GrokPluginView>(&mut decls);
     insert_declaration::<GrokPluginSummaryView>(&mut decls);
-    insert_declaration::<PiPluginView>(&mut decls);
-    insert_declaration::<PiPluginSummaryView>(&mut decls);
     insert_declaration::<AgentAuthModeKind>(&mut decls);
     insert_declaration::<AgentAuthModeOptionView>(&mut decls);
     insert_declaration::<AgentAuthModeView>(&mut decls);

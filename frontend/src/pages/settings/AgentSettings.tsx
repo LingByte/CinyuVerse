@@ -41,7 +41,6 @@ import {
 } from './AgentConfigurationAndDiagnostics';
 import { AgentDetail } from './AgentDetail';
 import { AgentAuthModeControl } from './AgentAuthModeControl';
-import { QoderLaunchTokenField } from './QoderLaunchTokenField';
 import { AgentEnvironmentEditor } from './AgentEnvironmentEditor';
 import { AgentEnvironmentDiagnosticsDialog } from './AgentEnvironmentDiagnosticsDialog';
 import { AgentModelProviderManager } from './AgentModelProviderManager';
@@ -52,7 +51,6 @@ import { OpenCodePluginHealth } from './OpenCodePluginHealth';
 import { DshAuthPanel } from './DshAuthPanel';
 import { DshPluginManager } from './DshPluginManager';
 import { GrokPluginManager } from './GrokPluginManager';
-import { PiPluginManager } from './PiPluginManager';
 import { DshSessionDefaults } from './DshSessionDefaults';
 import { PluginsSettings, type PluginEcosystem } from './PluginsSettings';
 import { SettingsSection as CollapsibleSettingsSection } from './SettingsSection';
@@ -1140,12 +1138,6 @@ export function AgentSettings() {
                 onDirtyChange={setOpenCodeProviderDirty}
                 onChanged={refreshAuthentication}
               />
-            ) : selectedAgent.agent_id === 'qoder' ? (
-              <QoderLaunchTokenField
-                locked={agentLocked}
-                onDirtyChange={setAuthModeDirty}
-                onChanged={refreshAuthentication}
-              />
             ) : undefined
           }
           nativeCredentialPresent={(fieldId) =>
@@ -1354,19 +1346,6 @@ export function AgentSettings() {
               summary={t('settings:agents.pluginCount', { count: pluginCount })}
             >
               <GrokPluginManager
-                onChanged={runPreflight}
-                onCount={setPluginCount}
-              />
-            </CollapsibleSettingsSection>
-          ) : selectedAgent.agent_id === 'pi' ? (
-            <CollapsibleSettingsSection
-              id={`${selectedAgent.agent_id}-native-plugins`}
-              title={t('settings:agents.pluginsTab')}
-              expanded={nativePluginsExpanded}
-              onToggle={() => setNativePluginsExpanded((current) => !current)}
-              summary={t('settings:agents.pluginCount', { count: pluginCount })}
-            >
-              <PiPluginManager
                 onChanged={runPreflight}
                 onCount={setPluginCount}
               />

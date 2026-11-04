@@ -1729,7 +1729,6 @@
     "authModeOpenAiKey": "OpenAI API Key",
     "authModeXaiKey": "xAI API Key",
     "authModeCustomEndpoint": "自定义模型端点",
-    "authModeCursorKey": "Cursor API Key",
     "authModeUnknown": "鉴权模式",
     "authDescUnknown": "使用此 Agent 声明的鉴权策略。",
     "authDescCodexSubscription": "使用 Codex 官方设备码登录，并停用冲突的 API Key 与 Cinyuverse Provider 投影。",
@@ -1737,13 +1736,10 @@
     "authDescCodexOfficialApi": "使用 OpenAI 官方 API Key；端点不可更改。",
     "authDescCodexKey": "以 OPENAI_API_KEY 进行非交互认证。",
     "authDescGrokSubscription": "订阅账号模式不会向进程传递 XAI_API_KEY。",
-    "authDescCursorSubscription": "订阅账号模式会清除 CURSOR_API_KEY 与旧的 API Base URL。",
     "authDescGrokOfficialApi": "使用 xAI 官方 API Key；端点不可更改。",
     "authDescGrokProvider": "使用 Grok 原生配置中的自定义端点。",
     "authDescGrokKey": "以 XAI_API_KEY 进行非交互认证。",
     "authDescGrokCustom": "使用 ~/.grok/config.toml 中的自定义模型端点与凭据。",
-    "authDescCursorOfficialApi": "使用 Cursor Dashboard API Key；不支持自定义 URL。",
-    "authDescCursorKey": "使用 Cursor Dashboard API Key，适合无浏览器环境。",
     "authDescClaudeSubscription": "使用 Claude 官方订阅登录，并清除冲突的端点凭据。",
     "authModeOfficialApi": "官方 API",
     "authDescClaudeOfficialApi": "使用 Anthropic 官方 API Key 与三个默认模型；端点不可更改。",
@@ -2145,12 +2141,6 @@
           "description": "运行 OpenCode 官方注销流程。"
         }
       },
-      "cline": {
-        "login": {
-          "label": "登录 Cline",
-          "description": "运行 Cline 官方认证流程。"
-        }
-      },
       "hermes": {
         "setup": {
           "label": "运行 Hermes Setup",
@@ -2167,12 +2157,6 @@
           "description": "运行 CodeBuddy 官方登录流程。"
         }
       },
-      "qoder": {
-        "login": {
-          "label": "登录 Qoder",
-          "description": "打开浏览器完成 Qoder 官方账号登录。"
-        }
-      },
       "kimi_code": {
         "login": {
           "label": "登录 Kimi Code",
@@ -2183,12 +2167,6 @@
           "description": "移除 Kimi Code 本地账号创作会话。"
         }
       },
-      "pi": {
-        "login": {
-          "label": "配置 Pi Provider",
-          "description": "启动 Pi，并在终端中使用 /login 连接 Provider。"
-        }
-      },
       "grok": {
         "login": {
           "label": "登录 Grok",
@@ -2197,20 +2175,6 @@
         "logout": {
           "label": "退出 Grok",
           "description": "移除 Grok 本地账号创作会话。"
-        }
-      },
-      "cursor": {
-        "login": {
-          "label": "登录 Cursor",
-          "description": "使用 Cursor 订阅账号登录。"
-        },
-        "logout": {
-          "label": "退出 Cursor",
-          "description": "移除 Cursor Agent 本地账号创作会话。"
-        },
-        "subscription": {
-          "label": "管理 Cursor 订阅",
-          "description": "打开 Cursor 官方套餐页面。"
         }
       }
     },

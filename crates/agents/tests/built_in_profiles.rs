@@ -61,14 +61,6 @@ fn codeg_pinned_distribution_matrix_is_exact() {
             ">=22.22.3",
         ),
         (
-            "cline",
-            ProfileComponent::CombinedRuntime,
-            "cline",
-            "3.0.49",
-            "cline",
-            ">=22",
-        ),
-        (
             "codebuddy",
             ProfileComponent::CombinedRuntime,
             "@tencent-ai/codebuddy-code",
@@ -83,14 +75,6 @@ fn codeg_pinned_distribution_matrix_is_exact() {
             "0.31.1",
             "kimi",
             ">=22.19",
-        ),
-        (
-            "pi",
-            ProfileComponent::AcpAdapter,
-            "pi-acp",
-            "0.0.33",
-            "pi-acp",
-            ">=22",
         ),
         (
             "grok",
@@ -141,16 +125,6 @@ fn codeg_pinned_distribution_matrix_is_exact() {
             component: ProfileComponent::CombinedRuntime,
             version: "1.18.23",
             command: "opencode",
-            ..
-        }
-    ));
-    let cursor = profile("cursor").install_sources.first().unwrap();
-    assert!(matches!(
-        cursor,
-        ProfileInstallSource::Binary {
-            component: ProfileComponent::CombinedRuntime,
-            version: "2026.07.23-e383d2b",
-            command: "cursor-agent",
             ..
         }
     ));
@@ -263,51 +237,6 @@ fn acp_launch_args_have_one_answer_per_profile() {
     }
 }
 
-/// Qoder CLI starts its interactive TUI when launched bare; only `--acp` makes
-/// it an ACP stdio server. Both published bin names must resolve to it.
-#[test]
-fn qoder_launches_as_an_acp_server_under_both_bin_names() {
-    let catalog = BuiltInProfileCatalog::bundled();
-    let qoder = catalog.profile(&AgentId::parse("qoder").unwrap()).unwrap();
-
-    let names = qoder
-        .external_candidates
-        .iter()
-        .map(|candidate| candidate.executable)
-        .collect::<Vec<_>>();
-    assert_eq!(names, ["qoder", "qodercli"]);
-
-    for candidate in qoder.external_candidates {
-        assert_eq!(candidate.acp_args, ["--acp"]);
-        assert_eq!(
-            agents::acp_launch_args(qoder, candidate.component),
-            vec!["--acp".to_string()]
-        );
-    }
-
-    assert!(matches!(
-        qoder.install_sources.first().unwrap(),
-        ProfileInstallSource::Npx {
-            component: ProfileComponent::CombinedRuntime,
-            package: "@qoder-ai/qodercli",
-            version: "1.1.44",
-            command: "qodercli",
-            args: ["--acp"],
-            ..
-        }
-    ));
-    assert_eq!(
-        qoder.registry_binding.as_ref().unwrap().registry_id,
-        "qoder"
-    );
-    assert_eq!(qoder.management_actions[0].args, &["login"]);
-    assert!(
-        qoder
-            .settings_features
-            .contains(&AgentSettingsFeature::AuthenticationMode)
-    );
-}
-
 #[test]
 fn built_in_profiles_are_declarative_and_bind_explicitly() {
     let catalog = BuiltInProfileCatalog::bundled();
@@ -327,18 +256,14 @@ fn built_in_profiles_are_declarative_and_bind_explicitly() {
         [
             "claude_code",
             "codex",
-            "pi",
             "opencode",
             "grok",
-            "cursor",
             "deepseek_harness",
             "antigravity",
-            "cline",
             "openclaw",
             "hermes",
             "codebuddy",
             "kimi_code",
-            "qoder",
         ]
     );
 
@@ -364,7 +289,7 @@ fn built_in_profiles_are_declarative_and_bind_explicitly() {
         }));
     }
 
-    for id in ["claude_code", "codex", "kimi_code", "grok", "cursor"] {
+    for id in ["claude_code", "codex", "kimi_code", "grok"] {
         let profile = catalog.profile(&AgentId::parse(id).unwrap()).unwrap();
         assert!(profile.management_actions.iter().any(|action| {
             action.kind == ProfileManagementActionKind::Login && action.program.is_some()
@@ -403,18 +328,14 @@ fn built_in_profiles_are_declarative_and_bind_explicitly() {
         [
             ("claude_code", None),
             ("codex", None),
-            ("pi", None),
             ("opencode", None),
             ("grok", None),
-            ("cursor", None),
             ("deepseek_harness", None),
             ("antigravity", None),
-            ("cline", None),
             ("openclaw", None),
             ("hermes", None),
             ("codebuddy", None),
             ("kimi_code", None),
-            ("qoder", None),
         ]
     );
     assert!(
@@ -429,12 +350,6 @@ fn built_in_profiles_are_declarative_and_bind_explicitly() {
             .unwrap()
             .adapter_bundles_runtime()
     );
-    assert!(
-        !catalog
-            .profile(&AgentId::parse("pi").unwrap())
-            .unwrap()
-            .adapter_bundles_runtime()
-    );
 }
 
 #[test]
@@ -446,13 +361,10 @@ fn codeg_account_action_matrix_is_complete() {
         ("antigravity", &[][..]),
         ("openclaw", &["onboard"][..]),
         ("opencode", &["login", "logout"][..]),
-        ("cline", &["login"][..]),
         ("hermes", &["setup", "model"][..]),
         ("codebuddy", &["login"][..]),
         ("kimi_code", &["login", "logout"][..]),
-        ("pi", &["login"][..]),
         ("grok", &["login", "logout", "subscription"][..]),
-        ("cursor", &["login", "logout", "subscription"][..]),
         ("deepseek_harness", &["setup"][..]),
     ] {
         let profile = catalog.profile(&AgentId::parse(agent_id).unwrap()).unwrap();
@@ -532,7 +444,6 @@ fn built_in_profiles_keep_codeg_advanced_configuration_contract() {
                 "kimi_default_effort",
             ][..],
         ),
-        ("pi", &["pi_custom_providers"][..]),
         (
             "grok",
             &[
@@ -541,10 +452,6 @@ fn built_in_profiles_keep_codeg_advanced_configuration_contract() {
                 "grok_context_window",
                 "grok_auto_compact_threshold",
             ][..],
-        ),
-        (
-            "cursor",
-            &["cursor_model", "cursor_force", "cursor_sandbox_mode"][..],
         ),
         ("deepseek_harness", &["deepseek_harness_api_key"][..]),
     ] {
@@ -580,10 +487,6 @@ fn built_in_profiles_keep_codeg_advanced_configuration_contract() {
     assert_eq!(
         native_field(&catalog, "grok", "grok_permission").path,
         ["ui", "permission_mode"]
-    );
-    assert_eq!(
-        native_field(&catalog, "cursor", "cursor_sandbox_mode").path,
-        ["sandbox", "mode"]
     );
     assert_eq!(
         native_field(&catalog, "deepseek_harness", "deepseek_harness_api_key").path,
@@ -628,30 +531,10 @@ fn codeg_directory_semantics_and_settings_capabilities_are_profile_declared() {
             .contains(&AgentSettingsFeature::ReusableModelProviders)
     );
 
-    let cline = profile("cline");
-    assert!(
-        cline
-            .native_config
-            .iter()
-            .all(|binding| binding.directory_override_env == Some("CLINE_DIR"))
-    );
-    assert_eq!(
-        cline
-            .account_evidence
-            .as_ref()
-            .unwrap()
-            .directory_override_env,
-        Some("CLINE_DIR")
-    );
-
     let codebuddy = profile("codebuddy");
     assert_eq!(
         codebuddy.native_config[0].directory_override_env,
         Some("CODEBUDDY_CONFIG_DIR")
-    );
-    assert!(
-        profile("cursor").account_evidence.is_none(),
-        "Cursor account login is stored in the platform secret store, not a config file"
     );
     assert!(
         profile("opencode")
@@ -673,29 +556,15 @@ fn codeg_directory_semantics_and_settings_capabilities_are_profile_declared() {
             .settings_features
             .contains(&AgentSettingsFeature::GrokPlugins)
     );
-    assert!(
-        profile("pi")
-            .settings_features
-            .contains(&AgentSettingsFeature::PiPlugins)
-    );
-    assert!(
-        profile("pi")
-            .settings_features
-            .contains(&AgentSettingsFeature::ReusableModelProviders)
-    );
-
     for id in [
         "claude_code",
         "codex",
         "antigravity",
         "opencode",
-        "cline",
         "hermes",
         "codebuddy",
         "kimi_code",
         "grok",
-        "cursor",
-        "qoder",
     ] {
         assert!(
             profile(id)
@@ -704,7 +573,7 @@ fn codeg_directory_semantics_and_settings_capabilities_are_profile_declared() {
             "{id} must declare native MCP support"
         );
     }
-    for id in ["openclaw", "pi", "deepseek_harness"] {
+    for id in ["openclaw", "deepseek_harness"] {
         assert!(
             !profile(id)
                 .settings_features
@@ -718,15 +587,11 @@ fn codeg_directory_semantics_and_settings_capabilities_are_profile_declared() {
         "antigravity",
         "openclaw",
         "opencode",
-        "cline",
         "hermes",
         "codebuddy",
         "kimi_code",
-        "pi",
         "grok",
-        "cursor",
         "deepseek_harness",
-        "qoder",
     ] {
         assert!(
             profile(id)
@@ -846,14 +711,6 @@ fn native_config_surfaces_keep_runtime_fields_out_of_authentication() {
     );
     assert_eq!(
         surface("grok", "grok_permission"),
-        NativeConfigSurface::Configuration
-    );
-    assert_eq!(
-        surface("cursor", "cursor_model"),
-        NativeConfigSurface::Configuration
-    );
-    assert_eq!(
-        surface("cursor", "cursor_force"),
         NativeConfigSurface::Configuration
     );
 }

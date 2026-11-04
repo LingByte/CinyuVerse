@@ -57,22 +57,6 @@ pub struct NativeCodexState {
     pub auth_api_key: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct NativePiProvider {
-    id: String,
-    name: String,
-    api_url: String,
-    model: String,
-    api_key: String,
-    credential_present: bool,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct NativePiState {
-    providers: Vec<NativePiProvider>,
-    active_provider: Option<String>,
-}
-
 /// 只有顶层 base_url、没有显式 `[model_providers.xxx]` 表时使用的合成标识。
 const NATIVE_ENDPOINT_PROVIDER_ID: &str = "__cinyuverse_native_endpoint__";
 
@@ -108,8 +92,6 @@ struct ProviderNativeHomes {
     kimi: PathBuf,
     hermes: PathBuf,
     openclaw: PathBuf,
-    cline: PathBuf,
-    pi: PathBuf,
 }
 
 impl ProviderNativeHomes {
@@ -122,20 +104,16 @@ impl ProviderNativeHomes {
             kimi: resolve_native_home(home, environment, "KIMI_CODE_HOME", ".kimi-code"),
             hermes: resolve_native_home(home, environment, "HERMES_HOME", ".hermes"),
             openclaw: resolve_native_home(home, environment, "OPENCLAW_HOME", ".openclaw"),
-            cline: resolve_native_home(home, environment, "CLINE_DIR", ".cline/data"),
-            pi: resolve_native_home(home, environment, "PI_CODING_AGENT_DIR", ".pi/agent"),
         }
     }
 
     fn native_list_home(&self, agent_id: &AgentId) -> &Path {
         match agent_id.as_str() {
-            "pi" => &self.pi,
             "claude_code" => &self.claude,
             "grok" => &self.grok,
             "kimi_code" => &self.kimi,
             "hermes" => &self.hermes,
             "openclaw" => &self.openclaw,
-            "cline" => &self.cline,
             _ if is_antigravity(agent_id) => &self.gemini,
             _ => &self.codex,
         }
@@ -207,7 +185,7 @@ pub async fn list(
     list_with_native(store_path, agent_id, None).await
 }
 
-/// 与 `list` 相同，并对 Codex / Pi 把原生存储中已有的供应商合并进视图。
+/// 与 `list` 相同，并对 Codex 把原生存储中已有的供应商合并进视图。
 pub async fn list_with_native(
     store_path: &Path,
     agent_id: AgentId,
@@ -215,17 +193,6 @@ pub async fn list_with_native(
 ) -> Result<AgentModelProvidersView, super::NativeError> {
     validate_agent(&agent_id)?;
     match agent_id.as_str() {
-        "pi" => {
-            let native = match native_home {
-                Some(home) => Some(read_native_pi_state(home).await?),
-                None => None,
-            };
-            let mut store = read_store(store_path).await?;
-            if adopt_native_providers(&mut store, &agent_id, &pi_native_drafts(native.as_ref())) {
-                write_store(store_path, &store).await?;
-            }
-            Ok(project_with_pi_native(&store, agent_id, native.as_ref()))
-        }
         "codex" => {
             let native = match native_home {
                 Some(home) => Some(read_native_codex_state(home).await?),
@@ -508,11 +475,6 @@ pub async fn delete(
     } else {
         None
     };
-    let native_pi = if agent_id.as_str() == "pi" {
-        Some(read_native_pi_state(&homes.pi).await?)
-    } else {
-        None
-    };
     let mut store = load_store_with_natives(store_path, &agent_id, &homes).await?;
     let remaining = store
         .providers
@@ -522,13 +484,7 @@ pub async fn delete(
     if remaining <= 1 {
         return Err("至少需要保留一个供应商".into());
     }
-    if provider_is_in_use(
-        &store,
-        &agent_id,
-        provider_id,
-        native_codex.as_ref(),
-        native_pi.as_ref(),
-    ) {
+    if provider_is_in_use(&store, &agent_id, provider_id, native_codex.as_ref()) {
         return Err("无法删除正在使用的供应商".into());
     }
     let Some(index) = store
@@ -539,10 +495,8 @@ pub async fn delete(
         return Err("找不到要删除的 Model Provider".into());
     };
     let removed = store.providers[index].clone();
-    match agent_id.as_str() {
-        "codex" => remove_native_codex_provider(&homes.codex, &removed).await?,
-        "pi" => remove_native_pi_provider(&homes.pi, &removed).await?,
-        _ => {}
+    if agent_id.as_str() == "codex" {
+        remove_native_codex_provider(&homes.codex, &removed).await?;
     }
     store.providers.remove(index);
     write_store(store_path, &store).await?;
@@ -598,30 +552,6 @@ fn project_with_codex_native(
             .iter()
             .map(|provider| (provider.id.as_str(), provider.api_url.as_str())),
         native.base_url.as_deref(),
-    );
-    view
-}
-
-fn project_with_pi_native(
-    store: &ProviderStore,
-    agent_id: AgentId,
-    native: Option<&NativePiState>,
-) -> AgentModelProvidersView {
-    let mut view = project(store, agent_id);
-    let Some(native) = native else {
-        return view;
-    };
-    if view.bound_provider_id.is_some() {
-        return view;
-    }
-    apply_native_active_binding(
-        &mut view,
-        native.active_provider.as_deref(),
-        native
-            .providers
-            .iter()
-            .map(|provider| (provider.id.as_str(), provider.api_url.as_str())),
-        None,
     );
     view
 }
@@ -701,13 +631,6 @@ async fn projected_view(
             }
             Ok(project_with_codex_native(&store, agent_id, Some(&native)))
         }
-        "pi" => {
-            let native = read_native_pi_state(&homes.pi).await?;
-            if adopt_native_providers(&mut store, &agent_id, &pi_native_drafts(Some(&native))) {
-                write_store(store_path, &store).await?;
-            }
-            Ok(project_with_pi_native(&store, agent_id, Some(&native)))
-        }
         _ => {
             let home = homes.native_list_home(&agent_id);
             let drafts = live_native_drafts(&agent_id, home).await?;
@@ -765,24 +688,6 @@ fn codex_native_drafts(native: Option<&NativeCodexState>) -> Vec<NativeProviderD
     drafts
 }
 
-fn pi_native_drafts(native: Option<&NativePiState>) -> Vec<NativeProviderDraft> {
-    let Some(native) = native else {
-        return Vec::new();
-    };
-    native
-        .providers
-        .iter()
-        .filter(|provider| !provider.api_url.is_empty())
-        .map(|provider| NativeProviderDraft {
-            id: provider.id.clone(),
-            name: provider.name.clone(),
-            api_url: provider.api_url.clone(),
-            api_key: provider.api_key.clone(),
-            model: provider.model.clone(),
-        })
-        .collect()
-}
-
 async fn live_native_drafts(
     agent_id: &AgentId,
     native_home: &Path,
@@ -795,7 +700,6 @@ async fn live_native_drafts(
         "grok" => native_grok_drafts(native_home).await?,
         "kimi_code" => native_kimi_provider_drafts(native_home).await?,
         "hermes" => native_hermes_draft(native_home).await?,
-        "cline" => native_cline_draft(native_home).await?,
         "openclaw" => native_openclaw_drafts(native_home).await?,
         _ if is_antigravity(agent_id) => native_gemini_draft(native_home, agent_id)
             .await?
@@ -937,14 +841,6 @@ async fn load_store_with_natives(
             }
             Ok(store)
         }
-        "pi" => {
-            let native = read_native_pi_state(&homes.pi).await?;
-            let mut store = read_store(store_path).await?;
-            if adopt_native_providers(&mut store, agent_id, &pi_native_drafts(Some(&native))) {
-                write_store(store_path, &store).await?;
-            }
-            Ok(store)
-        }
         _ => {
             let native_home = homes.native_list_home(agent_id);
             let drafts = live_native_drafts(agent_id, native_home).await?;
@@ -962,7 +858,6 @@ fn provider_is_in_use(
     agent_id: &AgentId,
     provider_id: &str,
     native_codex: Option<&NativeCodexState>,
-    native_pi: Option<&NativePiState>,
 ) -> bool {
     if store.bindings.values().any(|value| value == provider_id) {
         return true;
@@ -988,19 +883,6 @@ fn provider_is_in_use(
         {
             return true;
         }
-    }
-    if let Some(native) = native_pi
-        && native_active_matches_provider(
-            native.active_provider.as_deref(),
-            native
-                .providers
-                .iter()
-                .map(|item| (item.id.as_str(), item.api_url.as_str())),
-            None,
-            provider,
-        )
-    {
-        return true;
     }
     false
 }
@@ -1131,106 +1013,6 @@ pub async fn read_native_codex_state(
     });
     state.credential_present = !state.auth_api_key.is_empty() || table_key;
     Ok(state)
-}
-
-async fn read_native_pi_state(pi_home: &Path) -> Result<NativePiState, super::NativeError> {
-    let models = read_json_object_or_empty(&pi_home.join("models.json")).await?;
-    let auth = read_json_object_or_empty(&pi_home.join("auth.json")).await?;
-    let settings = read_json_object_or_empty(&pi_home.join("settings.json")).await?;
-    let active_provider = settings
-        .get("defaultProvider")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string);
-    let default_model = settings
-        .get("defaultModel")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or("");
-    let mut providers = Vec::new();
-    let mut seen = HashSet::new();
-    if let Some(entries) = models.get("providers").and_then(Value::as_object) {
-        for (id, provider) in entries {
-            let Some(object) = provider.as_object() else {
-                continue;
-            };
-            let api_url = object
-                .get("baseUrl")
-                .or_else(|| object.get("base_url"))
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .trim()
-                .to_string();
-            let model = object
-                .get("models")
-                .and_then(Value::as_array)
-                .and_then(|models| {
-                    models
-                        .iter()
-                        .find_map(|entry| entry.get("id").and_then(Value::as_str))
-                })
-                .unwrap_or(if active_provider.as_deref() == Some(id.as_str()) {
-                    default_model
-                } else {
-                    ""
-                })
-                .to_string();
-            let api_key = auth.get(id).map(pi_auth_key).unwrap_or_default();
-            let credential_present = !api_key.is_empty();
-            seen.insert(id.clone());
-            providers.push(NativePiProvider {
-                name: id.clone(),
-                id: id.clone(),
-                api_url,
-                model,
-                api_key,
-                credential_present,
-            });
-        }
-    }
-    if let Some(auth_entries) = auth.as_object() {
-        for (id, entry) in auth_entries {
-            if seen.contains(id) {
-                continue;
-            }
-            let api_key = pi_auth_key(entry);
-            if api_key.is_empty() {
-                continue;
-            }
-            seen.insert(id.clone());
-            providers.push(NativePiProvider {
-                name: id.clone(),
-                id: id.clone(),
-                api_url: String::new(),
-                model: if active_provider.as_deref() == Some(id.as_str()) {
-                    default_model.to_string()
-                } else {
-                    String::new()
-                },
-                api_key,
-                credential_present: true,
-            });
-        }
-    }
-    if let Some(active) = active_provider.as_deref()
-        && !seen.contains(active)
-    {
-        providers.push(NativePiProvider {
-            id: active.to_string(),
-            name: active.to_string(),
-            api_url: String::new(),
-            model: default_model.to_string(),
-            api_key: String::new(),
-            credential_present: false,
-        });
-    }
-    providers.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
-    Ok(NativePiState {
-        providers,
-        active_provider,
-    })
 }
 
 async fn read_store_reconciled(
@@ -1383,7 +1165,7 @@ async fn write_store(path: &Path, store: &ProviderStore) -> Result<(), super::Na
 fn validate_agent(agent_id: &AgentId) -> Result<(), super::NativeError> {
     if matches!(
         agent_id.as_str(),
-        "claude_code" | "codex" | "grok" | "kimi_code" | "hermes" | "openclaw" | "cline" | "pi"
+        "claude_code" | "codex" | "grok" | "kimi_code" | "hermes" | "openclaw"
     ) || is_antigravity(agent_id)
     {
         Ok(())
@@ -1553,7 +1335,6 @@ async fn native_import_drafts(
                 drafts.push(draft);
             }
         }
-        "pi" => drafts.extend(native_pi_drafts(&homes.pi).await?),
         _ if is_antigravity(agent_id) => {
             if let Some(draft) = native_gemini_draft(&homes.gemini, agent_id).await? {
                 drafts.push(draft);
@@ -1844,26 +1625,6 @@ async fn native_hermes_draft(hermes_home: &Path) -> Result<Vec<ImportDraft>, Str
     }])
 }
 
-async fn native_cline_draft(cline_home: &Path) -> Result<Vec<ImportDraft>, String> {
-    let state = read_json_object_or_empty(&cline_home.join("globalState.json")).await?;
-    let secrets = read_json_object_or_empty(&cline_home.join("secrets.json")).await?;
-    let api_url = json_text(&state, &["openAiBaseUrl"]);
-    if api_url.is_empty() {
-        return Ok(Vec::new());
-    }
-    Ok(vec![ImportDraft {
-        source_id: "__native_live__".to_string(),
-        name: "当前原生配置".to_string(),
-        api_url,
-        api_key: json_text(
-            &secrets,
-            &["openAiApiKey", "apiKey", "openRouterApiKey", "geminiApiKey"],
-        ),
-        model: json_text(&state, &["apiModelId"]),
-        skip_reason: None,
-    }])
-}
-
 async fn native_openclaw_drafts(openclaw_home: &Path) -> Result<Vec<ImportDraft>, String> {
     let document = read_json_object_or_empty(&openclaw_home.join("openclaw.json")).await?;
     let Some(providers) = document
@@ -1910,65 +1671,6 @@ async fn native_openclaw_drafts(openclaw_home: &Path) -> Result<Vec<ImportDraft>
                 api_url,
                 api_key,
                 model,
-                skip_reason: None,
-            })
-        })
-        .collect())
-}
-
-async fn native_pi_drafts(pi_home: &Path) -> Result<Vec<ImportDraft>, String> {
-    let models = read_json_object_or_empty(&pi_home.join("models.json")).await?;
-    let auth = read_json_object_or_empty(&pi_home.join("auth.json")).await?;
-    let settings = read_json_object_or_empty(&pi_home.join("settings.json")).await?;
-    let default_provider = settings
-        .get("defaultProvider")
-        .and_then(Value::as_str)
-        .unwrap_or("");
-    let default_model = settings
-        .get("defaultModel")
-        .and_then(Value::as_str)
-        .unwrap_or("");
-    let Some(providers) = models.get("providers").and_then(Value::as_object) else {
-        return Ok(Vec::new());
-    };
-    Ok(providers
-        .iter()
-        .filter_map(|(id, provider)| {
-            let object = provider.as_object()?;
-            let api_url = object
-                .get("baseUrl")
-                .or_else(|| object.get("base_url"))
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .trim()
-                .to_string();
-            if api_url.is_empty() {
-                return None;
-            }
-            let api_key = auth.get(id).map(pi_auth_key).unwrap_or_default();
-            let model_id = object
-                .get("models")
-                .and_then(Value::as_array)
-                .and_then(|models| {
-                    models
-                        .iter()
-                        .find_map(|entry| entry.get("id").and_then(Value::as_str))
-                })
-                .unwrap_or(if default_provider == id {
-                    default_model
-                } else {
-                    ""
-                });
-            let api = object
-                .get("api")
-                .and_then(Value::as_str)
-                .unwrap_or("openai-responses");
-            Some(ImportDraft {
-                source_id: format!("native:{id}"),
-                name: id.clone(),
-                api_url,
-                api_key,
-                model: serde_json::json!({ "id": model_id, "api": api }).to_string(),
                 skip_reason: None,
             })
         })
@@ -2212,30 +1914,6 @@ async fn capture_projection(
             )
             .await?;
         }
-        "cline" => {
-            capture_text_file(
-                &homes.cline.join("globalState.json"),
-                "globalState.json",
-                &mut backup,
-            )
-            .await?;
-            capture_text_file(
-                &homes.cline.join("secrets.json"),
-                "secrets.json",
-                &mut backup,
-            )
-            .await?;
-        }
-        "pi" => {
-            capture_text_file(
-                &homes.pi.join("settings.json"),
-                "settings.json",
-                &mut backup,
-            )
-            .await?;
-            capture_text_file(&homes.pi.join("models.json"), "models.json", &mut backup).await?;
-            capture_text_file(&homes.pi.join("auth.json"), "auth.json", &mut backup).await?;
-        }
         _ => unreachable!("validated Agent"),
     }
     Ok(backup)
@@ -2271,8 +1949,6 @@ fn empty_projection_backup(agent_id: &AgentId) -> ProviderProjectionBackup {
         "kimi_code" => ["config.toml", "credentials/kimi-code.json"].as_slice(),
         "hermes" => ["config.yaml"].as_slice(),
         "openclaw" => ["openclaw.json"].as_slice(),
-        "cline" => ["globalState.json", "secrets.json"].as_slice(),
-        "pi" => ["settings.json", "models.json", "auth.json"].as_slice(),
         _ => [].as_slice(),
     } {
         backup.file_values.insert((*key).to_string(), None);
@@ -2408,33 +2084,6 @@ async fn restore_projection(
                 true,
             )
             .await
-        }
-        "cline" => {
-            restore_text_file(
-                &homes.cline.join("globalState.json"),
-                "globalState.json",
-                backup,
-                false,
-            )
-            .await?;
-            restore_text_file(
-                &homes.cline.join("secrets.json"),
-                "secrets.json",
-                backup,
-                true,
-            )
-            .await
-        }
-        "pi" => {
-            restore_text_file(
-                &homes.pi.join("settings.json"),
-                "settings.json",
-                backup,
-                false,
-            )
-            .await?;
-            restore_text_file(&homes.pi.join("models.json"), "models.json", backup, false).await?;
-            restore_text_file(&homes.pi.join("auth.json"), "auth.json", backup, true).await
         }
         _ => validate_agent(agent_id),
     }
@@ -2643,8 +2292,6 @@ async fn apply_provider(
         "kimi_code" => apply_kimi(&homes.kimi, provider).await,
         "hermes" => apply_hermes(&homes.hermes, provider).await,
         "openclaw" => apply_openclaw(&homes.openclaw, provider).await,
-        "cline" => apply_cline(&homes.cline, provider).await,
-        "pi" => apply_pi(&homes.pi, provider).await,
         _ if is_antigravity(&provider.agent_id) => apply_antigravity(&homes.gemini, provider).await,
         _ => validate_agent(&provider.agent_id),
     }
@@ -3275,298 +2922,6 @@ async fn apply_openclaw(
         ),
         sensitive: true,
     }])
-    .await
-}
-
-async fn apply_pi(pi_home: &Path, provider: &StoredProvider) -> Result<(), super::NativeError> {
-    let settings_path = pi_home.join("settings.json");
-    let models_path = pi_home.join("models.json");
-    let auth_path = pi_home.join("auth.json");
-    let filesystem = TokioNativeFileSystem;
-    let settings_original = filesystem.read(&settings_path).await?;
-    let models_original = filesystem.read(&models_path).await?;
-    let auth_original = filesystem.read(&auth_path).await?;
-    let mut settings = parse_json_object_bytes(&settings_path, settings_original.as_deref())?;
-    let mut models = parse_json_object_bytes(&models_path, models_original.as_deref())?;
-    let mut auth = parse_json_object_bytes(&auth_path, auth_original.as_deref())?;
-    let native_id = pi_native_id(provider);
-    let selected = provider_model_ids(&provider.model);
-    let model_id = selected
-        .first()
-        .cloned()
-        .unwrap_or_else(|| pi_model_id(&provider.model));
-    let api = pi_wire_api(&provider.model);
-    let native_models: Vec<Value> = if selected.is_empty() {
-        vec![serde_json::json!({ "id": model_id, "name": provider.name })]
-    } else {
-        selected
-            .iter()
-            .map(|id| {
-                serde_json::json!({
-                    "id": id,
-                    "name": provider.name
-                })
-            })
-            .collect()
-    };
-    insert_string(
-        settings.as_object_mut().expect("object"),
-        "defaultProvider",
-        &native_id,
-    );
-    insert_string(
-        settings.as_object_mut().expect("object"),
-        "defaultModel",
-        &model_id,
-    );
-    let providers = object_entry(models.as_object_mut().expect("object"), "providers")?;
-    let api_key = provider.api_key.trim();
-    if !api_key.is_empty() {
-        auth.as_object_mut().expect("object").insert(
-            native_id.clone(),
-            serde_json::json!({
-                "type": "api_key",
-                "key": api_key
-            }),
-        );
-    }
-    providers.insert(
-        native_id,
-        serde_json::json!({
-            "baseUrl": provider.api_url,
-            "api": api,
-            "models": native_models
-        }),
-    );
-    apply_projection_mutations(&[
-        NativeFileMutation {
-            path: settings_path,
-            expected: settings_original,
-            replacement: Some(
-                serde_json::to_vec_pretty(&settings)
-                    .map_err(|error| format!("序列化 Pi settings.json 失败：{error}"))?,
-            ),
-            sensitive: false,
-        },
-        NativeFileMutation {
-            path: models_path,
-            expected: models_original,
-            replacement: Some(
-                serde_json::to_vec_pretty(&models)
-                    .map_err(|error| format!("序列化 Pi models.json 失败：{error}"))?,
-            ),
-            sensitive: false,
-        },
-        NativeFileMutation {
-            path: auth_path,
-            expected: auth_original,
-            replacement: Some(
-                serde_json::to_vec_pretty(&auth)
-                    .map_err(|error| format!("序列化 Pi auth.json 失败：{error}"))?,
-            ),
-            sensitive: true,
-        },
-    ])
-    .await
-}
-
-async fn remove_native_pi_provider(
-    pi_home: &Path,
-    provider: &StoredProvider,
-) -> Result<(), super::NativeError> {
-    let models_path = pi_home.join("models.json");
-    let auth_path = pi_home.join("auth.json");
-    let filesystem = TokioNativeFileSystem;
-    let models_original = filesystem.read(&models_path).await?;
-    let auth_original = filesystem.read(&auth_path).await?;
-    let mut models = parse_json_object_bytes(&models_path, models_original.as_deref())?;
-    let mut auth = parse_json_object_bytes(&auth_path, auth_original.as_deref())?;
-    let slug = pi_native_id(provider);
-    let ids = [provider.id.as_str(), slug.as_str()];
-    let mut changed = false;
-    if let Some(entries) = models.get_mut("providers").and_then(Value::as_object_mut) {
-        for id in ids {
-            if entries.remove(id).is_some() {
-                changed = true;
-            }
-        }
-        if entries.is_empty() {
-            models.as_object_mut().expect("object").remove("providers");
-        }
-    }
-    if let Some(entries) = auth.as_object_mut() {
-        for id in ids {
-            if entries.remove(id).is_some() {
-                changed = true;
-            }
-        }
-    }
-    if !changed {
-        return Ok(());
-    }
-    apply_projection_mutations(&[
-        NativeFileMutation {
-            path: models_path,
-            expected: models_original,
-            replacement: Some(
-                serde_json::to_vec_pretty(&models)
-                    .map_err(|error| format!("序列化 Pi models.json 失败：{error}"))?,
-            ),
-            sensitive: false,
-        },
-        NativeFileMutation {
-            path: auth_path,
-            expected: auth_original,
-            replacement: Some(
-                serde_json::to_vec_pretty(&auth)
-                    .map_err(|error| format!("序列化 Pi auth.json 失败：{error}"))?,
-            ),
-            sensitive: true,
-        },
-    ])
-    .await
-}
-
-const PI_RESERVED_PROVIDER_IDS: &[&str] = &[
-    "anthropic",
-    "openai",
-    "google",
-    "openrouter",
-    "vercel-ai-gateway",
-    "xai",
-    "deepseek",
-    "groq",
-    "cerebras",
-    "mistral",
-    "nvidia",
-    "together",
-    "fireworks",
-    "huggingface",
-    "kimi-coding",
-    "moonshotai",
-    "moonshotai-cn",
-    "zai",
-    "zai-coding-cn",
-    "minimax",
-    "minimax-cn",
-    "ant-ling",
-    "xiaomi",
-    "xiaomi-token-plan-cn",
-    "xiaomi-token-plan-ams",
-    "xiaomi-token-plan-sgp",
-    "opencode",
-    "opencode-go",
-];
-
-fn pi_auth_key(entry: &Value) -> String {
-    ["key", "apiKey", "api_key"]
-        .iter()
-        .find_map(|name| {
-            entry
-                .get(*name)
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .filter(|key| !key.is_empty())
-                .map(str::to_string)
-        })
-        .unwrap_or_default()
-}
-
-fn pi_native_id(provider: &StoredProvider) -> String {
-    let mut slug = provider
-        .name
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() {
-                ch.to_ascii_lowercase()
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>();
-    while slug.contains("--") {
-        slug = slug.replace("--", "-");
-    }
-    let slug = slug.trim_matches('-').to_string();
-    if slug.is_empty() {
-        "cinyuverse-provider".to_string()
-    } else if PI_RESERVED_PROVIDER_IDS.contains(&slug.as_str()) {
-        format!("cinyuverse-{slug}")
-    } else {
-        slug
-    }
-}
-
-fn pi_model_id(raw: &str) -> String {
-    match parse_model(raw) {
-        Value::Object(object) => object
-            .get("id")
-            .and_then(Value::as_str)
-            .filter(|value| !value.is_empty())
-            .unwrap_or(raw)
-            .to_string(),
-        Value::String(model) => model,
-        _ => raw.to_string(),
-    }
-}
-
-fn pi_wire_api(raw: &str) -> &'static str {
-    let api = match parse_model(raw) {
-        Value::Object(object) => object
-            .get("api")
-            .and_then(Value::as_str)
-            .unwrap_or("openai-responses")
-            .to_string(),
-        _ => "openai-responses".to_string(),
-    };
-    match api.as_str() {
-        "openai-completions" => "openai-completions",
-        "anthropic-messages" => "anthropic-messages",
-        "google-generative-ai" => "google-generative-ai",
-        _ => "openai-responses",
-    }
-}
-
-async fn apply_cline(
-    cline_home: &Path,
-    provider: &StoredProvider,
-) -> Result<(), super::NativeError> {
-    let state_path = cline_home.join("globalState.json");
-    let secrets_path = cline_home.join("secrets.json");
-    let filesystem = TokioNativeFileSystem;
-    let state_original = filesystem.read(&state_path).await?;
-    let secrets_original = filesystem.read(&secrets_path).await?;
-    let mut state = parse_json_object_bytes(&state_path, state_original.as_deref())?;
-    let mut secrets = parse_json_object_bytes(&secrets_path, secrets_original.as_deref())?;
-    let state_root = state.as_object_mut().expect("object");
-    insert_string(state_root, "apiProvider", "openai");
-    insert_string(state_root, "openAiBaseUrl", &provider.api_url);
-    insert_string(state_root, "apiModelId", &model_default(&provider.model));
-    insert_string(
-        secrets.as_object_mut().expect("object"),
-        "openAiApiKey",
-        &provider.api_key,
-    );
-    apply_projection_mutations(&[
-        NativeFileMutation {
-            path: state_path,
-            expected: state_original,
-            replacement: Some(
-                serde_json::to_vec_pretty(&state)
-                    .map_err(|error| format!("序列化 Cline 配置失败：{error}"))?,
-            ),
-            sensitive: false,
-        },
-        NativeFileMutation {
-            path: secrets_path,
-            expected: secrets_original,
-            replacement: Some(
-                serde_json::to_vec_pretty(&secrets)
-                    .map_err(|error| format!("序列化 Cline 凭据失败：{error}"))?,
-            ),
-            sensitive: true,
-        },
-    ])
     .await
 }
 
@@ -5218,173 +4573,6 @@ mod tests {
             imported.bound_provider_id.as_deref(),
             Some(imported.providers[0].id.as_str())
         );
-    }
-
-    #[tokio::test]
-    async fn pi_provider_binding_writes_models_auth_and_settings() {
-        let temp = tempfile::tempdir().unwrap();
-        let home = temp.path().join("home");
-        let agent_dir = home.join(".pi/agent");
-        let store_path = temp.path().join("data/providers.json");
-        tokio::fs::create_dir_all(&agent_dir).await.unwrap();
-        tokio::fs::write(&agent_dir.join("settings.json"), br#"{"theme":"dark"}"#)
-            .await
-            .unwrap();
-        tokio::fs::write(&agent_dir.join("models.json"), br#"{"keep":true}"#)
-            .await
-            .unwrap();
-        tokio::fs::write(&agent_dir.join("auth.json"), br#"{}"#)
-            .await
-            .unwrap();
-        let agent_id = AgentId::parse("pi").unwrap();
-        let created = save(
-            &store_path,
-            &home,
-            &HashMap::new(),
-            AgentModelProviderSaveRequest {
-                id: None,
-                name: "Private Gateway".to_string(),
-                agent_id: agent_id.clone(),
-                api_url: "https://private.example/v1".to_string(),
-                api_key: Some("sk-pi".to_string()),
-                model: r#"{"id":"private-model","api":"openai-responses"}"#.to_string(),
-            },
-        )
-        .await
-        .unwrap();
-        bind(
-            &store_path,
-            &home,
-            &HashMap::new(),
-            agent_id.clone(),
-            Some(created.providers[0].id.clone()),
-        )
-        .await
-        .unwrap();
-        let settings: Value = serde_json::from_slice(
-            &tokio::fs::read(agent_dir.join("settings.json"))
-                .await
-                .unwrap(),
-        )
-        .unwrap();
-        let models: Value = serde_json::from_slice(
-            &tokio::fs::read(agent_dir.join("models.json"))
-                .await
-                .unwrap(),
-        )
-        .unwrap();
-        let auth: Value =
-            serde_json::from_slice(&tokio::fs::read(agent_dir.join("auth.json")).await.unwrap())
-                .unwrap();
-        assert_eq!(settings["theme"], "dark");
-        assert_eq!(settings["defaultProvider"], "private-gateway");
-        assert_eq!(settings["defaultModel"], "private-model");
-        assert_eq!(
-            models["providers"]["private-gateway"]["baseUrl"],
-            "https://private.example/v1"
-        );
-        assert_eq!(
-            models["providers"]["private-gateway"]["api"],
-            "openai-responses"
-        );
-        assert_eq!(auth["private-gateway"]["key"], "sk-pi");
-        assert_eq!(models["keep"], true);
-
-        bind(&store_path, &home, &HashMap::new(), agent_id, None)
-            .await
-            .unwrap();
-        let restored: Value = serde_json::from_slice(
-            &tokio::fs::read(agent_dir.join("settings.json"))
-                .await
-                .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(restored["theme"], "dark");
-        assert!(restored.get("defaultProvider").is_none());
-    }
-
-    #[tokio::test]
-    async fn pi_list_recognizes_native_providers_and_active_binding() {
-        let temp = tempfile::tempdir().unwrap();
-        let home = temp.path().join("home");
-        let agent_dir = home.join(".pi/agent");
-        let store_path = temp.path().join("data/providers.json");
-        tokio::fs::create_dir_all(&agent_dir).await.unwrap();
-        tokio::fs::write(
-            agent_dir.join("settings.json"),
-            br#"{"defaultProvider":"private","defaultModel":"private-model"}"#,
-        )
-        .await
-        .unwrap();
-        tokio::fs::write(
-            agent_dir.join("models.json"),
-            br#"{"providers":{"private":{"baseUrl":"https://private.example/v1","api":"openai-responses","models":[{"id":"private-model"}]}}}"#,
-        )
-        .await
-        .unwrap();
-        tokio::fs::write(
-            agent_dir.join("auth.json"),
-            br#"{"private":{"type":"api_key","key":"sk-pi"},"anthropic":{"type":"api_key","key":"sk-ant"}}"#,
-        )
-        .await
-        .unwrap();
-        let view = list_with_native(&store_path, AgentId::parse("pi").unwrap(), Some(&agent_dir))
-            .await
-            .unwrap();
-        assert_eq!(view.bound_provider_id.as_deref(), Some("private"));
-        let private = view
-            .providers
-            .iter()
-            .find(|provider| provider.id == "private")
-            .expect("native custom provider");
-        assert!(private.bound);
-        assert!(private.managed);
-        assert!(private.credential_present);
-        assert_eq!(private.api_key, "sk-pi");
-        assert_eq!(private.api_url, "https://private.example/v1");
-        assert!(
-            view.providers
-                .iter()
-                .all(|provider| provider.id != "anthropic")
-        );
-    }
-
-    #[tokio::test]
-    async fn pi_list_reads_api_key_aliases_from_auth_entries() {
-        let temp = tempfile::tempdir().unwrap();
-        let home = temp.path().join("home");
-        let agent_dir = home.join(".pi/agent");
-        let store_path = temp.path().join("data/providers.json");
-        tokio::fs::create_dir_all(&agent_dir).await.unwrap();
-        tokio::fs::write(
-            agent_dir.join("settings.json"),
-            br#"{"defaultProvider":"gateway","defaultModel":"go"}"#,
-        )
-        .await
-        .unwrap();
-        tokio::fs::write(
-            agent_dir.join("models.json"),
-            br#"{"providers":{"gateway":{"baseUrl":"https://opencode.ai/zen/go/v1","api":"openai-completions","models":[{"id":"go"}]}}}"#,
-        )
-        .await
-        .unwrap();
-        tokio::fs::write(
-            agent_dir.join("auth.json"),
-            br#"{"gateway":{"type":"api_key","apiKey":"sk-go"}}"#,
-        )
-        .await
-        .unwrap();
-        let view = list_with_native(&store_path, AgentId::parse("pi").unwrap(), Some(&agent_dir))
-            .await
-            .unwrap();
-        let gateway = view
-            .providers
-            .iter()
-            .find(|provider| provider.id == "gateway")
-            .expect("gateway");
-        assert!(gateway.bound);
-        assert!(gateway.credential_present);
-        assert_eq!(gateway.api_key, "sk-go");
     }
 
     #[tokio::test]

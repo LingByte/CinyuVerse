@@ -30,36 +30,6 @@ const IMPORT_SKIP_KEYS: &[&str] = &[
     "upgrade",
 ];
 
-pub async fn cursor(
-    program: &Path,
-    api_key: Option<&str>,
-) -> Result<AgentModelCatalogView, String> {
-    let mut command = agent_process_command(program);
-    command.arg("models").kill_on_drop(true);
-    command.env_remove("CURSOR_API_BASE_URL");
-    if let Some(api_key) = api_key.map(str::trim).filter(|value| !value.is_empty()) {
-        command.env("CURSOR_API_KEY", api_key);
-    }
-    let output = tokio::time::timeout(CATALOG_TIMEOUT, command.output())
-        .await
-        .map_err(|_| "Cursor 模型目录请求超时".to_string())?
-        .map_err(|error| format!("运行 cursor-agent models 失败：{error}"))?;
-    if !output.status.success() {
-        return Err(command_error("cursor-agent models", &output.stderr));
-    }
-    let (models, default_model) = parse_cursor_models(&String::from_utf8_lossy(&output.stdout));
-    if models.is_empty() {
-        return Err("cursor-agent models 未返回可用模型".to_string());
-    }
-    Ok(AgentModelCatalogView {
-        agent_id: AgentId::parse("cursor").expect("built-in id"),
-        source: AgentModelCatalogSource::Live,
-        models,
-        default_model,
-        error: None,
-    })
-}
-
 pub async fn kimi(base_url: &str, api_key: &str) -> Result<AgentModelCatalogView, String> {
     let catalog = provider(
         AgentId::parse("kimi_code").expect("built-in id"),
@@ -871,44 +841,6 @@ fn codex_view(
     }
 }
 
-fn parse_cursor_models(text: &str) -> (Vec<AgentModelCatalogItemView>, Option<String>) {
-    let mut models = Vec::new();
-    let mut default_model = None;
-    for raw_line in text.lines() {
-        let line = strip_ansi(raw_line).trim().to_string();
-        if line.is_empty()
-            || line.ends_with(':')
-            || line.to_ascii_lowercase().starts_with("available model")
-        {
-            continue;
-        }
-        let is_default = line.to_ascii_lowercase().contains("(default)");
-        let line = line.replace("(default)", "").trim().to_string();
-        let (id, label) = line
-            .split_once(" - ")
-            .map(|(id, label)| (id.trim(), label.trim()))
-            .unwrap_or((line.as_str(), line.as_str()));
-        if id.is_empty() || id.contains(char::is_whitespace) {
-            continue;
-        }
-        if is_default {
-            default_model = Some(id.to_string());
-        }
-        if !models
-            .iter()
-            .any(|model: &AgentModelCatalogItemView| model.id == id)
-        {
-            models.push(AgentModelCatalogItemView {
-                id: id.to_string(),
-                label: label.to_string(),
-                context_window: None,
-                reasoning_levels: Vec::new(),
-            });
-        }
-    }
-    (models, default_model)
-}
-
 fn parse_openai_models(body: &Value) -> Vec<AgentModelCatalogItemView> {
     let entries = body
         .get("data")
@@ -967,13 +899,6 @@ fn validate_model_endpoint(base_url: &str) -> Result<url::Url, String> {
     Ok(url)
 }
 
-fn strip_ansi(value: &str) -> String {
-    static ANSI: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-    ANSI.get_or_init(|| regex::Regex::new(r"\x1B\[[0-?]*[ -/]*[@-~]").expect("ansi regex"))
-        .replace_all(value, "")
-        .into_owned()
-}
-
 fn command_error(command: &str, stderr: &[u8]) -> String {
     let detail = String::from_utf8_lossy(stderr).trim().to_string();
     if detail.is_empty() {
@@ -986,17 +911,6 @@ fn command_error(command: &str, stderr: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn cursor_parser_preserves_labels_and_default() {
-        let (models, default_model) = parse_cursor_models(
-            "Available models:\n\u{1b}[32mauto - Auto (default)\u{1b}[0m\ncomposer-1 - Composer 1\n",
-        );
-        assert_eq!(models.len(), 2);
-        assert_eq!(models[1].id, "composer-1");
-        assert_eq!(models[1].label, "Composer 1");
-        assert_eq!(default_model.as_deref(), Some("auto"));
-    }
 
     #[test]
     fn openai_parser_sorts_deduplicates_and_reads_context() {

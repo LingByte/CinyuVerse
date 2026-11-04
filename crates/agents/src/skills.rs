@@ -77,19 +77,23 @@ pub fn skills_surface(agent_type: AgentKind) -> AgentSkillsSurface {
         | AgentKind::Antigravity
         | AgentKind::Openclaw
         | AgentKind::Opencode
-        | AgentKind::Cline
         | AgentKind::Codebuddy
         | AgentKind::KimiCode
-        | AgentKind::Pi
         | AgentKind::Grok
-        | AgentKind::Cursor
-        | AgentKind::DeepseekHarness
-        | AgentKind::Qoder => AgentSkillsSurface {
+        | AgentKind::DeepseekHarness => AgentSkillsSurface {
             agent_type,
             strategy: AgentSkillsStrategy::Directory,
             global_supported: true,
             project_supported: true,
         },
+        AgentKind::Cursor | AgentKind::Pi | AgentKind::Cline | AgentKind::Qoder => {
+            AgentSkillsSurface {
+                agent_type,
+                strategy: AgentSkillsStrategy::Unsupported,
+                global_supported: false,
+                project_supported: false,
+            }
+        }
         AgentKind::Hermes => AgentSkillsSurface {
             agent_type,
             strategy: AgentSkillsStrategy::Directory,
@@ -105,22 +109,19 @@ pub fn skills_surface(agent_type: AgentKind) -> AgentSkillsSurface {
     }
 }
 
-/// Every agent Cinyuverse manages. Order is used for stable scan/display output.
-const ALL_AGENTS: [AgentKind; 14] = [
+/// Every live product agent Cinyuverse manages. Order is used for stable
+/// scan/display output. Retired identities stay out of this list.
+const ALL_AGENTS: [AgentKind; 10] = [
     AgentKind::ClaudeCode,
     AgentKind::Codex,
     AgentKind::Antigravity,
     AgentKind::Openclaw,
     AgentKind::Opencode,
-    AgentKind::Cline,
     AgentKind::Hermes,
     AgentKind::Codebuddy,
     AgentKind::KimiCode,
-    AgentKind::Pi,
     AgentKind::Grok,
-    AgentKind::Cursor,
     AgentKind::DeepseekHarness,
-    AgentKind::Qoder,
 ];
 
 pub fn skill_capable_agent_ids() -> Vec<String> {
@@ -211,13 +212,6 @@ fn configured_dir(variable: &str, fallback: Option<PathBuf>) -> Option<PathBuf> 
     }
 }
 
-fn cline_skills_root(home: Option<PathBuf>) -> Option<PathBuf> {
-    let configured = configured_dir("CLINE_DIR", None);
-    configured
-        .and_then(|data_root| data_root.parent().map(Path::to_path_buf))
-        .or_else(|| home.map(|home| home.join(".cline")))
-}
-
 fn codex_skills_home() -> Option<PathBuf> {
     configured_dir(
         "CODEX_HOME",
@@ -227,7 +221,7 @@ fn codex_skills_home() -> Option<PathBuf> {
 
 /// Whether the agent also supports a flat `{id}.md` skill layout (Codex only).
 fn allows_markdown_file(agent: AgentKind) -> bool {
-    matches!(agent, AgentKind::Codex | AgentKind::Pi)
+    matches!(agent, AgentKind::Codex)
 }
 
 fn git_project_root(start: &Path) -> PathBuf {
@@ -310,15 +304,6 @@ fn skill_dirs(agent: AgentKind, workspace: Option<&Path>) -> Vec<SkillDir> {
         .into_iter()
         .map(|dir| (dir.join("skills"), false))
         .collect(),
-        AgentKind::Cline => home
-            .iter()
-            .map(|home| (home.join(".agents").join("skills"), false))
-            .chain(
-                cline_skills_root(home.clone())
-                    .into_iter()
-                    .map(|dir| (dir.join("skills"), false)),
-            )
-            .collect(),
         AgentKind::Hermes => hermes_home()
             .into_iter()
             .map(|h| (h.join("skills"), false))
@@ -337,39 +322,13 @@ fn skill_dirs(agent: AgentKind, workspace: Option<&Path>) -> Vec<SkillDir> {
         .into_iter()
         .map(|dir| (dir.join("skills"), false))
         .collect(),
-        AgentKind::Pi => configured_dir(
-            "PI_CODING_AGENT_DIR",
-            home.as_ref().map(|home| home.join(".pi").join("agent")),
-        )
-        .into_iter()
-        .map(|dir| (dir.join("skills"), false))
-        .chain(
-            home.iter()
-                .map(|home| (home.join(".agents").join("skills"), false)),
-        )
-        .collect(),
         AgentKind::Grok => {
             configured_dir("GROK_HOME", home.as_ref().map(|home| home.join(".grok")))
                 .into_iter()
                 .map(|dir| (dir.join("skills"), false))
                 .collect()
         }
-        AgentKind::Cursor => configured_dir(
-            "CURSOR_CONFIG_DIR",
-            home.as_ref().map(|home| home.join(".cursor")),
-        )
-        .iter()
-        .flat_map(|cursor_root| {
-            let mut directories = vec![
-                (cursor_root.join("skills"), false),
-                (cursor_root.join("skills-cursor"), true),
-            ];
-            if let Some(home) = dirs::home_dir() {
-                directories.push((home.join(".agents").join("skills"), false));
-            }
-            directories
-        })
-        .collect(),
+        AgentKind::Cursor | AgentKind::Pi | AgentKind::Cline | AgentKind::Qoder => Vec::new(),
         AgentKind::DeepseekHarness => {
             configured_dir("DSH_HOME", home.as_ref().map(|home| home.join(".dsh")))
                 .into_iter()
@@ -380,13 +339,6 @@ fn skill_dirs(agent: AgentKind, workspace: Option<&Path>) -> Vec<SkillDir> {
                 )
                 .collect()
         }
-        AgentKind::Qoder => configured_dir(
-            "QODER_CONFIG_DIR",
-            home.as_ref().map(|home| home.join(".qoder")),
-        )
-        .into_iter()
-        .map(|dir| (dir.join("skills"), false))
-        .collect(),
         // In-process mock agent: no skill directories.
         AgentKind::QaMock => Vec::new(),
     };
@@ -406,20 +358,12 @@ fn skill_dirs(agent: AgentKind, workspace: Option<&Path>) -> Vec<SkillDir> {
             AgentKind::Opencode => &[".agents/skills", ".opencode/skills"],
             AgentKind::Antigravity => &[".gemini/skills", ".agents/skills"],
             AgentKind::Openclaw => &["skills"],
-            AgentKind::Cline => &[
-                ".agents/skills",
-                ".cline/skills",
-                ".clinerules/skills",
-                ".claude/skills",
-            ],
             AgentKind::Hermes => &[],
             AgentKind::Codebuddy => &[".codebuddy/skills"],
             AgentKind::KimiCode => &[".kimi-code/skills"],
-            AgentKind::Pi => &[".pi/skills", ".agents/skills"],
             AgentKind::Grok => &[".grok/skills"],
-            AgentKind::Cursor => &[".cursor/skills", ".agents/skills"],
+            AgentKind::Cursor | AgentKind::Pi | AgentKind::Cline | AgentKind::Qoder => &[],
             AgentKind::DeepseekHarness => &[".dsh/skills", ".agents/skills"],
-            AgentKind::Qoder => &[".qoder/skills"],
             AgentKind::QaMock => &[],
         };
         for relative in relatives {
@@ -990,7 +934,6 @@ fn agent_primary_skill_dir(agent: AgentKind) -> Option<PathBuf> {
             configured_dir("OPENCLAW_HOME", home.map(|home| home.join(".openclaw")))
                 .map(|dir| dir.join("skills"))
         }
-        AgentKind::Cline => home.map(|home| home.join(".agents").join("skills")),
         AgentKind::Hermes => hermes_home().map(|h| h.join("skills")),
         AgentKind::Codebuddy => configured_dir(
             "CODEBUDDY_CONFIG_DIR",
@@ -1001,23 +944,11 @@ fn agent_primary_skill_dir(agent: AgentKind) -> Option<PathBuf> {
             configured_dir("KIMI_CODE_HOME", home.map(|home| home.join(".kimi-code")))
                 .map(|dir| dir.join("skills"))
         }
-        AgentKind::Pi => configured_dir(
-            "PI_CODING_AGENT_DIR",
-            home.map(|home| home.join(".pi").join("agent")),
-        )
-        .map(|dir| dir.join("skills")),
         AgentKind::Grok => configured_dir("GROK_HOME", home.map(|home| home.join(".grok")))
             .map(|dir| dir.join("skills")),
-        AgentKind::Cursor => {
-            configured_dir("CURSOR_CONFIG_DIR", home.map(|home| home.join(".cursor")))
-                .map(|home| home.join("skills"))
-        }
+        AgentKind::Cursor | AgentKind::Pi | AgentKind::Cline | AgentKind::Qoder => None,
         AgentKind::DeepseekHarness => {
             configured_dir("DSH_HOME", home.map(|home| home.join(".dsh")))
-                .map(|dir| dir.join("skills"))
-        }
-        AgentKind::Qoder => {
-            configured_dir("QODER_CONFIG_DIR", home.map(|home| home.join(".qoder")))
                 .map(|dir| dir.join("skills"))
         }
         AgentKind::QaMock => None,
@@ -1998,9 +1929,8 @@ mod tests {
     }
 
     #[test]
-    fn codex_and_pi_support_markdown_file_skills() {
+    fn codex_supports_markdown_file_skills() {
         assert!(allows_markdown_file(AgentKind::Codex));
-        assert!(allows_markdown_file(AgentKind::Pi));
         assert!(!allows_markdown_file(AgentKind::ClaudeCode));
     }
 
@@ -2230,26 +2160,6 @@ mod tests {
             dir.scope == AgentSkillScope::Project
                 && dir.path == workspace.join(".agents").join("skills")
         }));
-    }
-
-    #[tokio::test]
-    async fn saved_cline_data_root_resolves_the_sibling_skills_directory() {
-        let root = tempfile::tempdir().unwrap();
-        let cline_root = root.path().join(".cline");
-        let data_root = cline_root.join("data");
-        let environment =
-            HashMap::from([("CLINE_DIR".to_string(), data_root.display().to_string())]);
-
-        let paths = with_saved_agent_environment(environment, async {
-            skill_dirs(AgentKind::Cline, None)
-                .into_iter()
-                .map(|dir| dir.path)
-                .collect::<Vec<_>>()
-        })
-        .await;
-
-        assert!(paths.contains(&cline_root.join("skills")));
-        assert!(!paths.contains(&data_root.join("skills")));
     }
 
     #[test]

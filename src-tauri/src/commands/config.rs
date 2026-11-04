@@ -719,10 +719,13 @@ mod tests {
         .fetch_all(&pool)
         .await
         .unwrap();
-        assert_eq!(agent_ids.len(), 13);
+        assert_eq!(agent_ids.len(), 10);
         assert!(agent_ids.iter().any(|agent_id| agent_id == "claude_code"));
         assert!(agent_ids.iter().any(|agent_id| agent_id == "codex"));
-        assert!(agent_ids.iter().any(|agent_id| agent_id == "cursor"));
+        assert!(agent_ids.iter().all(|agent_id| agent_id != "cursor"));
+        assert!(agent_ids.iter().all(|agent_id| agent_id != "pi"));
+        assert!(agent_ids.iter().all(|agent_id| agent_id != "cline"));
+        assert!(agent_ids.iter().all(|agent_id| agent_id != "qoder"));
         assert!(
             agent_ids
                 .iter()

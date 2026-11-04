@@ -1899,21 +1899,9 @@ export type AgentModelProviderImportRequest = { agent_id: AgentId, source: Agent
 
 export type ImportedAgentMessageMetadata = { kind?: string | null, tool_call_id?: string | null, tool_name?: string | null, tool_status?: string | null, raw_input?: JsonValue | null, raw_output?: JsonValue | null, model?: string | null, input_tokens?: number | null, output_tokens?: number | null, cost?: number | null, parent_session_id?: string | null, };
 
-export type PiCommandValidationView = { found: boolean, resolved_path: string | null, version: string | null, };
-
-export type PiConfigurationView = { default_provider: string, default_model: string, thinking_level: string, credential_present: boolean, auth_providers: Array<string>, custom_providers: Array<PiCustomProviderView>, runtime: PiRuntimeConfigurationView, };
-
-export type PiCredentialsSaveRequest = { provider: string, model: string, thinking_level: string | null, api_key: string | null, custom_base_url: string | null, custom_api: string | null, };
-
-export type PiCustomProviderView = { id: string, base_url: string, api: string, };
-
-export type PiRuntimeConfigurationView = { mode: string, command: string, config_dir: string, session_dir: string, trust_workspace: boolean, };
-
-export type PiRuntimeSaveRequest = { mode: string, command: string, config_dir: string, session_dir: string, trust_workspace: boolean, };
-
 export type AgentNativeConfigFileWriteRequest = { agent_id: AgentId, path: string, base_revision: string, content: string, };
 
-export type AgentSettingsFeature = "authentication_mode" | "model_catalog" | "reusable_model_providers" | "codex_model_catalog" | "pi_configuration" | "open_code_providers" | "open_code_plugins" | "dsh_providers" | "dsh_plugins" | "grok_plugins" | "pi_plugins" | "native_mcp" | "native_skills";
+export type AgentSettingsFeature = "authentication_mode" | "model_catalog" | "reusable_model_providers" | "codex_model_catalog" | "open_code_providers" | "open_code_plugins" | "dsh_providers" | "dsh_plugins" | "grok_plugins" | "native_mcp" | "native_skills";
 
 export type DshProviderKind = "official" | "catalog" | "custom";
 
@@ -2099,10 +2087,6 @@ export type ConversationLiveFeedbackNote = { id: string, text: string, createdAt
 export type LocalHistoryImportPhase = "loading" | "importing" | "imported" | "skipped" | "failed";
 
 export type LocalHistoryImportProgress = { current: number, total: number, agent_id: AgentId, external_session_id: string, title: string | null, phase: LocalHistoryImportPhase, imported: number, skipped: number, failed: number, conversation_id?: string | null, workspace_id?: string | null, };
-
-export type PiPluginSummaryView = { home: string, plugins: Array<PiPluginView>, };
-
-export type PiPluginView = { source: string, name: string, version: string | null, kind: string, path: string | null, };
 
 export type LocalHistoryImportJobSnapshot = { status: LocalHistoryImportJobStatus, progress: LocalHistoryImportProgress | null, result: LocalHistoryImportResult | null, log: Array<LocalHistoryImportLogEntry>, };
 

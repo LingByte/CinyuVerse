@@ -49,8 +49,6 @@ export function describeWindowLabel(
       return { key: 'windowSevenDaySonnet' };
     case 'extra_usage':
       return { key: 'windowExtraUsage' };
-    case 'cursor_models':
-      return { key: 'windowCursorModels' };
     case 'other_models':
       return { key: 'windowOtherModels' };
     case 'weekly':

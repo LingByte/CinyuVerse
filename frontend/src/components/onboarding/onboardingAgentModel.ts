@@ -27,7 +27,6 @@ const RECOMMENDED_AGENT_IDS: readonly AgentId[] = [
   'claude_code',
   'codex',
   'opencode',
-  'pi',
 ];
 
 const RECOMMENDED_AGENT_RANK = new Map(

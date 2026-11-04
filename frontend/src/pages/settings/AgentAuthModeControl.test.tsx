@@ -767,11 +767,11 @@ describe('AgentAuthModeControl', () => {
     );
   });
 
-  it('does not render auth-kind tabs for Qoder subscription-only auth', async () => {
+  it('does not render auth-kind tabs for CodeBuddy subscription-only auth', async () => {
     vi.spyOn(agentManagementApi, 'authMode').mockResolvedValue({
-      agent_id: 'qoder',
+      agent_id: 'codebuddy',
       mode: 'official_subscription',
-      credential_env: 'QODER_PERSONAL_ACCESS_TOKEN',
+      credential_env: 'CODEBUDDY_API_KEY',
       credential_present: false,
       modes: ['official_subscription'],
       options: [
@@ -779,25 +779,25 @@ describe('AgentAuthModeControl', () => {
           'official_subscription',
           'subscription',
           'authModeOfficialSubscription',
-          'authDescQoderSubscription'
+          'authDescCodebuddySubscription'
         ),
       ],
     });
 
     render(
       <AgentAuthModeControl
-        agentId="qoder"
+        agentId="codebuddy"
         authentication="not_logged_in"
         actions={{
-          agent_id: 'qoder',
+          agent_id: 'codebuddy',
           actions: [
             {
               id: 'login',
-              label: '登录 Qoder',
-              description: '打开浏览器完成 Qoder 官方账号登录',
-              label_key: 'agents.managementAction.qoder.login.label',
+              label: '登录 CodeBuddy',
+              description: '启动 CodeBuddy 官方登录',
+              label_key: 'agents.managementAction.codebuddy.login.label',
               description_key:
-                'agents.managementAction.qoder.login.description',
+                'agents.managementAction.codebuddy.login.description',
               kind: 'login' as const,
               available: true,
               unavailable_reason: null,
@@ -809,7 +809,9 @@ describe('AgentAuthModeControl', () => {
     );
 
     expect(await screen.findByTestId('agent-account-identity')).toBeVisible();
-    expect(screen.getByRole('button', { name: '登录 Qoder' })).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: '登录 CodeBuddy' })
+    ).toBeVisible();
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
     expect(screen.queryByRole('tabpanel')).not.toBeInTheDocument();
@@ -817,9 +819,9 @@ describe('AgentAuthModeControl', () => {
 
   it('does not render auth-kind tabs when the Agent only has Provider mode', async () => {
     vi.spyOn(agentManagementApi, 'authMode').mockResolvedValue({
-      agent_id: 'pi',
+      agent_id: 'openclaw',
       mode: 'model_provider',
-      credential_env: 'PI_API_KEY',
+      credential_env: 'OPENCLAW_API_KEY',
       credential_present: true,
       modes: ['model_provider'],
       options: [
@@ -827,19 +829,19 @@ describe('AgentAuthModeControl', () => {
           'model_provider',
           'provider',
           'authModeProvider',
-          'authDescPiProvider'
+          'authDescGenericProvider'
         ),
       ],
     });
 
     render(
       <AgentAuthModeControl
-        agentId="pi"
-        modelProvider={<input aria-label="Pi Provider" />}
+        agentId="openclaw"
+        modelProvider={<input aria-label="OpenClaw Provider" />}
       />
     );
 
-    expect(await screen.findByLabelText('Pi Provider')).toBeVisible();
+    expect(await screen.findByLabelText('OpenClaw Provider')).toBeVisible();
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
     expect(screen.queryByRole('tab')).not.toBeInTheDocument();
     expect(screen.queryByRole('tabpanel')).not.toBeInTheDocument();

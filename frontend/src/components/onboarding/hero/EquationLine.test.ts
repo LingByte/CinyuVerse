@@ -19,15 +19,11 @@ const RUNNABLE_AGENTS: AgentKind[] = [
   'antigravity',
   'openclaw',
   'opencode',
-  'cline',
   'hermes',
   'codebuddy',
   'kimi_code',
-  'pi',
   'grok',
-  'cursor',
   'deepseek_harness',
-  'qoder',
 ];
 
 describe('onboarding equation slots', () => {
@@ -43,9 +39,9 @@ describe('onboarding equation slots', () => {
     }
   });
 
-  it('treats Qoder as both an origin IDE and a runnable agent', () => {
+  it('keeps Qoder as an origin IDE without advertising it as runnable', () => {
     const originEntry = SLOT_A.find((item) => item.id === 'qoder');
     expect(originEntry?.kind).toBe('agent');
-    expect(SLOT_B.some((item) => item.id === 'qoder')).toBe(true);
+    expect(SLOT_B.some((item) => item.id === 'qoder')).toBe(false);
   });
 });

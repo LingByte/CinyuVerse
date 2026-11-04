@@ -35,16 +35,11 @@ import type {
   OpenCodeProviderConnectionsView,
   DshPluginSummaryView,
   GrokPluginSummaryView,
-  PiPluginSummaryView,
   DshProviderDiscoverRequest,
   DshProviderModelView,
   DshProviderSaveRequest,
   DshProvidersView,
   OpenCodePluginSummaryView,
-  PiCommandValidationView,
-  PiConfigurationView,
-  PiCredentialsSaveRequest,
-  PiRuntimeSaveRequest,
   PlanUsageResult,
 } from 'shared/types';
 
@@ -148,9 +143,6 @@ export const agentManagementApi = {
   ): Promise<CodexModelCatalogConfigView> =>
     backendCall('codex_model_catalog_apply', { request }),
 
-  cursorModelCatalog: (): Promise<AgentModelCatalogView> =>
-    backendCall('cursor_model_catalog'),
-
   kimiModelCatalog: (
     baseUrl: string,
     apiKey: string
@@ -214,19 +206,6 @@ export const agentManagementApi = {
   ): Promise<AgentModelProvidersView> =>
     backendCall('agent_model_provider_import', { request }),
 
-  piConfiguration: (): Promise<PiConfigurationView> =>
-    backendCall('pi_configuration'),
-
-  savePiCredentials: (
-    request: PiCredentialsSaveRequest
-  ): Promise<PiConfigurationView> =>
-    backendCall('pi_credentials_save', { request }),
-
-  savePiRuntime: (request: PiRuntimeSaveRequest): Promise<void> =>
-    backendCall('pi_runtime_save', { request }),
-
-  validatePiCommand: (command: string): Promise<PiCommandValidationView> =>
-    backendCall('pi_command_validate', { command }),
 
   authMode: (agentId: AgentId): Promise<AgentAuthModeView> =>
     backendCall('agent_auth_mode', { agentId }),
@@ -312,13 +291,6 @@ export const agentManagementApi = {
   removeGrokPlugin: (name: string): Promise<GrokPluginSummaryView> =>
     backendCall('grok_plugin_remove', { name }),
 
-  piPlugins: (): Promise<PiPluginSummaryView> => backendCall('pi_plugins'),
-
-  addPiPlugin: (spec: string): Promise<PiPluginSummaryView> =>
-    backendCall('pi_plugin_add', { spec }),
-
-  removePiPlugin: (spec: string): Promise<PiPluginSummaryView> =>
-    backendCall('pi_plugin_remove', { spec }),
 
   repair: (agentId: AgentId): Promise<AgentOperationReceipt> =>
     backendCall('agent_management_repair', { agentId }),

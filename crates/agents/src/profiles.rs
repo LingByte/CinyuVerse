@@ -362,18 +362,14 @@ impl BuiltInProfileCatalog {
             profiles: vec![
                 claude_code_profile(),
                 codex_profile(),
-                pi_profile(),
                 opencode_profile(),
                 grok_profile(),
-                cursor_profile(),
                 deepseek_harness_profile(),
                 antigravity_profile(),
-                cline_profile(),
                 openclaw_profile(),
                 hermes_profile(),
                 codebuddy_profile(),
                 kimi_code_profile(),
-                qoder_profile(),
             ],
         }
     }
@@ -444,20 +440,6 @@ const OPENCODE_CANDIDATES: &[ProfileExternalCandidate] = &[ProfileExternalCandid
     version_args: &["--version"],
     acp_args: &[],
 }];
-const PI_CANDIDATES: &[ProfileExternalCandidate] = &[
-    ProfileExternalCandidate {
-        component: ProfileComponent::AgentRuntime,
-        executable: "pi",
-        version_args: &["--version"],
-        acp_args: &[],
-    },
-    ProfileExternalCandidate {
-        component: ProfileComponent::AcpAdapter,
-        executable: "pi-acp",
-        version_args: &["--version"],
-        acp_args: &[],
-    },
-];
 const ANTIGRAVITY_CANDIDATES: &[ProfileExternalCandidate] = &[
     ProfileExternalCandidate {
         component: ProfileComponent::CombinedRuntime,
@@ -480,22 +462,11 @@ const ANTIGRAVITY_LAUNCH_ARGS: &[&str] = if cfg!(target_os = "linux") {
     &[]
 };
 const OPENCLAW_CANDIDATES: &[ProfileExternalCandidate] = &[external("openclaw")];
-const CLINE_CANDIDATES: &[ProfileExternalCandidate] = &[external("cline")];
 const HERMES_CANDIDATES: &[ProfileExternalCandidate] = &[external("hermes-acp")];
 const CODEBUDDY_CANDIDATES: &[ProfileExternalCandidate] = &[external("codebuddy")];
 const KIMI_CANDIDATES: &[ProfileExternalCandidate] = &[external("kimi")];
 const GROK_CANDIDATES: &[ProfileExternalCandidate] = &[external("grok")];
-const CURSOR_CANDIDATES: &[ProfileExternalCandidate] = &[external("cursor-agent")];
 const DEEPSEEK_HARNESS_CANDIDATES: &[ProfileExternalCandidate] = &[external("deepseek-acp")];
-/// Qoder CLI turns into an ACP stdio server with `--acp`; without it the same
-/// executable starts the interactive TUI. Both published executable names are
-/// probed because the official ACP guide uses `qoder` while the Model Studio
-/// install guide verifies `qodercli`.
-const QODER_ACP_ARGS: &[&str] = &["--acp"];
-const QODER_CANDIDATES: &[ProfileExternalCandidate] = &[
-    external_acp("qoder", QODER_ACP_ARGS),
-    external_acp("qodercli", QODER_ACP_ARGS),
-];
 
 const fn external(executable: &'static str) -> ProfileExternalCandidate {
     ProfileExternalCandidate {
@@ -503,18 +474,6 @@ const fn external(executable: &'static str) -> ProfileExternalCandidate {
         executable,
         version_args: &["--version"],
         acp_args: &[],
-    }
-}
-
-const fn external_acp(
-    executable: &'static str,
-    acp_args: &'static [&'static str],
-) -> ProfileExternalCandidate {
-    ProfileExternalCandidate {
-        component: ProfileComponent::CombinedRuntime,
-        executable,
-        version_args: &["--version"],
-        acp_args,
     }
 }
 
@@ -648,14 +607,6 @@ const OPENCODE_ACTIONS: &[ProfileManagementAction] = &[
         &["auth", "logout"],
     ),
 ];
-const CLINE_ACTIONS: &[ProfileManagementAction] = &[terminal_action(
-    "login",
-    "登录 Cline",
-    "启动 Cline 官方认证流程",
-    ProfileManagementActionKind::Login,
-    "cline",
-    &["auth"],
-)];
 const HERMES_ACTIONS: &[ProfileManagementAction] = &[
     terminal_action(
         "setup",
@@ -682,14 +633,6 @@ const CODEBUDDY_ACTIONS: &[ProfileManagementAction] = &[terminal_action(
     "codebuddy",
     &["login"],
 )];
-const QODER_ACTIONS: &[ProfileManagementAction] = &[terminal_action(
-    "login",
-    "登录 Qoder",
-    "打开浏览器完成 Qoder 官方账号登录",
-    ProfileManagementActionKind::Login,
-    "qodercli",
-    &["login"],
-)];
 const KIMI_ACTIONS: &[ProfileManagementAction] = &[
     terminal_action(
         "login",
@@ -708,14 +651,6 @@ const KIMI_ACTIONS: &[ProfileManagementAction] = &[
         &["logout"],
     ),
 ];
-const PI_ACTIONS: &[ProfileManagementAction] = &[terminal_action(
-    "login",
-    "配置 Pi Provider",
-    "启动 Pi，在终端中使用 /login",
-    ProfileManagementActionKind::Login,
-    "pi",
-    &[],
-)];
 const GROK_ACTIONS: &[ProfileManagementAction] = &[
     terminal_action(
         "login",
@@ -738,30 +673,6 @@ const GROK_ACTIONS: &[ProfileManagementAction] = &[
         "管理订阅",
         "打开 Grok 套餐与账单页面",
         "https://grok.com?_s=usage",
-    ),
-];
-const CURSOR_ACTIONS: &[ProfileManagementAction] = &[
-    terminal_action(
-        "login",
-        "登录 Cursor",
-        "使用 Cursor 订阅账号登录",
-        ProfileManagementActionKind::Login,
-        "cursor-agent",
-        &["login"],
-    ),
-    terminal_action(
-        "logout",
-        "退出登录",
-        "注销 Cursor Agent 本地账号",
-        ProfileManagementActionKind::Logout,
-        "cursor-agent",
-        &["logout"],
-    ),
-    url_action(
-        "subscription",
-        "管理订阅",
-        "打开 Cursor 套餐管理页面",
-        "https://www.cursor.com/settings",
     ),
 ];
 const DEEPSEEK_HARNESS_ACTIONS: &[ProfileManagementAction] = &[terminal_action(
@@ -1157,129 +1068,6 @@ const OPENCODE_CONFIG: &[NativeConfigBinding] = &[
     },
 ];
 
-const PI_AUTH_FIELDS: &[NativeConfigField] = &[
-    tagged_secret_field(
-        "pi_anthropic_api_key",
-        "Anthropic API Key",
-        "Pi 的 Anthropic provider 凭据",
-        &["anthropic", "key"],
-        ("type", "api_key"),
-    ),
-    tagged_secret_field(
-        "pi_openai_api_key",
-        "OpenAI API Key",
-        "Pi 的 OpenAI provider 凭据",
-        &["openai", "key"],
-        ("type", "api_key"),
-    ),
-    tagged_secret_field(
-        "pi_google_api_key",
-        "Google API Key",
-        "Pi 的 Google provider 凭据",
-        &["google", "key"],
-        ("type", "api_key"),
-    ),
-    tagged_secret_field(
-        "pi_opencode_api_key",
-        "OpenCode API Key",
-        "Pi 的 OpenCode provider 凭据",
-        &["opencode", "key"],
-        ("type", "api_key"),
-    ),
-];
-const PI_THINKING_OPTIONS: &[(&str, &str)] = &[
-    ("off", "关闭"),
-    ("minimal", "最少"),
-    ("low", "低"),
-    ("medium", "中"),
-    ("high", "高"),
-    ("xhigh", "极高"),
-];
-const PI_THEME_OPTIONS: &[(&str, &str)] = &[("dark", "深色"), ("light", "浅色")];
-const PI_SETTINGS_FIELDS: &[NativeConfigField] = &[
-    text_field(
-        "pi_default_provider",
-        "默认提供商",
-        "Pi 启动时使用的 provider",
-        &["defaultProvider"],
-    ),
-    text_field(
-        "pi_default_model",
-        "默认模型",
-        "Pi 启动时使用的模型 ID",
-        &["defaultModel"],
-    ),
-    select_field(
-        "pi_thinking_level",
-        "默认推理强度",
-        "Pi 的 defaultThinkingLevel",
-        &["defaultThinkingLevel"],
-        PI_THINKING_OPTIONS,
-    ),
-    select_field(
-        "pi_theme",
-        "终端主题",
-        "Pi 内置终端主题",
-        &["theme"],
-        PI_THEME_OPTIONS,
-    ),
-    boolean_field(
-        "pi_hide_thinking",
-        "隐藏推理内容",
-        "在输出中隐藏 thinking block",
-        &["hideThinkingBlock"],
-    ),
-    boolean_field(
-        "pi_quiet_startup",
-        "精简启动界面",
-        "隐藏 Pi 的启动信息",
-        &["quietStartup"],
-    ),
-    boolean_field(
-        "pi_compaction_enabled",
-        "自动压缩上下文",
-        "启用自动 compaction",
-        &["compaction", "enabled"],
-    ),
-    number_field(
-        "pi_compaction_reserve_tokens",
-        "压缩预留 Token",
-        "为模型回复预留的 Token 数",
-        &["compaction", "reserveTokens"],
-    ),
-];
-const PI_CONFIG: &[NativeConfigBinding] = &[
-    NativeConfigBinding {
-        binding_id: "auth",
-        home_relative_path: ".pi/agent/auth.json",
-        directory_override_env: Some("PI_CODING_AGENT_DIR"),
-        override_relative_path: "auth.json",
-        format: NativeConfigFormat::Json,
-        fields: PI_AUTH_FIELDS,
-    },
-    NativeConfigBinding {
-        binding_id: "settings",
-        home_relative_path: ".pi/agent/settings.json",
-        directory_override_env: Some("PI_CODING_AGENT_DIR"),
-        override_relative_path: "settings.json",
-        format: NativeConfigFormat::Json,
-        fields: PI_SETTINGS_FIELDS,
-    },
-    NativeConfigBinding {
-        binding_id: "models",
-        home_relative_path: ".pi/agent/models.json",
-        directory_override_env: Some("PI_CODING_AGENT_DIR"),
-        override_relative_path: "models.json",
-        format: NativeConfigFormat::Json,
-        fields: &[json_field(
-            "pi_custom_providers",
-            "自定义 Provider",
-            "Pi models.json 的 providers 对象",
-            &["providers"],
-        )],
-    },
-];
-
 const ANTIGRAVITY_AUTH_OPTIONS: &[(&str, &str)] = &[
     ("oauth-personal", "Google 账号"),
     ("oauth-business", "Gemini Enterprise"),
@@ -1412,84 +1200,6 @@ const OPENCLAW_CONFIG: &[NativeConfigBinding] = &[NativeConfigBinding {
     format: NativeConfigFormat::Json,
     fields: OPENCLAW_FIELDS,
 }];
-
-const CLINE_PROVIDER_OPTIONS: &[(&str, &str)] = &[
-    ("anthropic", "Anthropic"),
-    ("openai", "OpenAI"),
-    ("openai-native", "OpenAI Native"),
-    ("openrouter", "OpenRouter"),
-    ("gemini", "Gemini"),
-    ("deepseek", "DeepSeek"),
-    ("bedrock", "AWS Bedrock"),
-    ("vertex", "GCP Vertex"),
-    ("ollama", "Ollama"),
-    ("lmstudio", "LM Studio"),
-];
-const CLINE_STATE_FIELDS: &[NativeConfigField] = &[
-    authentication(select_field(
-        "cline_provider",
-        "Provider",
-        "Cline API Provider",
-        &["apiProvider"],
-        CLINE_PROVIDER_OPTIONS,
-    )),
-    authentication(text_field(
-        "cline_model",
-        "模型",
-        "Cline 模型 ID",
-        &["apiModelId"],
-    )),
-    authentication(text_field(
-        "cline_base_url",
-        "API URL",
-        "OpenAI 兼容端点",
-        &["openAiBaseUrl"],
-    )),
-];
-const CLINE_SECRET_FIELDS: &[NativeConfigField] = &[
-    authentication(secret_field(
-        "cline_anthropic_key",
-        "Anthropic API Key",
-        "Cline Anthropic 凭据",
-        &["apiKey"],
-    )),
-    authentication(secret_field(
-        "cline_openai_key",
-        "OpenAI API Key",
-        "Cline OpenAI 凭据",
-        &["openAiApiKey"],
-    )),
-    authentication(secret_field(
-        "cline_openrouter_key",
-        "OpenRouter API Key",
-        "Cline OpenRouter 凭据",
-        &["openRouterApiKey"],
-    )),
-    authentication(secret_field(
-        "cline_gemini_key",
-        "Gemini API Key",
-        "Cline Gemini 凭据",
-        &["geminiApiKey"],
-    )),
-];
-const CLINE_CONFIG: &[NativeConfigBinding] = &[
-    NativeConfigBinding {
-        binding_id: "state",
-        home_relative_path: ".cline/data/globalState.json",
-        directory_override_env: Some("CLINE_DIR"),
-        override_relative_path: "globalState.json",
-        format: NativeConfigFormat::Json,
-        fields: CLINE_STATE_FIELDS,
-    },
-    NativeConfigBinding {
-        binding_id: "secrets",
-        home_relative_path: ".cline/data/secrets.json",
-        directory_override_env: Some("CLINE_DIR"),
-        override_relative_path: "secrets.json",
-        format: NativeConfigFormat::Json,
-        fields: CLINE_SECRET_FIELDS,
-    },
-];
 
 const HERMES_PROVIDER_OPTIONS: &[(&str, &str)] = &[
     ("openrouter", "OpenRouter"),
@@ -1951,48 +1661,6 @@ const GROK_CONFIG: &[NativeConfigBinding] = &[NativeConfigBinding {
     fields: GROK_FIELDS,
 }];
 
-const CURSOR_SANDBOX_OPTIONS: &[(&str, &str)] = &[("enabled", "启用"), ("disabled", "关闭")];
-const CURSOR_FIELDS: &[NativeConfigField] = &[
-    text_field(
-        "cursor_model",
-        "默认模型",
-        "作为 Cursor 根级 --model 启动参数传入",
-        &["cinyuverse", "model"],
-    ),
-    boolean_field(
-        "cursor_force",
-        "Run Everything",
-        "作为 Cursor 根级 --force 启动参数传入",
-        &["cinyuverse", "force"],
-    ),
-    select_field(
-        "cursor_sandbox_mode",
-        "沙箱",
-        "Cursor CLI sandbox.mode",
-        &["sandbox", "mode"],
-        CURSOR_SANDBOX_OPTIONS,
-    ),
-    json_field(
-        "cursor_allow_rules",
-        "允许规则",
-        "命令与工具 allow 规则（JSON）",
-        &["permissions", "allow"],
-    ),
-    json_field(
-        "cursor_deny_rules",
-        "拒绝规则",
-        "命令与工具 deny 规则（JSON）",
-        &["permissions", "deny"],
-    ),
-];
-const CURSOR_CONFIG: &[NativeConfigBinding] = &[NativeConfigBinding {
-    binding_id: "config",
-    home_relative_path: ".cursor/cli-config.json",
-    directory_override_env: Some("CURSOR_CONFIG_DIR"),
-    override_relative_path: "cli-config.json",
-    format: NativeConfigFormat::Json,
-    fields: CURSOR_FIELDS,
-}];
 const DEEPSEEK_HARNESS_FIELDS: &[NativeConfigField] = &[authentication(secret_field(
     "deepseek_harness_api_key",
     "API Key",
@@ -2017,15 +1685,6 @@ const DEEPSEEK_HARNESS_CONFIG: &[NativeConfigBinding] = &[
         fields: &[],
     },
 ];
-
-const QODER_CONFIG: &[NativeConfigBinding] = &[NativeConfigBinding {
-    binding_id: "settings",
-    home_relative_path: ".qoder/settings.json",
-    directory_override_env: Some("QODER_CONFIG_DIR"),
-    override_relative_path: "settings.json",
-    format: NativeConfigFormat::Json,
-    fields: &[],
-}];
 
 const fn text_field(
     field_id: &'static str,
@@ -2277,31 +1936,9 @@ const OPENCODE_SETTINGS: &[AgentSettingsFeature] = &[
     AgentSettingsFeature::NativeMcp,
     AgentSettingsFeature::NativeSkills,
 ];
-/// Qoder authenticates through `qoder login` (or `QODER_PERSONAL_ACCESS_TOKEN`
-/// as the same account's headless credential). There is no official API Key
-/// env and no custom endpoint. Skills live in `~/.qoder/skills`; MCP servers
-/// live in `~/.qoder/settings.json` `mcpServers`.
-const QODER_SETTINGS: &[AgentSettingsFeature] = &[
-    AgentSettingsFeature::AuthenticationMode,
-    AgentSettingsFeature::NativeMcp,
-    AgentSettingsFeature::NativeSkills,
-];
 const KIMI_SETTINGS: &[AgentSettingsFeature] = &[
     AgentSettingsFeature::AuthenticationMode,
     AgentSettingsFeature::ReusableModelProviders,
-    AgentSettingsFeature::ModelCatalog,
-    AgentSettingsFeature::NativeMcp,
-    AgentSettingsFeature::NativeSkills,
-];
-const PI_SETTINGS: &[AgentSettingsFeature] = &[
-    AgentSettingsFeature::AuthenticationMode,
-    AgentSettingsFeature::ReusableModelProviders,
-    AgentSettingsFeature::PiConfiguration,
-    AgentSettingsFeature::PiPlugins,
-    AgentSettingsFeature::NativeSkills,
-];
-const CURSOR_SETTINGS: &[AgentSettingsFeature] = &[
-    AgentSettingsFeature::AuthenticationMode,
     AgentSettingsFeature::ModelCatalog,
     AgentSettingsFeature::NativeMcp,
     AgentSettingsFeature::NativeSkills,
@@ -2586,51 +2223,6 @@ fn opencode_profile() -> BuiltInProfile {
     }
 }
 
-fn cline_profile() -> BuiltInProfile {
-    BuiltInProfile {
-        agent_id: AgentId::parse("cline").expect("bundled AgentId"),
-        display_name: "Cline",
-        description: "Cline's official CLI agent with native ACP support",
-        icon: ProfileIcon {
-            light: "/agents/cline.svg",
-            dark: "/agents/cline.svg",
-        },
-        registry_binding: Some(ProfileRegistryBinding {
-            registry_id: "cline",
-        }),
-        topology: ProfileTopology::NativeAcp,
-        supported_platforms: DESKTOP_PLATFORMS,
-        install_sources: vec![native_npx(
-            "cline",
-            "3.0.49",
-            "cline",
-            &["--acp"],
-            ">=22",
-            "sha512-yZj+L/gGORrb/5YBCUwOEmwgwExdlTU0hEcBA9a+es7Usd0iuAWAHwrWCPwMfHdBwvvuw9qxpwqdMa2v7KbisQ==",
-        )],
-        external_candidates: CLINE_CANDIDATES,
-        dependencies: NODE_22_DEPENDENCIES,
-        management_actions: CLINE_ACTIONS,
-        runtime_executable_env: None,
-        native_config: CLINE_CONFIG,
-        settings_features: &[
-            AgentSettingsFeature::AuthenticationMode,
-            AgentSettingsFeature::ReusableModelProviders,
-            AgentSettingsFeature::NativeMcp,
-            AgentSettingsFeature::NativeSkills,
-        ],
-        authentication_precedence: AuthenticationPrecedence::SingleSource,
-        authentication_required_by_default: true,
-        account_evidence: Some(AccountEvidence {
-            home_relative_directory: ".cline/data",
-            directory_override_env: Some("CLINE_DIR"),
-            override_relative_directory: "",
-            relative_file: "secrets.json",
-            kind: AccountEvidenceKind::NonEmptyObject,
-        }),
-    }
-}
-
 fn hermes_profile() -> BuiltInProfile {
     BuiltInProfile {
         agent_id: AgentId::parse("hermes").expect("bundled AgentId"),
@@ -2781,56 +2373,6 @@ fn artifact(
     }
 }
 
-fn pi_profile() -> BuiltInProfile {
-    BuiltInProfile {
-        agent_id: AgentId::parse("pi").expect("bundled AgentId"),
-        display_name: "Pi",
-        description: "Pi coding agent through the pi ACP adapter",
-        icon: ProfileIcon {
-            light: "/agents/pi.svg",
-            dark: "/agents/pi.svg",
-        },
-        registry_binding: Some(ProfileRegistryBinding {
-            registry_id: "pi-acp",
-        }),
-        topology: ProfileTopology::AdapterBacked,
-        supported_platforms: DESKTOP_PLATFORMS,
-        install_sources: vec![
-            npx(
-                ProfileComponent::AgentRuntime,
-                "@earendil-works/pi-coding-agent",
-                "0.83.0",
-                "pi",
-                ">=22",
-                "sha512-uYhF+FsZxogoSX/AxBcUdiY+ZklubwaXyAoEGA2eQwsHcyEAhUYIKh/WLXe/a8+k8eTCmxb+ZN2Zo9mzQtzbWw==",
-            ),
-            npx(
-                ProfileComponent::AcpAdapter,
-                "pi-acp",
-                "0.0.33",
-                "pi-acp",
-                ">=22",
-                "sha512-vX9kY1tK14E72G4dBAx+RGCk/k7XPjTHls6dLUxA8WSkBav6B6JHuSBv3eusp50LCR/GTRsR2kIKsG0Z5jANzw==",
-            ),
-        ],
-        external_candidates: PI_CANDIDATES,
-        dependencies: NODE_22_DEPENDENCIES,
-        management_actions: PI_ACTIONS,
-        runtime_executable_env: None,
-        native_config: PI_CONFIG,
-        settings_features: PI_SETTINGS,
-        authentication_precedence: AuthenticationPrecedence::SingleSource,
-        authentication_required_by_default: true,
-        account_evidence: Some(AccountEvidence {
-            home_relative_directory: ".pi/agent",
-            directory_override_env: Some("PI_CODING_AGENT_DIR"),
-            override_relative_directory: "",
-            relative_file: "auth.json",
-            kind: AccountEvidenceKind::ProviderEntryNotApiKey,
-        }),
-    }
-}
-
 fn grok_profile() -> BuiltInProfile {
     BuiltInProfile {
         agent_id: AgentId::parse("grok").expect("bundled AgentId"),
@@ -2871,77 +2413,6 @@ fn grok_profile() -> BuiltInProfile {
     }
 }
 
-fn cursor_profile() -> BuiltInProfile {
-    const VERSION: &str = "2026.07.23-e383d2b";
-    BuiltInProfile {
-        agent_id: AgentId::parse("cursor").expect("bundled AgentId"),
-        display_name: "Cursor",
-        description: "Cursor's coding agent via cursor-agent acp",
-        icon: ProfileIcon {
-            light: "/agents/cursor-light.svg",
-            dark: "/agents/cursor-dark.svg",
-        },
-        registry_binding: Some(ProfileRegistryBinding {
-            registry_id: "cursor",
-        }),
-        topology: ProfileTopology::NativeAcp,
-        supported_platforms: DESKTOP_PLATFORMS,
-        install_sources: vec![ProfileInstallSource::Binary {
-            component: ProfileComponent::CombinedRuntime,
-            version: VERSION,
-            command: "cursor-agent",
-            args: &["acp"],
-            artifacts: vec![
-                binary_artifact(
-                    "darwin-aarch64",
-                    "https://downloads.cursor.com/lab/2026.07.23-e383d2b/darwin/arm64/agent-cli-package.tar.gz",
-                    "f2eb25851f2079dcdf0558a816e06c402d187abfca93255d35167020439ebbf2",
-                ),
-                binary_artifact(
-                    "darwin-x86_64",
-                    "https://downloads.cursor.com/lab/2026.07.23-e383d2b/darwin/x64/agent-cli-package.tar.gz",
-                    "f44194dfcb41468f85bfb4e53978ac098a2a78ce629806490c32b80b40975aa2",
-                ),
-                binary_artifact(
-                    "linux-aarch64",
-                    "https://downloads.cursor.com/lab/2026.07.23-e383d2b/linux/arm64/agent-cli-package.tar.gz",
-                    "f40b99647cb24e0da885e97620a2048034f1fe8961910d573d827d77c4d26dcb",
-                ),
-                binary_artifact(
-                    "linux-x86_64",
-                    "https://downloads.cursor.com/lab/2026.07.23-e383d2b/linux/x64/agent-cli-package.tar.gz",
-                    "702ad595213bee5df0268be9f80a19f29fcceaa2a42fc55e39f2b5199051f0c4",
-                ),
-                binary_artifact(
-                    "windows-aarch64",
-                    "https://downloads.cursor.com/lab/2026.07.23-e383d2b/windows/arm64/agent-cli-package.zip",
-                    "1d94e23b6901c3ab3092ed4094d77843d7a4978df24a873cc8c6421026f5efdc",
-                ),
-                binary_artifact(
-                    "windows-x86_64",
-                    "https://downloads.cursor.com/lab/2026.07.23-e383d2b/windows/x64/agent-cli-package.zip",
-                    "96c7b739eaf2fc68869341f2e0781ccbefd631a7493d373728bf14141749035f",
-                ),
-            ],
-            entry: Some(ProfileBinaryEntry {
-                unix: "dist-package/cursor-agent",
-                windows: "dist-package/cursor-agent.cmd",
-                unix_siblings: &[],
-                windows_siblings: &[],
-            }),
-        }],
-        external_candidates: CURSOR_CANDIDATES,
-        dependencies: ARCHIVE_DEPENDENCIES,
-        management_actions: CURSOR_ACTIONS,
-        runtime_executable_env: None,
-        native_config: CURSOR_CONFIG,
-        settings_features: CURSOR_SETTINGS,
-        authentication_precedence: AuthenticationPrecedence::AccountThenApiKey,
-        authentication_required_by_default: true,
-        account_evidence: None,
-    }
-}
-
 fn deepseek_harness_profile() -> BuiltInProfile {
     BuiltInProfile {
         agent_id: AgentId::parse("deepseek_harness").expect("bundled AgentId"),
@@ -2973,58 +2444,6 @@ fn deepseek_harness_profile() -> BuiltInProfile {
         authentication_precedence: AuthenticationPrecedence::SingleSource,
         authentication_required_by_default: true,
         account_evidence: None,
-    }
-}
-
-fn qoder_profile() -> BuiltInProfile {
-    BuiltInProfile {
-        agent_id: AgentId::parse("qoder").expect("bundled AgentId"),
-        display_name: "Qoder",
-        description: "Qoder CLI's coding agent over native ACP",
-        icon: ProfileIcon {
-            light: "/agents/qoder.svg",
-            dark: "/agents/qoder.svg",
-        },
-        registry_binding: Some(ProfileRegistryBinding {
-            registry_id: "qoder",
-        }),
-        topology: ProfileTopology::NativeAcp,
-        supported_platforms: DESKTOP_PLATFORMS,
-        install_sources: vec![native_npx(
-            "@qoder-ai/qodercli",
-            "1.1.44",
-            "qodercli",
-            QODER_ACP_ARGS,
-            ">=20",
-            "sha512-OFZFj6w6Zckuz/o8KT3LCLctS7g5UZbSSyoF66+8seYNrQkkFmU0GrnGCsduHK7ZBrlpRVWXPQg6h9gUWo3v4A==",
-        )],
-        external_candidates: QODER_CANDIDATES,
-        dependencies: NODE_20_DEPENDENCIES,
-        management_actions: QODER_ACTIONS,
-        runtime_executable_env: None,
-        native_config: QODER_CONFIG,
-        settings_features: QODER_SETTINGS,
-        authentication_precedence: AuthenticationPrecedence::AccountThenApiKey,
-        authentication_required_by_default: true,
-        account_evidence: Some(AccountEvidence {
-            home_relative_directory: ".qoder",
-            directory_override_env: Some("QODER_CONFIG_DIR"),
-            override_relative_directory: "",
-            relative_file: "settings.json",
-            kind: AccountEvidenceKind::NonEmptyStringAt(&["security", "auth", "selectedType"]),
-        }),
-    }
-}
-
-const fn binary_artifact(
-    platform: &'static str,
-    archive_url: &'static str,
-    sha256: &'static str,
-) -> ProfileBinaryArtifact {
-    ProfileBinaryArtifact {
-        platform,
-        archive_url,
-        sha256: Some(sha256),
     }
 }
 

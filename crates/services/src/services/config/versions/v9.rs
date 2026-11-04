@@ -196,22 +196,40 @@ impl Config {
 
 impl From<String> for Config {
     fn from(raw_config: String) -> Self {
-        if let Ok(config) = serde_json::from_str::<Config>(&raw_config)
+        let mut config = if let Ok(config) = serde_json::from_str::<Config>(&raw_config)
             && config.config_version == "v9"
         {
-            return config;
-        }
-
-        match Self::from_previous_version(&raw_config) {
-            Ok(config) => {
-                tracing::info!("Config upgraded to v9");
-                config
+            config
+        } else {
+            match Self::from_previous_version(&raw_config) {
+                Ok(config) => {
+                    tracing::info!("Config upgraded to v9");
+                    config
+                }
+                Err(e) => {
+                    tracing::warn!("Config migration failed: {}, using default", e);
+                    Self::default()
+                }
             }
-            Err(e) => {
-                tracing::warn!("Config migration failed: {}, using default", e);
-                Self::default()
-            }
+        };
+        // Retired product Agents fall back to Claude Code (or clear optional
+        // agent-id fields) so Settings / defaults never keep a dead identity.
+        let retired = [
+            AgentKind::Cursor.as_str(),
+            AgentKind::Pi.as_str(),
+            AgentKind::Cline.as_str(),
+            AgentKind::Qoder.as_str(),
+        ];
+        if retired.contains(&config.executor_profile.executor.as_str()) {
+            config.executor_profile = ExecutorProfileId::new(AgentKind::ClaudeCode);
         }
+        if retired.contains(&config.pr_auto_description_agent_id.as_str()) {
+            config.pr_auto_description_agent_id.clear();
+        }
+        if retired.contains(&config.prompt_enhancement_agent_id.as_str()) {
+            config.prompt_enhancement_agent_id.clear();
+        }
+        config
     }
 }
 

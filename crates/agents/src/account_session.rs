@@ -10,7 +10,7 @@ use api_types::AgentAuthenticationStatus;
 use base64::Engine;
 use serde_json::Value;
 
-use crate::{AgentId, cursor_auth, metadata, profiles::ProfileManagementActionKind};
+use crate::{AgentId, metadata, profiles::ProfileManagementActionKind};
 
 /// Keep a recorded official-account result when disk residue disagrees.
 ///
@@ -46,9 +46,6 @@ pub fn authentication_from_account_command(
 
 const CONFIRM_TIMEOUT_SECS: u64 = 4;
 const CHATGPT_ME_URL: &str = "https://chatgpt.com/backend-api/me";
-const CURSOR_PERIOD_USAGE_URL: &str =
-    "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage";
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AccountSessionConfirmation {
     Confirmed,
@@ -90,7 +87,6 @@ pub async fn resolve_account_label(agent_id: &AgentId) -> Option<String> {
         "claude_code" => {
             account_label_from_document(&read_json_value(metadata::claude_config_path()?).await?)
         }
-        "cursor" => jwt_identity(cursor_auth::cursor_account_token().await?.as_str()),
         "grok" => account_label_from_grok_auth(&read_json_value(grok_auth_path()?).await?),
         _ => None,
     }
@@ -197,7 +193,6 @@ pub async fn confirm_account_session(
     }
     match agent_id.as_str() {
         "codex" => confirm_codex_account(local_auth_document).await,
-        "cursor" => confirm_cursor_account().await,
         _ => AccountSessionConfirmation::Inconclusive,
     }
 }
@@ -233,13 +228,6 @@ async fn confirm_codex_account(document: Option<&Value>) -> AccountSessionConfir
     }
 }
 
-async fn confirm_cursor_account() -> AccountSessionConfirmation {
-    let Some(token) = cursor_auth::cursor_account_token().await else {
-        return AccountSessionConfirmation::Rejected;
-    };
-    confirm_bearer_post(CURSOR_PERIOD_USAGE_URL, &token, Some("cursor-agent"), "{}").await
-}
-
 async fn confirm_bearer_get_response(
     url: &str,
     token: &str,
@@ -260,37 +248,6 @@ async fn confirm_bearer_get_response(
     let status = response.status().as_u16();
     let body = response.text().await.unwrap_or_default();
     Some((status, body))
-}
-
-async fn confirm_bearer_post(
-    url: &str,
-    token: &str,
-    user_agent: Option<&str>,
-    body: &str,
-) -> AccountSessionConfirmation {
-    let Ok(client) = reqwest::Client::builder()
-        .timeout(Duration::from_secs(CONFIRM_TIMEOUT_SECS))
-        .build()
-    else {
-        return AccountSessionConfirmation::Inconclusive;
-    };
-    let mut request = client
-        .post(url)
-        .header("Authorization", format!("Bearer {token}"))
-        .header("Accept", "application/json")
-        .header("Content-Type", "application/json")
-        .body(body.to_string());
-    if let Some(user_agent) = user_agent {
-        request = request.header("User-Agent", user_agent);
-    }
-    match request.send().await {
-        Ok(response) => {
-            let status = response.status().as_u16();
-            let text = response.text().await.unwrap_or_default();
-            account_session_from_http(status, &text)
-        }
-        Err(_) => AccountSessionConfirmation::Inconclusive,
-    }
 }
 
 #[cfg(test)]

@@ -1238,14 +1238,6 @@ fn auth_mode_translation_keys(agent_id: &AgentId, mode: &str) -> (&'static str, 
         ("grok", "custom" | "model_provider") => {
             ("agents.authModeProvider", "agents.authDescGrokProvider")
         }
-        ("cursor", "subscription") => (
-            "agents.authModeSubscription",
-            "agents.authDescCursorSubscription",
-        ),
-        ("cursor", "custom") => (
-            "agents.authModeOfficialApi",
-            "agents.authDescCursorOfficialApi",
-        ),
         ("deepseek_harness", "deepseek") => {
             ("agents.authModeOfficialApi", "agents.authDescDeepseekApi")
         }
@@ -1284,24 +1276,11 @@ fn auth_mode_translation_keys(agent_id: &AgentId, mode: &str) -> (&'static str, 
         ("kimi_code", "model_provider") => {
             ("agents.authModeProvider", "agents.authDescKimiProvider")
         }
-        ("cline", "official_subscription") => (
-            "agents.authModeOfficialSubscription",
-            "agents.authDescClineSubscription",
-        ),
-        ("cline", "official_api") => (
-            "agents.authModeOfficialApi",
-            "agents.authDescClineOfficialApi",
-        ),
-        ("cline", "model_provider") => ("agents.authModeProvider", "agents.authDescClineProvider"),
         ("codebuddy", "official_subscription") => (
             "agents.authModeOfficialSubscription",
             "agents.authDescCodebuddySubscription",
         ),
-        ("qoder", "official_subscription") => (
-            "agents.authModeOfficialSubscription",
-            "agents.authDescQoderSubscription",
-        ),
-        ("pi" | "openclaw", "model_provider") => {
+        ("openclaw", "model_provider") => {
             ("agents.authModeProvider", "agents.authDescGenericProvider")
         }
         _ => ("agents.authModeUnknown", "agents.authDescUnknown"),
@@ -2129,14 +2108,24 @@ mod tests {
     }
 
     #[test]
-    fn qoder_auth_options_are_subscription_only() {
-        let agent_id = AgentId::parse("qoder").unwrap();
+    fn codebuddy_auth_options_are_subscription_only() {
+        let agent_id = AgentId::parse("codebuddy").unwrap();
         let policy = built_in_auth_mode_policy(&agent_id).unwrap();
         let options = project_auth_mode_options(&agent_id, policy.modes);
         assert_eq!(options.len(), 1);
         assert_eq!(options[0].value, "official_subscription");
         assert_eq!(options[0].kind, AgentAuthModeKind::Subscription);
         assert!(!options[0].credential_required);
+    }
+
+    #[test]
+    fn retired_product_agents_have_no_auth_mode_policy() {
+        for agent_id in ["cursor", "pi", "cline", "qoder"] {
+            assert!(
+                built_in_auth_mode_policy(&AgentId::parse(agent_id).unwrap()).is_none(),
+                "{agent_id} must not expose a live auth-mode policy"
+            );
+        }
     }
 
     #[test]

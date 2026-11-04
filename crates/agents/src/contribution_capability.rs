@@ -20,15 +20,11 @@ pub fn builtin_contribution_capabilities() -> Vec<AgentContributionCapability> {
         AgentKind::Antigravity,
         AgentKind::Openclaw,
         AgentKind::Opencode,
-        AgentKind::Cline,
         AgentKind::Hermes,
         AgentKind::Codebuddy,
         AgentKind::KimiCode,
-        AgentKind::Pi,
         AgentKind::Grok,
-        AgentKind::Cursor,
         AgentKind::DeepseekHarness,
-        AgentKind::Qoder,
     ]
     .into_iter()
     .map(|agent| {
@@ -38,10 +34,7 @@ pub fn builtin_contribution_capabilities() -> Vec<AgentContributionCapability> {
             skills_project: surface.global_supported,
             mcp_session_new: surface.global_supported,
             mcp_native_file: surface.global_supported,
-            hooks_project: matches!(
-                agent,
-                AgentKind::ClaudeCode | AgentKind::Codex | AgentKind::Cursor
-            ),
+            hooks_project: matches!(agent, AgentKind::ClaudeCode | AgentKind::Codex),
         }
     })
     .collect()

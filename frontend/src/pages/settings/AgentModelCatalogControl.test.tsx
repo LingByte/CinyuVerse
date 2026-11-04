@@ -15,7 +15,6 @@ vi.mock('@/features/agent-management', async (importOriginal) => {
     agentManagementApi: {
       ...actual.agentManagementApi,
       codexModelCatalog: vi.fn(),
-      cursorModelCatalog: vi.fn(),
       kimiModelCatalog: vi.fn(),
     },
   };
@@ -24,26 +23,26 @@ vi.mock('@/features/agent-management', async (importOriginal) => {
 describe('AgentModelCatalogControl', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('loads Cursor Runtime models and projects a selection into native config', async () => {
-    vi.mocked(agentManagementApi.cursorModelCatalog).mockResolvedValue({
-      agent_id: 'cursor',
+  it('loads Codex models and projects a selection into native config', async () => {
+    vi.mocked(agentManagementApi.codexModelCatalog).mockResolvedValue({
+      agent_id: 'codex',
       source: 'live',
       models: [
         {
-          id: 'composer-1',
-          label: 'Composer 1',
+          id: 'gpt-5',
+          label: 'GPT-5',
           context_window: null,
           reasoning_levels: [],
         },
       ],
-      default_model: 'composer-1',
+      default_model: 'gpt-5',
       error: null,
     });
     const onSelect = vi.fn();
     render(
       <AgentModelCatalogControl
-        agentId="cursor"
-        drafts={{ cursor_model: '' }}
+        agentId="codex"
+        drafts={{ codex_model: '' }}
         disabled={false}
         onSelect={onSelect}
       />
@@ -56,9 +55,9 @@ describe('AgentModelCatalogControl', () => {
     await pickAstryxOption(
       userEvent,
       screen.getByLabelText('选择目录模型'),
-      'Composer 1 · composer-1'
+      'GPT-5 · gpt-5'
     );
-    expect(onSelect).toHaveBeenCalledWith('cursor_model', 'composer-1');
+    expect(onSelect).toHaveBeenCalledWith('codex_model', 'gpt-5');
   });
 
   it('uses only the current Kimi endpoint and key draft', async () => {

@@ -12,7 +12,6 @@ import {
 
 const MODEL_FIELDS: Partial<Record<AgentId, string>> = {
   codex: 'codex_model',
-  cursor: 'cursor_model',
   kimi_code: 'kimi_model',
 };
 
@@ -47,12 +46,10 @@ export function AgentModelCatalogControl({
       const result =
         agentId === 'codex'
           ? await agentManagementApi.codexModelCatalog(forceRefresh)
-          : agentId === 'cursor'
-            ? await agentManagementApi.cursorModelCatalog()
-            : await agentManagementApi.kimiModelCatalog(
-                drafts.kimi_base_url ?? '',
-                drafts.kimi_api_key ?? ''
-              );
+          : await agentManagementApi.kimiModelCatalog(
+              drafts.kimi_base_url ?? '',
+              drafts.kimi_api_key ?? ''
+            );
       setCatalog(result);
       setError(result.error);
     } catch (cause) {

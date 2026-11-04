@@ -22,15 +22,11 @@ export const SLOT_B: SlotItem[] = [
   { id: 'antigravity', label: 'Antigravity', kind: 'agent' },
   { id: 'openclaw', label: 'OpenClaw', kind: 'agent' },
   { id: 'opencode', label: 'OpenCode', kind: 'agent' },
-  { id: 'cline', label: 'Cline', kind: 'agent' },
   { id: 'hermes', label: 'Hermes', kind: 'agent' },
   { id: 'codebuddy', label: 'CodeBuddy', kind: 'agent' },
   { id: 'kimi', label: 'Kimi Code', kind: 'agent' },
-  { id: 'pi', label: 'Pi', kind: 'agent' },
   { id: 'grok', label: 'Grok', kind: 'agent' },
-  { id: 'cursor', label: 'Cursor', kind: 'agent' },
   { id: 'deepseek', label: 'DeepSeek', kind: 'agent' },
-  { id: 'qoder', label: 'Qoder', kind: 'agent' },
 ];
 
 const SLOT_C_ZH: SlotItem[] = [

@@ -70,7 +70,7 @@ describe('onboarding Agent model', () => {
           display_name: 'OpenCode',
           lifecycle: 'needs_auth',
         }),
-        managed({ agent_id: 'pi', display_name: 'Pi' }),
+        managed({ agent_id: 'hermes', display_name: 'Hermes' }),
       ],
       [
         registry({
@@ -79,7 +79,7 @@ describe('onboarding Agent model', () => {
           installed: true,
           added: true,
         }),
-        registry({ agent_id: 'cursor', display_name: 'Cursor' }),
+        registry({ agent_id: 'codebuddy', display_name: 'CodeBuddy' }),
       ]
     );
 
@@ -88,8 +88,8 @@ describe('onboarding Agent model', () => {
       'opencode',
       'kimi',
       'claude_code',
-      'pi',
-      'cursor',
+      'hermes',
+      'codebuddy',
     ]);
     expect(options[0]).toMatchObject({
       recommended: true,

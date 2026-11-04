@@ -10,18 +10,6 @@ fn subscription_modes_scrub_conflicting_credentials() {
     ]);
     apply_built_in_auth_mode_policy(&AgentId::parse("grok").unwrap(), &mut grok);
     assert!(!grok.contains_key("XAI_API_KEY"));
-
-    let mut cursor = HashMap::from([
-        ("CURSOR_AUTH_MODE".to_string(), "subscription".to_string()),
-        ("CURSOR_API_KEY".to_string(), "stale".to_string()),
-        (
-            "CURSOR_API_BASE_URL".to_string(),
-            "https://stale.example".to_string(),
-        ),
-    ]);
-    apply_built_in_auth_mode_policy(&AgentId::parse("cursor").unwrap(), &mut cursor);
-    assert!(!cursor.contains_key("CURSOR_API_KEY"));
-    assert!(!cursor.contains_key("CURSOR_API_BASE_URL"));
 }
 
 #[test]
@@ -69,20 +57,13 @@ fn deepseek_official_mode_clears_custom_base_url() {
 }
 
 #[test]
-fn qoder_has_only_subscription_and_keeps_the_personal_access_token() {
-    let policy = agents::built_in_auth_mode_policy(&AgentId::parse("qoder").unwrap()).unwrap();
-    assert_eq!(policy.modes, &["official_subscription"]);
-    assert!(policy.credential_modes.is_empty());
-
-    let mut env = HashMap::from([(
-        "QODER_PERSONAL_ACCESS_TOKEN".to_string(),
-        "pt-keep".to_string(),
-    )]);
-    apply_built_in_auth_mode_policy(&AgentId::parse("qoder").unwrap(), &mut env);
-    assert_eq!(
-        env.get("QODER_PERSONAL_ACCESS_TOKEN").map(String::as_str),
-        Some("pt-keep")
-    );
+fn retired_product_agents_have_no_auth_mode_policy() {
+    for agent_id in ["cursor", "pi", "cline", "qoder"] {
+        assert!(
+            agents::built_in_auth_mode_policy(&AgentId::parse(agent_id).unwrap()).is_none(),
+            "{agent_id} must not expose a live auth-mode policy"
+        );
+    }
 }
 
 #[test]

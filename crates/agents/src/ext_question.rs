@@ -1,6 +1,6 @@
 //! Vendor ACP reverse-requests that ask the user a question or decision.
 //!
-//! Claude uses standard `elicitation/create`. Grok and Cursor block on vendor
+//! Claude uses standard `elicitation/create`. Grok blocks on vendor
 //! ext-methods instead. This module is the single host entry: parse those
 //! methods onto the existing `x-cinyuverse-questions` card, then encode the user's
 //! answer back into the vendor payload.
@@ -10,7 +10,6 @@ use std::collections::HashMap;
 use serde_json::{Value, json};
 
 use crate::{
-    cursor_ask::{self, CursorAskQuestionRequest, CursorCreatePlanRequest},
     elicitation::AgentElicitationResponse,
     grok_ask::{self, AskUserQuestionExtRequest},
     grok_plan::{self, ExitPlanModeExtRequest},
@@ -28,8 +27,6 @@ pub struct ExtQuestion {
 #[derive(Debug, Clone, PartialEq)]
 enum ExtQuestionKind {
     GrokAsk(AskUserQuestionExtRequest),
-    CursorAsk(CursorAskQuestionRequest),
-    CursorPlan(CursorCreatePlanRequest),
     GrokExitPlan(ExitPlanModeExtRequest),
 }
 
@@ -52,29 +49,6 @@ pub fn question_schema(questions: impl IntoIterator<Item = Value>) -> Value {
         "type": "object",
         "x-cinyuverse-questions": questions.into_iter().collect::<Vec<_>>(),
     })
-}
-
-pub fn question_header(text: &str, index: usize) -> String {
-    let text = text.trim();
-    if text.chars().count() <= 16 {
-        return if text.is_empty() {
-            format!("问题 {}", index + 1)
-        } else {
-            text.to_string()
-        };
-    }
-    let mut header: String = text.chars().take(16).collect();
-    header.push('…');
-    header
-}
-
-pub fn prompt_from_texts<'a>(texts: impl IntoIterator<Item = &'a str>) -> String {
-    texts
-        .into_iter()
-        .map(str::trim)
-        .filter(|text| !text.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 pub fn answer_entries(content: &Value) -> Vec<(String, Vec<String>)> {
@@ -132,12 +106,6 @@ pub fn parse(method: &str, params: &str) -> Option<Result<ExtQuestion, String>> 
     if grok_plan::is_exit_plan_mode_method(method) {
         return Some(parse_grok_plan(params));
     }
-    if cursor_ask::is_ask_question_method(method) {
-        return Some(parse_cursor_ask(params));
-    }
-    if cursor_ask::is_create_plan_method(method) {
-        return Some(parse_cursor_plan(params));
-    }
     None
 }
 
@@ -164,10 +132,6 @@ impl ExtQuestion {
             ExtQuestionKind::GrokAsk(request) => {
                 grok_ask::ext_response_from_elicitation(response, &request.questions)
             }
-            ExtQuestionKind::CursorAsk(request) => {
-                cursor_ask::ask_response_from_elicitation(response, &request.questions)
-            }
-            ExtQuestionKind::CursorPlan(_) => cursor_ask::plan_response_from_elicitation(response),
             ExtQuestionKind::GrokExitPlan(_) => grok_plan::ext_response_from_elicitation(response),
         }
     }
@@ -196,29 +160,6 @@ fn parse_grok_plan(params: &str) -> Result<ExtQuestion, String> {
     })
 }
 
-fn parse_cursor_ask(params: &str) -> Result<ExtQuestion, String> {
-    let request = cursor_ask::parse_ask_request(params)?;
-    if request.questions.is_empty() {
-        return Err("cursor/ask_question requires at least one question".into());
-    }
-    Ok(ExtQuestion {
-        session_id: request.session_id.clone(),
-        prompt: cursor_ask::ask_prompt(&request),
-        schema: cursor_ask::ask_question_schema(&request),
-        kind: ExtQuestionKind::CursorAsk(request),
-    })
-}
-
-fn parse_cursor_plan(params: &str) -> Result<ExtQuestion, String> {
-    let request = cursor_ask::parse_plan_request(params)?;
-    Ok(ExtQuestion {
-        session_id: request.session_id.clone(),
-        prompt: cursor_ask::plan_prompt(&request),
-        schema: cursor_ask::plan_question_schema(&request),
-        kind: ExtQuestionKind::CursorPlan(request),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,6 +169,8 @@ mod tests {
     fn ignores_unknown_methods() {
         assert!(parse("session/request_permission", "{}").is_none());
         assert!(parse("x.ai/announcements/update", "{}").is_none());
+        assert!(parse("cursor/ask_question", "{}").is_none());
+        assert!(parse("cursor/create_plan", "{}").is_none());
     }
 
     #[test]
@@ -240,23 +183,6 @@ mod tests {
         .unwrap();
         assert_eq!(grok.session_id.as_deref(), Some("s1"));
         assert!(grok.schema["x-cinyuverse-questions"].is_array());
-
-        let cursor = parse(
-            "cursor/ask_question",
-            r#"{"questions":[{"id":"q1","prompt":"Pick one","options":[{"id":"a","label":"A"}]}]}"#,
-        )
-        .unwrap()
-        .unwrap();
-        assert_eq!(cursor.prompt, "Pick one");
-
-        let plan = parse(
-            "cursor/create_plan",
-            r#"{"name":"Auth","plan":"Add login","todos":[{"content":"Write tests","status":"pending"}]}"#,
-        )
-        .unwrap()
-        .unwrap();
-        assert!(plan.prompt.contains("Add login"));
-        assert!(plan.prompt.contains("Write tests"));
 
         let exit = parse(
             "x.ai/exit_plan_mode",
@@ -271,14 +197,6 @@ mod tests {
     fn rejects_empty_question_lists() {
         assert!(
             parse(
-                "cursor/ask_question",
-                r#"{"toolCallId":"c1","questions":[]}"#
-            )
-            .unwrap()
-            .is_err()
-        );
-        assert!(
-            parse(
                 "x.ai/ask_user_question",
                 r#"{"sessionId":"s1","questions":[]}"#
             )
@@ -289,23 +207,6 @@ mod tests {
 
     #[test]
     fn encodes_vendor_specific_replies() {
-        let cursor = parse(
-            "cursor/ask_question",
-            r#"{"questions":[{"id":"db","prompt":"DB?","options":[{"id":"pg","label":"Postgres"}]}]}"#,
-        )
-        .unwrap()
-        .unwrap();
-        let reply = cursor.into_response(AgentElicitationResponse::Accept {
-            content: json!({
-                "answers": [{ "questionId": "db", "labels": ["Postgres"] }]
-            }),
-        });
-        assert_eq!(reply["outcome"]["outcome"], "answered");
-        assert_eq!(
-            reply["outcome"]["answers"][0]["selectedOptionIds"],
-            json!(["pg"])
-        );
-
         let grok_plan = parse(
             "x.ai/exit_plan_mode",
             r#"{"sessionId":"s1","toolCallId":"t1"}"#,

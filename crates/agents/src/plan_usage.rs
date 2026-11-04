@@ -3,9 +3,8 @@
 //! Deliberately independent of the ACP runtime: Codex is probed through a
 //! one-shot `codex app-server` JSON-RPC exchange, Claude Code through the
 //! OAuth usage endpoint using the credentials the CLI already stores locally,
-//! Grok through the official CLI chat-proxy settings/billing endpoints, and
-//! Cursor through the official DashboardService period-usage API. None of the
-//! probes touch live agent connections or conversations.
+//! and Grok through the official CLI chat-proxy settings/billing endpoints.
+//! None of the probes touch live agent connections or conversations.
 
 use std::{
     collections::HashMap,
@@ -26,7 +25,7 @@ use tokio::{
 use ts_rs::TS;
 use workspace_utils::process::new_hidden_tokio_command;
 
-use crate::{AgentId, cursor_auth, metadata};
+use crate::{AgentId, metadata};
 
 const CODEX_APP_SERVER_TIMEOUT_SECS: u64 = 20;
 const CLAUDE_USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
@@ -46,12 +45,6 @@ const GROK_OIDC_DISCOVERY_URL: &str = "https://auth.x.ai/.well-known/openid-conf
 /// Nginx routes the CLI proxy to OAuth only when this header is present.
 const GROK_TOKEN_AUTH_HEADER: &str = "xai-grok-cli";
 const GROK_CLIENT_VERSION: &str = "1.0.13";
-const CURSOR_PERIOD_USAGE_URL: &str =
-    "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage";
-const CURSOR_PLAN_INFO_URL: &str =
-    "https://api2.cursor.sh/aiserver.v1.DashboardService/GetPlanInfo";
-const CURSOR_USAGE_USER_AGENT: &str = "cursor-agent";
-const CURSOR_USAGE_TIMEOUT_SECS: u64 = 15;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -60,7 +53,7 @@ pub struct PlanUsageWindow {
     /// Stable window identifier the frontend maps to a localized label.
     /// Codex: `primary` / `secondary`. Claude: `five_hour` / `seven_day` /
     /// `seven_day_opus` / `seven_day_sonnet` / `extra_usage`. Grok: `weekly` /
-    /// `monthly` / `plan_period`. Cursor: `cursor_models` / `other_models`.
+    /// `monthly` / `plan_period`.
     pub id: String,
     pub used_percent: Option<f64>,
     #[ts(type = "number | null")]
@@ -135,7 +128,6 @@ pub async fn probe_plan_usage(agent_id: &AgentId) -> PlanUsageResult {
         "claude_code" => probe_claude_plan_usage().await,
         "codex" => probe_codex_plan_usage().await,
         "grok" => probe_grok_plan_usage().await,
-        "cursor" => probe_cursor_plan_usage().await,
         _ => PlanUsageResult::unavailable(PlanUsageUnavailableReason::UnsupportedAgent),
     };
     if let PlanUsageResult::Ok { usage } = &result
@@ -1090,148 +1082,6 @@ async fn probe_grok_plan_usage() -> PlanUsageResult {
     }
 }
 
-// ── Cursor: official DashboardService period usage ──────────────────────────
-
-async fn load_cursor_access_token() -> Result<String, PlanUsageResult> {
-    if let Ok(token) = env::var("CURSOR_API_KEY")
-        && !token.trim().is_empty()
-    {
-        return Ok(token.trim().to_string());
-    }
-    if let Some(token) = cursor_auth::cursor_account_token().await {
-        return Ok(token);
-    }
-    Err(PlanUsageResult::unavailable(
-        PlanUsageUnavailableReason::NotLoggedIn,
-    ))
-}
-
-async fn cursor_authorized_json(
-    client: &reqwest::Client,
-    url: &str,
-    access_token: &str,
-) -> Result<Value, PlanUsageResult> {
-    let response = match client
-        .post(url)
-        .header("Authorization", format!("Bearer {access_token}"))
-        .header("User-Agent", CURSOR_USAGE_USER_AGENT)
-        .header("Content-Type", "application/json")
-        .header("Accept", "application/json")
-        .body("{}")
-        .send()
-        .await
-    {
-        Ok(response) => response,
-        Err(error) => return Err(PlanUsageResult::error(error.to_string())),
-    };
-    if let Some(result) = plan_usage_from_status(response.status(), "Cursor") {
-        return Err(result);
-    }
-    response
-        .json::<Value>()
-        .await
-        .map_err(|error| PlanUsageResult::error(error.to_string()))
-}
-
-fn map_cursor_window(
-    id: &str,
-    used_percent: Option<f64>,
-    window_minutes: Option<i64>,
-    resets_at_ms: Option<i64>,
-) -> Option<PlanUsageWindow> {
-    used_percent.map(|used_percent| PlanUsageWindow {
-        id: id.to_string(),
-        used_percent: Some(used_percent),
-        window_minutes,
-        resets_at_ms,
-    })
-}
-
-fn map_cursor_plan_usage(period: &Value, plan_info: Option<&Value>) -> AgentPlanUsage {
-    let plan_usage = period.get("planUsage").unwrap_or(period);
-    let cycle_start = period.get("billingCycleStart").and_then(json_i64);
-    let cycle_end = period.get("billingCycleEnd").and_then(json_i64);
-    let window_minutes = match (cycle_start, cycle_end) {
-        (Some(start), Some(end)) if end > start => Some((end - start) / 60_000),
-        _ => None,
-    };
-
-    let mut windows = Vec::new();
-    if let Some(window) = map_cursor_window(
-        "cursor_models",
-        plan_usage.get("autoPercentUsed").and_then(Value::as_f64),
-        window_minutes,
-        cycle_end,
-    ) {
-        windows.push(window);
-    }
-    if let Some(window) = map_cursor_window(
-        "other_models",
-        plan_usage.get("apiPercentUsed").and_then(Value::as_f64),
-        window_minutes,
-        cycle_end,
-    ) {
-        windows.push(window);
-    }
-    if windows.is_empty()
-        && let Some(window) = map_cursor_window(
-            "monthly",
-            plan_usage.get("totalPercentUsed").and_then(Value::as_f64),
-            window_minutes,
-            cycle_end,
-        )
-    {
-        windows.push(window);
-    }
-
-    let plan_type = plan_info
-        .and_then(|value| value.get("planInfo"))
-        .and_then(|info| info.get("planName"))
-        .and_then(Value::as_str)
-        .filter(|name| !name.is_empty())
-        .map(str::to_string);
-
-    let remaining = plan_usage.get("remaining").and_then(json_i64);
-    let limit = plan_usage.get("limit").and_then(json_i64);
-    let credits = match (remaining, limit) {
-        (Some(remaining), Some(limit)) if limit > 0 => Some(PlanCredits {
-            balance: Some(format!("{:.2}", remaining as f64 / 100.0)),
-            unlimited: false,
-        }),
-        _ => None,
-    };
-
-    AgentPlanUsage {
-        plan_type,
-        windows,
-        credits,
-    }
-}
-
-async fn probe_cursor_plan_usage() -> PlanUsageResult {
-    let access_token = match load_cursor_access_token().await {
-        Ok(token) => token,
-        Err(result) => return result,
-    };
-    let client = match http_client(CURSOR_USAGE_TIMEOUT_SECS) {
-        Ok(client) => client,
-        Err(result) => return result,
-    };
-
-    let period = match cursor_authorized_json(&client, CURSOR_PERIOD_USAGE_URL, &access_token).await
-    {
-        Ok(value) => value,
-        Err(result) => return result,
-    };
-    let plan_info = cursor_authorized_json(&client, CURSOR_PLAN_INFO_URL, &access_token)
-        .await
-        .ok();
-
-    PlanUsageResult::Ok {
-        usage: map_cursor_plan_usage(&period, plan_info.as_ref()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1558,45 +1408,6 @@ mod tests {
         });
         let usage = map_grok_plan_usage(&settings, &billing);
         assert!(usage.windows.is_empty());
-    }
-
-    #[test]
-    fn cursor_usage_maps_official_pools_and_plan() {
-        let period = json!({
-            "billingCycleStart": "1786771054000",
-            "billingCycleEnd": "1789449454000",
-            "planUsage": {
-                "remaining": 32000,
-                "limit": 40000,
-                "autoPercentUsed": 12.5,
-                "apiPercentUsed": 40.0,
-                "totalPercentUsed": 20.0
-            }
-        });
-        let plan_info = json!({
-            "planInfo": { "planName": "Ultra", "includedAmountCents": 40000 }
-        });
-        let usage = map_cursor_plan_usage(&period, Some(&plan_info));
-        assert_eq!(usage.plan_type.as_deref(), Some("Ultra"));
-        assert_eq!(usage.windows.len(), 2);
-        assert_eq!(usage.windows[0].id, "cursor_models");
-        assert_eq!(usage.windows[0].used_percent, Some(12.5));
-        assert_eq!(usage.windows[1].id, "other_models");
-        assert_eq!(usage.windows[1].used_percent, Some(40.0));
-        assert_eq!(usage.credits.unwrap().balance.as_deref(), Some("320.00"));
-    }
-
-    #[test]
-    fn cursor_usage_falls_back_to_total_percent() {
-        let period = json!({
-            "billingCycleEnd": 1_789_449_454_000_i64,
-            "planUsage": { "totalPercentUsed": 8.0 }
-        });
-        let usage = map_cursor_plan_usage(&period, None);
-        assert_eq!(usage.windows.len(), 1);
-        assert_eq!(usage.windows[0].id, "monthly");
-        assert_eq!(usage.windows[0].used_percent, Some(8.0));
-        assert!(usage.plan_type.is_none());
     }
 
     #[test]

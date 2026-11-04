@@ -42,7 +42,6 @@ async fn seed_legacy_settings(pool: &SqlitePool) {
         "opencode",
         "antigravity",
         "openclaw",
-        "cline",
         "hermes",
     ]
     .into_iter()
@@ -650,19 +649,6 @@ async fn migration_seeds_and_promotes_the_current_built_in_agent_catalog() {
     .execute(&pool)
     .await
     .unwrap();
-    sqlx::query(
-        r#"UPDATE agent_setting SET
-               runtime_cli_path = '/fixture/cline',
-               runtime_cli_version = '3.0.9',
-               runtime_cli_revision = 'cli-revision',
-               runtime_acp_path = '/fixture/cline-acp',
-               runtime_acp_version = '3.0.9',
-               runtime_acp_revision = 'acp-revision'
-           WHERE agent_type = 'cline'"#,
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
     sqlx::query("UPDATE agent_setting SET enabled = 0 WHERE agent_type = 'codex'")
         .execute(&pool)
         .await
@@ -682,18 +668,14 @@ async fn migration_seeds_and_promotes_the_current_built_in_agent_catalog() {
         [
             ("claude_code", true),
             ("codex", false),
-            ("pi", true),
             ("opencode", true),
             ("grok", true),
-            ("cursor", true),
             ("deepseek_harness", true),
             ("antigravity", false),
-            ("cline", true),
             ("openclaw", true),
             ("hermes", true),
             ("codebuddy", true),
             ("kimi_code", true),
-            ("qoder", true),
         ]
     );
     assert!(
@@ -714,15 +696,11 @@ async fn migration_seeds_and_promotes_the_current_built_in_agent_catalog() {
         "antigravity",
         "openclaw",
         "opencode",
-        "cline",
         "hermes",
         "codebuddy",
         "kimi_code",
-        "pi",
         "grok",
-        "cursor",
         "deepseek_harness",
-        "qoder",
     ] {
         assert!(
             sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM agent_setting WHERE agent_type = ?")
@@ -774,7 +752,8 @@ async fn migration_seeds_and_promotes_the_current_built_in_agent_catalog() {
             .find(&AgentId::parse("cline").unwrap())
             .await
             .unwrap()
-            .is_some()
+            .is_none(),
+        "retired product agents must not remain in membership"
     );
 }
 
@@ -787,15 +766,11 @@ async fn migration_rewrites_the_previous_default_agent_bar_order() {
         "antigravity",
         "openclaw",
         "opencode",
-        "cline",
         "hermes",
         "codebuddy",
         "kimi_code",
-        "pi",
         "grok",
-        "cursor",
         "deepseek_harness",
-        "qoder",
         "vendor.custom",
     ]
     .into_iter()
@@ -840,18 +815,14 @@ async fn migration_rewrites_the_previous_default_agent_bar_order() {
         [
             "claude_code",
             "codex",
-            "pi",
             "opencode",
             "grok",
-            "cursor",
             "deepseek_harness",
             "antigravity",
-            "cline",
             "openclaw",
             "hermes",
             "codebuddy",
             "kimi_code",
-            "qoder",
             "vendor.custom",
         ]
     );
@@ -873,7 +844,7 @@ async fn migration_rewrites_the_previous_default_agent_bar_order() {
 #[tokio::test]
 async fn migration_keeps_a_customized_agent_bar_order() {
     let pool = migrated_pool().await;
-    for (position, agent_id) in ["pi", "claude_code", "codex", "opencode"]
+    for (position, agent_id) in ["grok", "claude_code", "codex", "opencode"]
         .into_iter()
         .enumerate()
     {
@@ -903,7 +874,7 @@ async fn migration_keeps_a_customized_agent_bar_order() {
         .iter()
         .map(|row| row.agent_id.as_str())
         .collect::<Vec<_>>();
-    assert_eq!(&ids[..4], &["pi", "claude_code", "codex", "opencode"]);
+    assert_eq!(&ids[..4], &["grok", "claude_code", "codex", "opencode"]);
 }
 
 #[tokio::test]

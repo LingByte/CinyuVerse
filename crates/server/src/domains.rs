@@ -349,7 +349,6 @@ impl ServerApplicationDomains {
             | DomainCommand::CodexModelCatalogConfig
             | DomainCommand::CodexRequestDeviceCode
             | DomainCommand::CodexPollDeviceCode
-            | DomainCommand::CursorModelCatalog
             | DomainCommand::KimiModelCatalog
             | DomainCommand::CreateWorkflowDebugWorkspace
             | DomainCommand::GetChatEventWebhooks
@@ -380,13 +379,6 @@ impl ServerApplicationDomains {
             | DomainCommand::GrokPlugins
             | DomainCommand::GrokPluginAdd
             | DomainCommand::GrokPluginRemove
-            | DomainCommand::PiPlugins
-            | DomainCommand::PiPluginAdd
-            | DomainCommand::PiPluginRemove
-            | DomainCommand::PiConfiguration
-            | DomainCommand::PiCredentialsSave
-            | DomainCommand::PiRuntimeSave
-            | DomainCommand::PiCommandValidate
             | DomainCommand::OpenCodePluginList
             | DomainCommand::OpenCodePluginAdd
             | DomainCommand::OpenCodePluginInstall

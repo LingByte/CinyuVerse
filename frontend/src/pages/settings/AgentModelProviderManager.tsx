@@ -703,12 +703,6 @@ export function AgentModelProviderManager({
             value={model}
             onChange={setModel}
           />
-        ) : agentId === 'pi' ? (
-          <PiProviderModelEditor
-            disabled={busy}
-            value={model}
-            onChange={setModel}
-          />
         ) : agentId === 'codex' ? (
           <div className="agent-model-provider-codex">
             <span>{t('settings:agents.modelCatalog')}</span>
@@ -1415,77 +1409,6 @@ function GrokProviderModelEditor({
   );
 }
 
-const PI_PROTOCOLS = [
-  'openai-responses',
-  'openai-completions',
-  'anthropic-messages',
-  'google-generative-ai',
-] as const;
-
-function PiProviderModelEditor({
-  value,
-  disabled,
-  onChange,
-}: {
-  value: string;
-  disabled: boolean;
-  onChange: (value: string) => void;
-}) {
-  const { t } = useTranslation('settings');
-  const parsed = parsePiModel(value);
-  const patch = (next: typeof parsed) => {
-    onChange(JSON.stringify({ id: next.id, api: next.api }));
-  };
-  return (
-    <fieldset className="agent-model-provider-claude">
-      <legend>{t('agents.model')}</legend>
-      <label>
-        <span>{t('agents.model')}</span>
-        <input
-          aria-label={t('agents.providerModelAria')}
-          autoComplete="off"
-          disabled={disabled}
-          name="pi_provider_model"
-          spellCheck={false}
-          value={parsed.id}
-          onChange={(event) => patch({ ...parsed, id: event.target.value })}
-        />
-      </label>
-      <label>
-        <span>{t('agents.customProviderProtocol')}</span>
-        <AstryxSelect
-          ariaLabel={t('agents.customProviderProtocol')}
-          disabled={disabled}
-          value={parsed.api}
-          options={PI_PROTOCOLS.map((protocol) => ({
-            value: protocol,
-            label: protocol,
-          }))}
-          onChange={(api) => patch({ ...parsed, api })}
-        />
-      </label>
-    </fieldset>
-  );
-}
-
-function parsePiModel(value: string): { id: string; api: string } {
-  try {
-    const parsed = JSON.parse(value) as { id?: unknown; api?: unknown };
-    if (parsed && typeof parsed === 'object') {
-      return {
-        id: typeof parsed.id === 'string' ? parsed.id : '',
-        api:
-          typeof parsed.api === 'string' &&
-          PI_PROTOCOLS.includes(parsed.api as (typeof PI_PROTOCOLS)[number])
-            ? parsed.api
-            : 'openai-responses',
-      };
-    }
-  } catch {
-    /* plain model id */
-  }
-  return { id: value, api: 'openai-responses' };
-}
 
 function parseGrokModel(value: string): {
   id: string;
@@ -1639,14 +1562,6 @@ function serializeSelectedModels(
       context_window: parsed.context_window
         ? Number(parsed.context_window)
         : null,
-      models: ids,
-    });
-  }
-  if (agentId === 'pi') {
-    const parsed = parsePiModel(current);
-    return JSON.stringify({
-      id: ids[0] ?? '',
-      api: parsed.api,
       models: ids,
     });
   }

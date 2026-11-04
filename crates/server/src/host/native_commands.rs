@@ -9,8 +9,7 @@ use api_types::{
     AgentModelProviderSaveRequest, AgentNativeConfigFieldKind, AgentNativeConfigFieldView,
     AgentNativeConfigFileView, AgentNativeConfigFormat, AgentNativeConfigOptionView,
     AgentNativeConfigSurface, AgentNativeConfigView, CodexModelCatalogConfigRequest,
-    DshProviderSaveRequest, OpenCodeProviderConnectRequest, PiCredentialsSaveRequest,
-    PiRuntimeSaveRequest,
+    DshProviderSaveRequest, OpenCodeProviderConnectRequest,
 };
 use application::ApplicationError;
 use serde::{Deserialize, de::DeserializeOwned};
@@ -22,9 +21,8 @@ use super::{
     native::{
         apply_native_file_mutations, catalog_cache_dir, codex_device_auth, dsh_configuration,
         grok_plugins, json_document_mutation, model_catalogs, model_provider_import,
-        model_providers, opencode_catalog, opencode_plugins, opencode_providers, pi_configuration,
-        pi_plugins, provider_store_path, read_json_object_or_empty, read_json_object_state,
-        resolve_agent_home,
+        model_providers, opencode_catalog, opencode_plugins, opencode_providers,
+        provider_store_path, read_json_object_or_empty, read_json_object_state, resolve_agent_home,
     },
 };
 use crate::domains::{internal_error, parse, serialize};
@@ -130,12 +128,6 @@ struct DshDiscoverArgs {
     provider_id: Option<String>,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CommandArgs {
-    command: String,
-}
-
 pub async fn dispatch_codex_request_device_code() -> Result<Value, ApplicationError> {
     serialize(
         codex_device_auth::request_device_code()
@@ -173,19 +165,6 @@ pub async fn dispatch_model_catalog(
     args: Value,
 ) -> Result<Value, ApplicationError> {
     match command {
-        "cursor_model_catalog" => {
-            let agent_id = AgentId::parse("cursor").map_err(internal_error)?;
-            let env = env_for(pool, &agent_id).await?;
-            let program =
-                management::resolve_management_program(pool, &agent_id, "cursor-agent", &env)
-                    .await
-                    .ok_or_else(|| bad("未找到 cursor-agent；请先安装或修复 Cursor。"))?;
-            serialize(
-                model_catalogs::cursor(&program, env.get("CURSOR_API_KEY").map(String::as_str))
-                    .await
-                    .map_err(bad)?,
-            )
-        }
         "kimi_model_catalog" => {
             let args: KimiCatalogArgs = parse(args)?;
             serialize(
@@ -494,80 +473,6 @@ pub async fn dispatch_model_provider_import(
     .map_err(bad)?;
     invalidate("agent-management-snapshot-invalidated");
     Ok((request.agent_id, serialize(view)?))
-}
-
-pub async fn dispatch_pi_configuration(pool: &SqlitePool) -> Result<Value, ApplicationError> {
-    let home = require_home()?;
-    serialize(pi_configuration::load(pool, &home).await.map_err(bad)?)
-}
-
-pub async fn dispatch_pi_credentials_save(
-    pool: &SqlitePool,
-    args: Value,
-) -> Result<Value, ApplicationError> {
-    let request: PiCredentialsSaveRequest = parse(args)?;
-    let home = require_home()?;
-    let view = pi_configuration::save_credentials(pool, &home, request)
-        .await
-        .map_err(bad)?;
-    invalidate("agent-management-snapshot-invalidated");
-    serialize(view)
-}
-
-pub async fn dispatch_pi_runtime_save(
-    pool: &SqlitePool,
-    args: Value,
-) -> Result<Value, ApplicationError> {
-    let request: PiRuntimeSaveRequest = parse(args)?;
-    pi_configuration::save_runtime(pool, request)
-        .await
-        .map_err(bad)?;
-    invalidate("agent-management-snapshot-invalidated");
-    Ok(Value::Null)
-}
-
-pub async fn dispatch_pi_command_validate(args: Value) -> Result<Value, ApplicationError> {
-    let args: CommandArgs = parse(args)?;
-    serialize(pi_configuration::validate_command(&args.command).await)
-}
-
-pub async fn dispatch_pi_plugins(pool: &SqlitePool) -> Result<Value, ApplicationError> {
-    let home = require_home()?;
-    serialize(pi_plugins::list_plugins(pool, &home).await.map_err(bad)?)
-}
-
-pub async fn dispatch_pi_plugin_add(
-    pool: &SqlitePool,
-    args: Value,
-) -> Result<Value, ApplicationError> {
-    let args: PluginSpecArgs = parse(args)?;
-    let spec = args
-        .spec
-        .or(args.name)
-        .ok_or_else(|| bad("缺少插件 spec"))?;
-    let home = require_home()?;
-    let view = pi_plugins::add_plugin(pool, &home, &spec)
-        .await
-        .map_err(bad)?;
-    invalidate("agent-management-snapshot-invalidated");
-    serialize(view)
-}
-
-pub async fn dispatch_pi_plugin_remove(
-    pool: &SqlitePool,
-    args: Value,
-) -> Result<Value, ApplicationError> {
-    let args: PluginSpecArgs = parse(args)?;
-    let spec = args
-        .spec
-        .or(args.name)
-        .ok_or_else(|| bad("缺少插件 spec"))?;
-    let home = require_home()?;
-    let view = pi_plugins::remove_plugin(pool, &home, &spec)
-        .await
-        .map_err(bad)?;
-    invalidate("agent-management-snapshot-invalidated");
-    serialize(view)
 }
 
 pub async fn dispatch_dsh_providers(pool: &SqlitePool) -> Result<Value, ApplicationError> {
