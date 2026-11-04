@@ -40,6 +40,7 @@ pub mod tags;
 pub mod tasks;
 pub mod tauri_inspector;
 pub mod terminal;
+pub mod library_imitate;
 pub mod tomato;
 pub mod version_control;
 pub mod web_service;

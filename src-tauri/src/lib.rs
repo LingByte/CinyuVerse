@@ -712,6 +712,8 @@ pub fn run(cef_bootstrap: Result<CefBootstrap, String>) {
         commands::tomato::library_delete_local,
         commands::tomato::library_reveal_local,
         commands::tomato::library_open_local,
+        commands::library_imitate::library_imitate_status,
+        commands::library_imitate::library_start_imitate_analysis,
         commands::web_service::generate_web_service_token,
         commands::web_service::create_host_device_pairing,
         commands::web_service::list_host_devices,

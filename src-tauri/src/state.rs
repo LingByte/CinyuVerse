@@ -201,6 +201,7 @@ pub struct AppState {
     pub plugin_app_surfaces: Arc<plugins::PluginAppSurfaceHost>,
     pub remote_desktop: Arc<crate::remote_desktop::RemoteDesktopRegistry>,
     pub local_history_import: Arc<StdMutex<LocalHistoryImportRuntime>>,
+    pub imitate_jobs: Arc<crate::commands::library_imitate::ImitateJobRegistry>,
 }
 
 impl AppState {
@@ -374,6 +375,7 @@ impl AppState {
             plugin_app_surfaces,
             remote_desktop,
             local_history_import: Arc::new(StdMutex::new(LocalHistoryImportRuntime::default())),
+            imitate_jobs: Arc::new(crate::commands::library_imitate::ImitateJobRegistry::default()),
         })
     }
 
