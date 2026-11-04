@@ -51,6 +51,15 @@ pub async fn list_git_repos(
 }
 
 #[tauri::command]
+pub async fn path_exists(path: String) -> Result<bool, AppError> {
+    let path_buf = PathBuf::from(path.trim());
+    if path_buf.as_os_str().is_empty() {
+        return Ok(false);
+    }
+    Ok(path_buf.exists())
+}
+
+#[tauri::command]
 pub async fn reveal_in_file_manager(path: String) -> Result<(), AppError> {
     let sanitized_path = sanitize_absolute_path(&path)?;
 

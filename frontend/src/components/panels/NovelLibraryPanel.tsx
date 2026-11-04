@@ -2,7 +2,7 @@
  * Novel Library — search/download books via the Tomato platform and keep them
  * in a configurable local directory.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Library,
@@ -15,6 +15,9 @@ import {
   Settings,
   FolderOpen,
   ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,7 +30,9 @@ type LocalBook = {
   path: string;
   ext: string;
   size: number;
-  modified_ms: number;
+  modifiedMs: number;
+  coverPath: string | null;
+  coverDataUrl: string | null;
 };
 
 type SearchItem = {
@@ -69,6 +74,23 @@ type DownloadResult = {
   size: number;
 };
 
+type EpubChapterMeta = {
+  index: number;
+  title: string;
+};
+
+type EpubBook = {
+  title: string;
+  author: string;
+  chapters: EpubChapterMeta[];
+};
+
+type EpubChapter = {
+  index: number;
+  title: string;
+  text: string;
+};
+
 type Mode = 'local' | 'search';
 
 export function NovelLibraryPanel() {
@@ -87,10 +109,16 @@ export function NovelLibraryPanel() {
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [textPreview, setTextPreview] = useState<string | null>(null);
+  const [textPreviewLoading, setTextPreviewLoading] = useState(false);
+  const [epubBook, setEpubBook] = useState<EpubBook | null>(null);
+  const [epubChapter, setEpubChapter] = useState<EpubChapter | null>(null);
+  const [epubLoading, setEpubLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<LibrarySettings | null>(null);
   const [pathDraft, setPathDraft] = useState('');
   const [pathSaving, setPathSaving] = useState(false);
+  const localPreviewRequestRef = useRef(0);
+  const readerScrollRef = useRef<HTMLDivElement | null>(null);
 
   const loadSettings = useCallback(async () => {
     const cfg = await invoke<LibrarySettings>('library_get_settings');
@@ -121,6 +149,19 @@ export function NovelLibraryPanel() {
     const q = searchQuery.toLowerCase();
     return localBooks.filter((book) => book.name.toLowerCase().includes(q));
   }, [localBooks, mode, searchQuery]);
+
+  const localTitleSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const book of localBooks) {
+      set.add(normalizeBookTitle(displayBookName(book.name)));
+    }
+    return set;
+  }, [localBooks]);
+
+  const isDownloaded = useCallback(
+    (title: string) => localTitleSet.has(normalizeBookTitle(title)),
+    [localTitleSet]
+  );
 
   const saveLibraryPath = useCallback(
     async (nextPath: string) => {
@@ -182,11 +223,34 @@ export function NovelLibraryPanel() {
     }
   }, [searchQuery]);
 
+  const loadEpubChapter = useCallback(
+    async (bookPath: string, index: number, requestId: number) => {
+      setEpubLoading(true);
+      try {
+        const chapter = await invoke<EpubChapter>('library_read_epub_chapter', {
+          args: { path: bookPath, index },
+        });
+        if (localPreviewRequestRef.current !== requestId) return;
+        setEpubChapter(chapter);
+        readerScrollRef.current?.scrollTo({ top: 0 });
+      } catch (err) {
+        if (localPreviewRequestRef.current !== requestId) return;
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (localPreviewRequestRef.current === requestId) {
+          setEpubLoading(false);
+        }
+      }
+    },
+    []
+  );
+
   const handleSelectRemote = useCallback(async (item: SearchItem) => {
     setSelectedRemote(item);
     setSelectedLocal(null);
     setTextPreview(null);
-    // Show list cover immediately; refresh metadata via preview.
+    setEpubBook(null);
+    setEpubChapter(null);
     setPreview(
       item.coverDataUrl
         ? ({
@@ -218,23 +282,98 @@ export function NovelLibraryPanel() {
     }
   }, []);
 
-  const handleSelectLocal = useCallback(async (book: LocalBook) => {
-    setSelectedLocal(book);
-    setSelectedRemote(null);
-    setPreview(null);
-    setTextPreview(null);
-    if (book.ext === 'txt') {
-      try {
-        const content = await invoke<string>('library_read_local', {
-          path: book.path,
-          maxChars: 20000,
-        });
-        setTextPreview(content);
-      } catch (err) {
-        setTextPreview(err instanceof Error ? err.message : String(err));
+  const handleSelectLocal = useCallback(
+    async (book: LocalBook) => {
+      const requestId = ++localPreviewRequestRef.current;
+      setSelectedLocal(book);
+      setSelectedRemote(null);
+      setPreview(null);
+      setTextPreview(null);
+      setEpubBook(null);
+      setEpubChapter(null);
+      setError(null);
+
+      if (book.ext === 'txt') {
+        setTextPreviewLoading(true);
+        try {
+          const content = await invoke<string>('library_read_local', {
+            path: book.path,
+            maxChars: 40000,
+          });
+          if (localPreviewRequestRef.current !== requestId) return;
+          setTextPreview(content);
+        } catch (err) {
+          if (localPreviewRequestRef.current !== requestId) return;
+          setTextPreview(err instanceof Error ? err.message : String(err));
+        } finally {
+          if (localPreviewRequestRef.current === requestId) {
+            setTextPreviewLoading(false);
+          }
+        }
+        return;
       }
+
+      if (book.ext === 'epub' || book.ext === 'book') {
+        setEpubLoading(true);
+        try {
+          const opened = await invoke<{ book: EpubBook; path: string }>(
+            'library_open_epub',
+            { path: book.path }
+          );
+          if (localPreviewRequestRef.current !== requestId) return;
+          const bookMeta = opened.book;
+          const resolvedPath = opened.path;
+          setSelectedLocal({
+            ...book,
+            path: resolvedPath,
+            ext: 'book',
+            name: bookMeta.title || book.name,
+          });
+          setEpubBook(bookMeta);
+          // EPUB→folder conversion may have replaced the loose file — refresh list.
+          if (resolvedPath !== book.path) {
+            void loadLocal();
+          }
+          const first =
+            bookMeta.chapters.find((chapter) =>
+              /^第\s*\d+\s*章/.test(chapter.title)
+            )?.index ??
+            bookMeta.chapters.find(
+              (chapter) =>
+                !/^(简介|目录|封面|版权)/.test(chapter.title.trim())
+            )?.index ??
+            bookMeta.chapters[0]?.index ??
+            0;
+          await loadEpubChapter(resolvedPath, first, requestId);
+        } catch (err) {
+          if (localPreviewRequestRef.current !== requestId) return;
+          setError(err instanceof Error ? err.message : String(err));
+          setEpubLoading(false);
+        }
+      }
+    },
+    [loadEpubChapter, loadLocal]
+  );
+
+  const handleDeleteLocal = useCallback(async () => {
+    if (!selectedLocal) return;
+    const name = displayBookName(selectedLocal.name);
+    if (!window.confirm(`删除「${name}」？此操作不可撤销。`)) {
+      return;
     }
-  }, []);
+    setError(null);
+    try {
+      await invoke('library_delete_local', { path: selectedLocal.path });
+      setSelectedLocal(null);
+      setEpubBook(null);
+      setEpubChapter(null);
+      setTextPreview(null);
+      setNotice(`已删除「${name}」`);
+      await loadLocal();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [loadLocal, selectedLocal]);
 
   const handleDownload = useCallback(
     async (item: SearchItem) => {
@@ -259,6 +398,9 @@ export function NovelLibraryPanel() {
     },
     [loadLocal]
   );
+
+  const currentChapterIndex = epubChapter?.index ?? 0;
+  const chapterCount = epubBook?.chapters.length ?? 0;
 
   return (
     <div className="library-overlay bg-background text-foreground flex h-full w-full flex-col overflow-hidden">
@@ -403,29 +545,54 @@ export function NovelLibraryPanel() {
                   </p>
                 </div>
               ) : null}
-              <div className="divide-y">
-                {filteredLocal.map((book) => (
-                  <button
-                    key={book.path}
-                    type="button"
-                    className={cn(
-                      'flex w-full items-start gap-2 px-3 py-2.5 text-left hover:bg-muted/50',
-                      selectedLocal?.path === book.path &&
-                        'border-l-2 border-blue-500 bg-blue-50 dark:bg-blue-950/30'
-                    )}
-                    onClick={() => void handleSelectLocal(book)}
-                  >
-                    <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">
-                        {book.name}
+              <div className="space-y-0.5 p-1.5">
+                {filteredLocal.map((book) => {
+                  const selected = selectedLocal?.path === book.path;
+                  return (
+                    <button
+                      key={book.path}
+                      type="button"
+                      className={cn(
+                        'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors',
+                        selected ? 'bg-muted' : 'hover:bg-muted/60'
+                      )}
+                      onClick={() => void handleSelectLocal(book)}
+                    >
+                      <div className="h-14 w-10 shrink-0 overflow-hidden rounded-md bg-muted shadow-sm">
+                        {book.coverDataUrl ? (
+                          <img
+                            src={book.coverDataUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div
+                            className={cn(
+                              'flex h-full w-full items-center justify-center',
+                          book.ext === 'epub' || book.ext === 'book'
+                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                            : 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
+                            )}
+                          >
+                            {book.ext === 'epub' || book.ext === 'book' ? (
+                              <BookOpen className="h-4 w-4" />
+                            ) : (
+                              <FileText className="h-4 w-4" />
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div className="mt-0.5 text-[10px] text-muted-foreground">
-                        {book.ext.toUpperCase()} · {formatSize(book.size)}
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[13px] font-medium leading-snug">
+                          {displayBookName(book.name)}
+                        </div>
+                        <div className="mt-0.5 text-[10px] text-muted-foreground">
+                          {book.ext.toUpperCase()} · {formatSize(book.size)}
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             </>
           ) : (
@@ -441,65 +608,78 @@ export function NovelLibraryPanel() {
                   没有搜索结果
                 </div>
               ) : null}
-              <div className="divide-y">
-                {searchResults.map((item) => (
-                  <div
-                    key={item.bookId}
-                    className={cn(
-                      'px-3 py-2.5 hover:bg-muted/50',
-                      selectedRemote?.bookId === item.bookId &&
-                        'border-l-2 border-blue-500 bg-blue-50 dark:bg-blue-950/30'
-                    )}
-                  >
-                    <button
-                      type="button"
-                      className="flex w-full items-start gap-2.5 text-left"
-                      onClick={() => void handleSelectRemote(item)}
+              <div className="space-y-0.5 p-1.5">
+                {searchResults.map((item) => {
+                  const selected = selectedRemote?.bookId === item.bookId;
+                  const downloaded = isDownloaded(item.title);
+                  const downloading = downloadingId === item.bookId;
+                  return (
+                    <div
+                      key={item.bookId}
+                      className={cn(
+                        'rounded-lg px-2.5 py-2 transition-colors',
+                        selected ? 'bg-muted' : 'hover:bg-muted/60'
+                      )}
                     >
-                      <div className="h-14 w-10 shrink-0 overflow-hidden rounded bg-muted">
-                        {item.coverDataUrl ? (
-                          <img
-                            src={item.coverDataUrl}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center">
-                            <BookOpen className="h-4 w-4 text-muted-foreground/50" />
+                      <div className="flex items-start gap-2.5">
+                        <button
+                          type="button"
+                          className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
+                          onClick={() => void handleSelectRemote(item)}
+                        >
+                          <div className="h-14 w-10 shrink-0 overflow-hidden rounded-md bg-muted shadow-sm">
+                            {item.coverDataUrl ? (
+                              <img
+                                src={item.coverDataUrl}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center">
+                                <BookOpen className="h-4 w-4 text-muted-foreground/50" />
+                              </div>
+                            )}
                           </div>
-                        )}
+                          <div className="min-w-0 flex-1 pt-0.5">
+                            <div className="line-clamp-2 text-[13px] font-medium leading-snug">
+                              {item.title}
+                            </div>
+                            <div className="mt-1 text-[10px] text-muted-foreground">
+                              {item.author || '未知作者'}
+                            </div>
+                          </div>
+                        </button>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium">
-                          {item.title}
-                        </div>
-                        <div className="mt-0.5 text-[10px] text-muted-foreground">
-                          {item.author || '未知作者'}
-                        </div>
-                      </div>
-                    </button>
-                    <div className="mt-2 pl-[3.25rem]">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={downloadingId === item.bookId}
-                        onClick={() => void handleDownload(item)}
-                      >
-                        {downloadingId === item.bookId ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            下载中…
-                          </>
+                      <div className="mt-2 flex justify-end">
+                        {downloaded ? (
+                          <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-300">
+                            已在本地
+                          </span>
                         ) : (
-                          <>
-                            <Download className="h-3.5 w-3.5" />
-                            下载到本地
-                          </>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-7 px-2.5 text-[11px]"
+                            disabled={downloading}
+                            onClick={() => void handleDownload(item)}
+                          >
+                            {downloading ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                下载中…
+                              </>
+                            ) : (
+                              <>
+                                <Download className="h-3.5 w-3.5" />
+                                下载到本地
+                              </>
+                            )}
+                          </Button>
                         )}
-                      </Button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           )}
@@ -516,51 +696,192 @@ export function NovelLibraryPanel() {
           ) : null}
 
           {selectedLocal ? (
-            <div className="flex h-full flex-col overflow-hidden">
-              <div className="shrink-0 border-b p-4">
-                <h3 className="text-lg font-semibold">{selectedLocal.name}</h3>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {selectedLocal.path}
+            <div className="flex h-full overflow-hidden">
+              {(selectedLocal.ext === 'epub' || selectedLocal.ext === 'book') &&
+              epubBook ? (
+                <div className="flex w-56 shrink-0 flex-col border-r">
+                  <div className="shrink-0 border-b px-3 py-2">
+                    <div className="truncate text-xs font-medium">目录</div>
+                    <div className="mt-0.5 text-[10px] text-muted-foreground">
+                      {chapterCount} 章
+                      {epubBook.author ? ` · ${epubBook.author}` : ''}
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-1">
+                    {epubBook.chapters.map((chapter) => (
+                      <button
+                        key={chapter.index}
+                        type="button"
+                        className={cn(
+                          'mb-0.5 w-full rounded-md px-2 py-1.5 text-left text-[11px] leading-snug transition-colors',
+                          chapter.index === currentChapterIndex
+                            ? 'bg-muted font-medium'
+                            : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                        )}
+                        onClick={() => {
+                          if (!selectedLocal) return;
+                          const requestId = ++localPreviewRequestRef.current;
+                          void loadEpubChapter(
+                            selectedLocal.path,
+                            chapter.index,
+                            requestId
+                          );
+                        }}
+                      >
+                        {chapter.title}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="mt-3 flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() =>
-                      void invoke('library_open_local', {
-                        path: selectedLocal.path,
-                      })
-                    }
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    打开
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      void invoke('library_reveal_local', {
-                        path: selectedLocal.path,
-                      })
-                    }
-                  >
-                    <FolderOpen className="h-3.5 w-3.5" />
-                    在访达中显示
-                  </Button>
+              ) : null}
+
+              <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                <div className="shrink-0 border-b p-4">
+                  <h3 className="text-lg font-semibold">
+                    {epubBook?.title || displayBookName(selectedLocal.name)}
+                  </h3>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {selectedLocal.path}
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {selectedLocal.ext === 'epub' ||
+                    selectedLocal.ext === 'book' ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={
+                            epubLoading || currentChapterIndex <= 0 || !epubBook
+                          }
+                          onClick={() => {
+                            if (!selectedLocal || !epubBook) return;
+                            const prev = Math.max(0, currentChapterIndex - 1);
+                            const requestId = ++localPreviewRequestRef.current;
+                            void loadEpubChapter(
+                              selectedLocal.path,
+                              prev,
+                              requestId
+                            );
+                          }}
+                        >
+                          <ChevronLeft className="h-3.5 w-3.5" />
+                          上一章
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={
+                            epubLoading ||
+                            !epubBook ||
+                            currentChapterIndex >= chapterCount - 1
+                          }
+                          onClick={() => {
+                            if (!selectedLocal || !epubBook) return;
+                            const next = Math.min(
+                              chapterCount - 1,
+                              currentChapterIndex + 1
+                            );
+                            const requestId = ++localPreviewRequestRef.current;
+                            void loadEpubChapter(
+                              selectedLocal.path,
+                              next,
+                              requestId
+                            );
+                          }}
+                        >
+                          下一章
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        void invoke('library_open_local', {
+                          path: selectedLocal.path,
+                        })
+                      }
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      系统打开
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        void invoke('library_reveal_local', {
+                          path: selectedLocal.path,
+                        })
+                      }
+                    >
+                      <FolderOpen className="h-3.5 w-3.5" />
+                      在访达中显示
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => void handleDeleteLocal()}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      删除
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4">
-                {selectedLocal.ext === 'txt' && textPreview ? (
-                  <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground/80">
-                    {textPreview}
-                  </pre>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    {selectedLocal.ext === 'epub'
-                      ? 'EPUB 请用「打开」在系统阅读器中查看。'
-                      : '该格式不支持内嵌预览。'}
-                  </p>
-                )}
+                <div
+                  ref={readerScrollRef}
+                  className="flex-1 overflow-y-auto p-4"
+                >
+                  {selectedLocal.ext === 'epub' ||
+                  selectedLocal.ext === 'book' ? (
+                    epubLoading && !epubChapter ? (
+                      <div className="flex items-center text-xs text-muted-foreground">
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {selectedLocal.ext === 'epub'
+                          ? '正在解析并转换书库…'
+                          : '加载章节…'}
+                      </div>
+                    ) : epubChapter ? (
+                      <article className="mx-auto max-w-2xl">
+                        <h4 className="mb-4 text-base font-semibold">
+                          {epubChapter.title}
+                        </h4>
+                        <div className="space-y-4 text-[15px] leading-7 text-foreground/90">
+                          {chapterBodyParagraphs(
+                            epubChapter.title,
+                            epubChapter.text
+                          ).map((para, i) => (
+                            <p key={i}>{para}</p>
+                          ))}
+                        </div>
+                        {epubLoading ? (
+                          <div className="mt-4 flex items-center text-xs text-muted-foreground">
+                            <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                            加载中…
+                          </div>
+                        ) : null}
+                      </article>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        无法打开该 EPUB。
+                      </p>
+                    )
+                  ) : textPreviewLoading ? (
+                    <div className="flex items-center text-xs text-muted-foreground">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      解析预览…
+                    </div>
+                  ) : textPreview ? (
+                    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground/80">
+                      {textPreview}
+                    </pre>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      该格式不支持内嵌预览。
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           ) : null}
@@ -607,25 +928,31 @@ export function NovelLibraryPanel() {
                         <span className="text-emerald-600">完结</span>
                       ) : null}
                     </div>
-                    <div className="mt-3">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={downloadingId === selectedRemote.bookId}
-                        onClick={() => void handleDownload(selectedRemote)}
-                      >
-                        {downloadingId === selectedRemote.bookId ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            下载中…
-                          </>
-                        ) : (
-                          <>
-                            <Download className="h-3.5 w-3.5" />
-                            下载到本地书库
-                          </>
-                        )}
-                      </Button>
+                    <div className="mt-3 flex justify-end">
+                      {isDownloaded(selectedRemote.title) ? (
+                        <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-700 dark:text-emerald-300">
+                          已在本地
+                        </span>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={downloadingId === selectedRemote.bookId}
+                          onClick={() => void handleDownload(selectedRemote)}
+                        >
+                          {downloadingId === selectedRemote.bookId ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              下载中…
+                            </>
+                          ) : (
+                            <>
+                              <Download className="h-3.5 w-3.5" />
+                              下载到本地
+                            </>
+                          )}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -759,4 +1086,33 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function displayBookName(filename: string): string {
+  return filename.replace(/\.(epub|txt|mp3|wav)$/i, '');
+}
+
+function normalizeBookTitle(title: string): string {
+  return title
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_\-—–·・.]+/g, '');
+}
+
+function chapterBodyParagraphs(title: string, text: string): string[] {
+  const titleKey = normalizeBookTitle(title);
+  const paras = text
+    .split(/\n\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  let i = 0;
+  while (i < paras.length) {
+    const key = normalizeBookTitle(paras[i]);
+    if (key === titleKey || (titleKey.startsWith(key) && key.length >= 4)) {
+      i += 1;
+      continue;
+    }
+    break;
+  }
+  return paras.slice(i);
 }

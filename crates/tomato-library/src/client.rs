@@ -1,8 +1,10 @@
 //! HTTP client for the Tomato download platform.
 
-use anyhow::{anyhow, bail, Context, Result};
-use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
-use reqwest::Client;
+use anyhow::{Context, Result, anyhow, bail};
+use reqwest::{
+    Client,
+    header::{CONTENT_TYPE, HeaderMap, HeaderValue},
+};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -309,10 +311,7 @@ impl TomatoClient {
     }
 
     /// Fetch a cover (or any authenticated relative/absolute URL) as raw bytes.
-    pub async fn fetch_authenticated_bytes(
-        &self,
-        path_or_url: &str,
-    ) -> Result<(Vec<u8>, String)> {
+    pub async fn fetch_authenticated_bytes(&self, path_or_url: &str) -> Result<(Vec<u8>, String)> {
         let url = if path_or_url.starts_with("http://") || path_or_url.starts_with("https://") {
             path_or_url.to_string()
         } else if path_or_url.starts_with('/') {
@@ -507,8 +506,9 @@ pub fn unexpected_missing_job(id: u64) -> anyhow::Error {
 
 #[cfg(test)]
 mod tests {
-    use super::cover_url_from_raw;
     use serde_json::json;
+
+    use super::cover_url_from_raw;
 
     #[test]
     fn extracts_thumb_url_from_raw() {

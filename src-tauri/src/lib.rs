@@ -623,6 +623,9 @@ pub fn run(cef_bootstrap: Result<CefBootstrap, String>) {
             if let Err(error) = apply_app_icon(&main_window) {
                 tracing::warn!("Failed to apply app icon to main window: {}", error);
             }
+            if let Err(error) = main_window.maximize() {
+                tracing::warn!("Failed to maximize main window: {}", error);
+            }
 
             let app_handle = app.handle().clone();
             main_window.on_window_event(move |event| {
@@ -679,6 +682,7 @@ pub fn run(cef_bootstrap: Result<CefBootstrap, String>) {
         commands::remote_desktop::remote_desktop_listen,
         commands::remote_desktop::remote_desktop_subscribe,
         commands::terminal::open_external_terminal,
+        commands::filesystem::path_exists,
         commands::filesystem::reveal_in_file_manager,
         tray::update_tray_badge,
         commands::repos::open_repo_in_editor,
@@ -703,6 +707,9 @@ pub fn run(cef_bootstrap: Result<CefBootstrap, String>) {
         commands::tomato::library_preview,
         commands::tomato::library_download,
         commands::tomato::library_read_local,
+        commands::tomato::library_open_epub,
+        commands::tomato::library_read_epub_chapter,
+        commands::tomato::library_delete_local,
         commands::tomato::library_reveal_local,
         commands::tomato::library_open_local,
         commands::web_service::generate_web_service_token,

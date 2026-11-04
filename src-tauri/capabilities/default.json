@@ -5,8 +5,7 @@
   "windows": [
     "main",
     "settings",
-    "desktop-toast",
-    "project-rail"
+    "desktop-toast"
   ],
   "permissions": [
     "core:default",

@@ -2,15 +2,15 @@
 
 use std::time::Duration;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
-use crate::client::{
-    job_failed_message, pick_preferred_format, unexpected_missing_job, TomatoClient,
+use crate::{
+    client::{TomatoClient, job_failed_message, pick_preferred_format, unexpected_missing_job},
+    config::TomatoLibraryConfig,
+    local::{sanitize_filename, unique_target_path},
 };
-use crate::config::TomatoLibraryConfig;
-use crate::local::{sanitize_filename, unique_target_path};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadRequest {
@@ -39,7 +39,14 @@ pub async fn download_book_to_library(
     let library_dir = cfg.ensure_library_dir()?;
 
     let preview = client.preview(&request.book_id).await.ok();
-    if preview.is_some() {
+    let mut cover_bytes: Option<(Vec<u8>, String)> = None;
+    if let Some(ref preview) = preview {
+        if !preview.cover_url.trim().is_empty() {
+            match client.fetch_authenticated_bytes(&preview.cover_url).await {
+                Ok(data) => cover_bytes = Some(data),
+                Err(err) => warn!("cover fetch failed: {err}"),
+            }
+        }
         if let Err(err) = client.preview_cleanup(&request.book_id).await {
             warn!("preview cleanup failed: {err}");
         }
@@ -100,7 +107,8 @@ pub async fn download_book_to_library(
                     let value = options[0].clone();
                     client.set_book_name(job_id, &value).await?;
                     title = value;
-                } else if let Some(options) = job.format_options.as_ref().filter(|o| !o.is_empty()) {
+                } else if let Some(options) = job.format_options.as_ref().filter(|o| !o.is_empty())
+                {
                     let value = pick_preferred_format(options).unwrap_or_else(|| "epub".into());
                     client.set_format(job_id, &value).await?;
                     chosen_format = value;
@@ -129,13 +137,37 @@ pub async fn download_book_to_library(
     std::fs::write(&target, &bytes)
         .with_context(|| format!("Failed to write {}", target.display()))?;
 
+    if let Some((cover_data, content_type)) = cover_bytes {
+        if let Err(err) = crate::local::write_cover_bytes(&target, &cover_data, &content_type) {
+            warn!("failed to save local cover: {err}");
+        }
+    }
+
+    // Prefer a folder book (parsed chapters) over keeping the raw EPUB around.
+    let (final_path, final_format, final_size) = if chosen_format.eq_ignore_ascii_case("epub") {
+        match crate::book_dir::import_epub_as_book_dir(&target, &library_dir) {
+            Ok(book_dir) => {
+                let size = std::fs::metadata(&book_dir)
+                    .map(|m| m.len())
+                    .unwrap_or(bytes.len() as u64);
+                (book_dir, "book".to_string(), size)
+            }
+            Err(err) => {
+                warn!("epub→folder conversion failed, keeping epub: {err}");
+                (target, chosen_format, bytes.len() as u64)
+            }
+        }
+    } else {
+        (target, chosen_format, bytes.len() as u64)
+    };
+
     Ok(DownloadResult {
         job_id,
         title,
         author,
-        local_path: target.to_string_lossy().into_owned(),
-        format: chosen_format,
-        size: bytes.len() as u64,
+        local_path: final_path.to_string_lossy().into_owned(),
+        format: final_format,
+        size: final_size,
     })
 }
 

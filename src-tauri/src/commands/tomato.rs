@@ -1,14 +1,14 @@
 //! Tauri commands for the Tomato download platform + local book library.
 
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use futures::stream::{FuturesUnordered, StreamExt};
 use serde::{Deserialize, Serialize};
 use tomato_library::{
-    cover_url_from_raw, default_library_path, download_book_to_library, list_local_books,
-    read_local_text, DownloadRequest, DownloadResult, LocalBook, TomatoClient,
-    TomatoLibraryConfig, TomatoLibraryConfigManager,
+    DownloadRequest, DownloadResult, EpubBook, EpubChapter, LocalBook, TomatoClient,
+    TomatoLibraryConfig, TomatoLibraryConfigManager, cover_url_from_raw, default_library_path,
+    delete_book, download_book_to_library, ensure_book_dir, list_local_books, open_book,
+    read_chapter, read_local_text,
 };
 
 use crate::error::AppError;
@@ -151,9 +151,7 @@ async fn resolve_search_cover(
                 None
             } else {
                 match client.fetch_authenticated_bytes(&url).await {
-                    Ok((bytes, content_type)) => {
-                        Some(encode_data_url(&bytes, &content_type))
-                    }
+                    Ok((bytes, content_type)) => Some(encode_data_url(&bytes, &content_type)),
                     Err(err) => {
                         tracing::warn!(
                             book_id = %item.book_id,
@@ -296,10 +294,54 @@ pub async fn library_read_local(path: String, max_chars: Option<usize>) -> Resul
         .and_then(|e| e.to_str())
         .unwrap_or("")
         .to_ascii_lowercase();
-    if ext != "txt" {
-        return Err("仅支持预览 txt 文件；epub 请用系统应用打开".into());
+    let max = max_chars.unwrap_or(0);
+    match ext.as_str() {
+        "txt" => read_local_text(&path, max).map_err(|e| e.to_string()),
+        _ => Err("该格式请用章节阅读接口打开".into()),
     }
-    read_local_text(&path, max_chars.unwrap_or(0)).map_err(|e| e.to_string())
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryOpenBookView {
+    pub book: EpubBook,
+    /// Resolved book folder path (EPUB files are converted here on first open).
+    pub path: String,
+}
+
+#[tauri::command]
+pub async fn library_open_epub(path: String) -> Result<LibraryOpenBookView, String> {
+    let cfg = load_cfg()?;
+    let library_root = cfg.ensure_library_dir().map_err(|e| e.to_string())?;
+    let path = PathBuf::from(path);
+    let book_dir = tokio::task::spawn_blocking(move || ensure_book_dir(&path, &library_root))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+    let book = open_book(&book_dir).map_err(|e| e.to_string())?;
+    Ok(LibraryOpenBookView {
+        book,
+        path: book_dir.to_string_lossy().into_owned(),
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryEpubChapterArgs {
+    pub path: String,
+    pub index: u32,
+}
+
+#[tauri::command]
+pub async fn library_read_epub_chapter(
+    args: LibraryEpubChapterArgs,
+) -> Result<EpubChapter, String> {
+    read_chapter(&PathBuf::from(args.path), args.index).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn library_delete_local(path: String) -> Result<(), String> {
+    delete_book(&PathBuf::from(path)).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

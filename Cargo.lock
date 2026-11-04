@@ -7659,12 +7659,14 @@ name = "tomato-library"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "dirs 5.0.1",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
+ "zip 4.6.1",
 ]
 
 [[package]]
