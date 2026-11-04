@@ -675,9 +675,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   color: var(--text-faint);
   transform: rotate(0deg);
   transition: transform 140ms ease;
+}
+
+.file-tree-chevron svg {
+  display: block;
 }
 
 .file-tree-chevron.is-open {

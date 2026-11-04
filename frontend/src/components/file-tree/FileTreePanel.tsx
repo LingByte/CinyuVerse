@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { toast } from '@/components/ui/toast';
 import { useTranslation } from 'react-i18next';
 import {
+  ChevronRight,
   FilePlus,
   FolderPlus,
   Plus,
@@ -1337,8 +1338,9 @@ export function FileTreePanel({
             {isFolder && canExpand ? (
               <span
                 className={`file-tree-chevron${isExpanded ? ' is-open' : ''}`}
+                aria-hidden
               >
-                {'>'}
+                <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
               </span>
             ) : (
               <span className="file-tree-spacer" aria-hidden />
@@ -1443,8 +1445,9 @@ export function FileTreePanel({
             >
               <span
                 className={`file-tree-chevron${isRootVisibleExpanded ? ' is-open' : ''}`}
+                aria-hidden
               >
-                {'>'}
+                <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
               </span>
               <span className="file-tree-name">{workspaceRootLabel}</span>
             </button>

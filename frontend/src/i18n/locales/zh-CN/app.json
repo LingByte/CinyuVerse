@@ -52,6 +52,7 @@
   "projectCard": {
     "viewDetails": "查看详情",
     "openInIde": "在编辑器中打开",
+    "openInIdeFailed": "无法打开编辑器，请在设置中检查默认编辑器配置",
     "edit": "编辑",
     "createdAt": "创建于 {{date}}"
   },
@@ -128,6 +129,9 @@
     "noProjects": "暂无作品，创建一个开始使用吧。",
     "open": "打开",
     "openProjectFolder": "在访达中打开作品目录",
+    "missingProjectTitle": "作品目录已不存在",
+    "missingProjectMessage": "「{{name}}」的本地路径已失效。是否从最近作品中删除这条记录？",
+    "removeMissingRecord": "删除记录",
     "tagline": "AI 原生小说创作平台"
   },
   "webConnect": {

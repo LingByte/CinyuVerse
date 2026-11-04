@@ -52,6 +52,7 @@
   "projectCard": {
     "viewDetails": "View details",
     "openInIde": "Open in Editor",
+    "openInIdeFailed": "Couldn’t open the editor. Check the default editor in Settings.",
     "edit": "Edit",
     "createdAt": "Created {{date}}"
   },
@@ -128,6 +129,9 @@
     "noProjects": "No novels yet. Create one to get started.",
     "open": "Open",
     "openProjectFolder": "Reveal novel folder in file manager",
+    "missingProjectTitle": "Novel folder missing",
+    "missingProjectMessage": "The local path for \"{{name}}\" is gone. Remove this record from recent novels?",
+    "removeMissingRecord": "Remove record",
     "tagline": "AI-native novel creation platform"
   },
   "webConnect": {

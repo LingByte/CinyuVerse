@@ -1,8 +1,5 @@
 import type { TaskWithAttemptStatus, Workspace } from 'shared/types';
-import type {
-  ConfirmDialogProps,
-  EditorSelectionDialogProps,
-} from '@/components/dialogs';
+import type { ConfirmDialogProps } from '@/components/dialogs';
 
 // Type definitions for nice-modal-react modal arguments
 declare module '@ebay/nice-modal-react' {
@@ -21,9 +18,6 @@ declare module '@ebay/nice-modal-react' {
     disclaimer: void;
     onboarding: void;
     'release-notes': void;
-
-    // Workspace/session-related modals
-    'editor-selection': EditorSelectionDialogProps;
   }
 }
 

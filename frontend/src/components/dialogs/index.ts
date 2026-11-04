@@ -7,17 +7,9 @@ export {
   type ProjectFormDialogProps,
   type ProjectFormDialogResult,
 } from './projects/ProjectFormDialog';
-export {
-  ProjectEditorSelectionDialog,
-  type ProjectEditorSelectionDialogProps,
-} from './projects/ProjectEditorSelectionDialog';
 
 // Workspace/session-related dialogs
 export { CreatePRDialog } from './tasks/CreatePRDialog';
-export {
-  EditorSelectionDialog,
-  type EditorSelectionDialogProps,
-} from './tasks/EditorSelectionDialog';
 export {
   TagEditDialog,
   type TagEditDialogProps,

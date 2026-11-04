@@ -19,6 +19,7 @@ import {
   useKanbanProjectSessions,
   type KanbanProjectSessionRecord,
 } from '@/hooks/useKanbanProjectSessions';
+import { useKanbanPanelSwipe } from '@/hooks/useKanbanPanelSwipe';
 import { dateTimestamp } from '@/utils/date';
 import { resolveCreateSessionHref } from '@/lib/createSessionHref';
 import { useKanbanBoardStyle } from '@/lib/kanbanBoardStyle';
@@ -110,21 +111,27 @@ export function KanbanBoard() {
     : shouldShowLeftArrow(panelView);
   const showRightArrow = shouldShowRightArrow(panelView);
 
-  const handleLeftArrowClick = () => {
+  const handleLeftArrowClick = useCallback(() => {
     if (panelView === 'sessionHub') {
       goToBoard();
     } else if (panelView === 'usageDashboard') {
       goToSessionHub();
     }
-  };
+  }, [goToBoard, goToSessionHub, panelView]);
 
-  const handleRightArrowClick = () => {
+  const handleRightArrowClick = useCallback(() => {
     if (panelView === 'board') {
       goToSessionHub();
     } else if (panelView === 'sessionHub') {
       goToUsageDashboard();
     }
-  };
+  }, [goToSessionHub, goToUsageDashboard, panelView]);
+
+  // Swipe left → next panel (same as right arrow); swipe right → previous.
+  const swipeHandlers = useKanbanPanelSwipe({
+    onSwipeLeft: handleRightArrowClick,
+    onSwipeRight: handleLeftArrowClick,
+  });
 
   const getLeftArrowLabel = () => {
     if (panelView === 'sessionHub') return t('kanbanPanel.backToBoard');
@@ -144,7 +151,10 @@ export function KanbanBoard() {
       {!hideSessionSlot && outerSessionSide === 'left' && (
         <KanbanSessionSlot side="left" active={outerSessionActive} />
       )}
-      <div className="kanban-shell relative h-full min-w-0 flex-1 overflow-hidden">
+      <div
+        className="kanban-shell relative h-full min-w-0 flex-1 overflow-hidden touch-pan-y"
+        {...swipeHandlers}
+      >
         <div
           className="flex h-full w-[300%] transition-transform duration-300 ease-out"
           style={{
