@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Trash2,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -93,6 +94,29 @@ type EpubChapter = {
 
 type Mode = 'local' | 'search';
 
+type ImitateStatusView = {
+  phase: 'idle' | 'queued' | 'running' | 'completed' | 'failed' | string;
+  progress: string | null;
+  error: string | null;
+  updatedAt: string;
+  conversationId: string | null;
+};
+
+export function imitateStatusLabel(status: ImitateStatusView | null): string {
+  if (!status) return '未分析';
+  switch (status.phase) {
+    case 'queued':
+    case 'running':
+      return status.progress || '分析中';
+    case 'completed':
+      return '已完成';
+    case 'failed':
+      return status.error ? `失败：${status.error}` : '失败';
+    default:
+      return '未分析';
+  }
+}
+
 export function NovelLibraryPanel() {
   const { t } = useTranslation('panels');
   const [mode, setMode] = useState<Mode>('local');
@@ -117,6 +141,10 @@ export function NovelLibraryPanel() {
   const [settings, setSettings] = useState<LibrarySettings | null>(null);
   const [pathDraft, setPathDraft] = useState('');
   const [pathSaving, setPathSaving] = useState(false);
+  const [imitateStatus, setImitateStatus] = useState<ImitateStatusView | null>(
+    null
+  );
+  const [imitateStarting, setImitateStarting] = useState(false);
   const localPreviewRequestRef = useRef(0);
   const readerScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -368,12 +396,70 @@ export function NovelLibraryPanel() {
       setEpubBook(null);
       setEpubChapter(null);
       setTextPreview(null);
+      setImitateStatus(null);
       setNotice(`已删除「${name}」`);
       await loadLocal();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
   }, [loadLocal, selectedLocal]);
+
+  const refreshImitateStatus = useCallback(async (path: string) => {
+    try {
+      const status = await invoke<ImitateStatusView>('library_imitate_status', {
+        path,
+      });
+      setImitateStatus(status);
+      return status;
+    } catch {
+      setImitateStatus(null);
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!selectedLocal || selectedLocal.ext !== 'book') {
+      setImitateStatus(null);
+      return;
+    }
+    const path = selectedLocal.path;
+    void refreshImitateStatus(path);
+  }, [selectedLocal, refreshImitateStatus]);
+
+  useEffect(() => {
+    if (
+      !selectedLocal ||
+      selectedLocal.ext !== 'book' ||
+      !imitateStatus ||
+      (imitateStatus.phase !== 'queued' && imitateStatus.phase !== 'running')
+    ) {
+      return;
+    }
+    const path = selectedLocal.path;
+    const timer = window.setInterval(() => {
+      void refreshImitateStatus(path);
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [selectedLocal, imitateStatus, refreshImitateStatus]);
+
+  const handleStartImitate = useCallback(async () => {
+    if (!selectedLocal || selectedLocal.ext !== 'book') return;
+    setImitateStarting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const status = await invoke<ImitateStatusView>(
+        'library_start_imitate_analysis',
+        { path: selectedLocal.path }
+      );
+      setImitateStatus(status);
+      setNotice('已开始仿写分析');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setImitateStarting(false);
+    }
+  }, [selectedLocal]);
 
   const handleDownload = useCallback(
     async (item: SearchItem) => {
@@ -793,6 +879,36 @@ export function NovelLibraryPanel() {
                           <ChevronRight className="h-3.5 w-3.5" />
                         </Button>
                       </>
+                    ) : null}
+                    {selectedLocal.ext === 'book' ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={
+                          imitateStarting ||
+                          imitateStatus?.phase === 'queued' ||
+                          imitateStatus?.phase === 'running'
+                        }
+                        onClick={() => void handleStartImitate()}
+                        data-testid="library-imitate-analyze"
+                      >
+                        {imitateStarting ||
+                        imitateStatus?.phase === 'queued' ||
+                        imitateStatus?.phase === 'running' ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-3.5 w-3.5" />
+                        )}
+                        分析
+                      </Button>
+                    ) : null}
+                    {selectedLocal.ext === 'book' ? (
+                      <span
+                        className="text-xs text-muted-foreground"
+                        data-testid="library-imitate-status"
+                      >
+                        {imitateStatusLabel(imitateStatus)}
+                      </span>
                     ) : null}
                     <Button
                       size="sm"
