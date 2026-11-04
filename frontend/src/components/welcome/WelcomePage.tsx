@@ -64,22 +64,49 @@ function WelcomeAction({
 
 function RecentProjectItem({
   project,
-  onClick,
+  onOpen,
+  onMissing,
   onContextMenu,
 }: {
   project: { id: string; name: string };
-  onClick: () => void;
+  onOpen: () => void;
+  onMissing: () => void | Promise<void>;
   onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }) {
   const { t } = useTranslation(['app', 'common']);
-  const { data: repos } = useProjectRepos(project.id);
+  const { data: repos, isFetched } = useProjectRepos(project.id);
   const repoPath = repos?.[0]?.path ?? '';
+  const [pathExists, setPathExists] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!isFetched) {
+      setPathExists(null);
+      return;
+    }
+    if (!repoPath) {
+      setPathExists(false);
+      return;
+    }
+    setPathExists(null);
+    void desktopApi
+      .pathExists(repoPath)
+      .then((exists) => {
+        if (!cancelled) setPathExists(exists);
+      })
+      .catch(() => {
+        if (!cancelled) setPathExists(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isFetched, repoPath]);
 
   const handleOpenFolder = useCallback(
     async (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault();
       event.stopPropagation();
-      if (!repoPath) {
+      if (!repoPath || pathExists === false) {
         return;
       }
       try {
@@ -88,21 +115,45 @@ function RecentProjectItem({
         console.error('Failed to reveal project folder:', error);
       }
     },
-    [repoPath]
+    [pathExists, repoPath]
   );
 
+  const handleClick = useCallback(async () => {
+    if (!isFetched || pathExists === null) {
+      return;
+    }
+    if (!pathExists) {
+      await onMissing();
+      return;
+    }
+    onOpen();
+  }, [isFetched, onMissing, onOpen, pathExists]);
+
   return (
-    <div className="group flex w-full items-center gap-2 rounded px-2 py-1.5 transition-colors hover:bg-muted/60">
+    <div
+      className={`group flex w-full items-center gap-2 rounded px-2 py-1.5 transition-colors hover:bg-muted/60 ${
+        pathExists === false ? 'opacity-70' : ''
+      }`}
+    >
       <button
         type="button"
-        onClick={onClick}
+        onClick={() => void handleClick()}
         onContextMenu={onContextMenu}
         className="min-w-0 flex-1 truncate text-left text-sm font-medium text-foreground"
-        title={t('welcomePage.recentProjectTooltip')}
+        title={
+          pathExists === false
+            ? t('welcomePage.missingProjectTitle')
+            : t('welcomePage.recentProjectTooltip')
+        }
       >
         {project.name}
+        {pathExists === false ? (
+          <span className="ml-2 text-[11px] font-normal text-muted-foreground">
+            {t('welcomePage.missingProjectTitle')}
+          </span>
+        ) : null}
       </button>
-      {repoPath ? (
+      {repoPath && pathExists !== false ? (
         <button
           type="button"
           onClick={(event) => void handleOpenFolder(event)}
@@ -180,6 +231,44 @@ export function WelcomePage() {
     [navigate]
   );
 
+  const deleteProjectRecord = useCallback(
+    async (targetProject: { id: string; name: string }) => {
+      setIsDeletingProject(true);
+      try {
+        await projectsApi.delete(targetProject.id);
+        toast.success(
+          t('welcomePage.projectDeleted', { name: targetProject.name })
+        );
+      } catch (error) {
+        console.error('Failed to delete recent project:', error);
+        toast.error(t('welcomePage.deleteProjectFailed'));
+      } finally {
+        setIsDeletingProject(false);
+      }
+    },
+    [t]
+  );
+
+  const handleMissingProject = useCallback(
+    async (project: { id: string; name: string }) => {
+      if (isDeletingProject) return;
+      const result = await ConfirmDialog.show({
+        title: t('welcomePage.missingProjectTitle'),
+        message: t('welcomePage.missingProjectMessage', {
+          name: project.name,
+        }),
+        confirmText: t('welcomePage.removeMissingRecord'),
+        cancelText: t('common:cancel'),
+        variant: 'destructive',
+        contentClassName: PROJECT_DELETE_CONFIRM_CLASSNAME,
+        contentStyle: PROJECT_DELETE_CONFIRM_STYLE,
+      });
+      if (result !== 'confirmed') return;
+      await deleteProjectRecord(project);
+    },
+    [deleteProjectRecord, isDeletingProject, t]
+  );
+
   const handleProjectContextMenu = useCallback(
     (
       project: { id: string; name: string },
@@ -196,14 +285,34 @@ export function WelcomePage() {
     []
   );
 
-  const handleOpenFromContextMenu = useCallback(() => {
+  const handleOpenFromContextMenu = useCallback(async () => {
     if (!contextMenu) {
       return;
     }
-
-    handleProjectClick(contextMenu.projectId);
+    const target = {
+      id: contextMenu.projectId,
+      name: contextMenu.projectName,
+    };
     setContextMenu(null);
-  }, [contextMenu, handleProjectClick]);
+
+    try {
+      const repos = await projectsApi.getRepositories(target.id);
+      const repoPath = repos?.[0]?.path?.trim() ?? '';
+      const exists = repoPath
+        ? await desktopApi.pathExists(repoPath)
+        : false;
+      if (!exists) {
+        await handleMissingProject(target);
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to verify project path:', error);
+      await handleMissingProject(target);
+      return;
+    }
+
+    handleProjectClick(target.id);
+  }, [contextMenu, handleMissingProject, handleProjectClick]);
 
   const handleDeleteFromContextMenu = useCallback(async () => {
     if (!contextMenu || isDeletingProject) {
@@ -232,19 +341,8 @@ export function WelcomePage() {
       return;
     }
 
-    setIsDeletingProject(true);
-    try {
-      await projectsApi.delete(targetProject.id);
-      toast.success(
-        t('welcomePage.projectDeleted', { name: targetProject.name })
-      );
-    } catch (error) {
-      console.error('Failed to delete recent project:', error);
-      toast.error(t('welcomePage.deleteProjectFailed'));
-    } finally {
-      setIsDeletingProject(false);
-    }
-  }, [contextMenu, isDeletingProject, t]);
+    await deleteProjectRecord(targetProject);
+  }, [contextMenu, deleteProjectRecord, isDeletingProject, t]);
 
   return (
     <div className="welcome-page-surface h-full overflow-auto">
@@ -303,7 +401,8 @@ export function WelcomePage() {
               <RecentProjectItem
                 key={project.id}
                 project={project}
-                onClick={() => handleProjectClick(project.id)}
+                onOpen={() => handleProjectClick(project.id)}
+                onMissing={() => void handleMissingProject(project)}
                 onContextMenu={(event) =>
                   handleProjectContextMenu(project, event)
                 }

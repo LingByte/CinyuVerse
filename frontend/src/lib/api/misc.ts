@@ -264,6 +264,9 @@ export const fileTreeApi = {
 };
 
 export const desktopApi = {
+  pathExists: async (path: string): Promise<boolean> => {
+    return backendCall<boolean>('path_exists', { path });
+  },
   revealInFileManager: async (path: string): Promise<void> => {
     return backendCall<void>('reveal_in_file_manager', { path });
   },

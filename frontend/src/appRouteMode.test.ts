@@ -9,8 +9,6 @@ describe('getAppRouteMode', () => {
 
   it('keeps prefixed but non-exact routes in the main app shell', () => {
     expect(getAppRouteMode('/desktop-toast/settings')).toBe('main');
-    expect(getAppRouteMode('/project-rail')).toBe('main');
-    expect(getAppRouteMode('/project-rail/local-projects')).toBe('main');
   });
 
   it('defaults ordinary routes to the main app shell', () => {

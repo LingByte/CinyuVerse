@@ -71,21 +71,6 @@
     "creating": "创建中...",
     "createButton": "创建 PR"
   },
-  "cloneRepo": {
-    "title": "克隆作品集",
-    "description": "输入 Git 作品集地址并选择本地目录，克隆完成后自动加入草稿。",
-    "urlLabel": "作品集地址",
-    "urlPlaceholder": "https://github.com/owner/repo.git 或 git@...",
-    "cloneToLabel": "克隆到",
-    "parentDirPlaceholder": "选择父目录",
-    "browse": "浏览…",
-    "willCloneTo": "将克隆到：{{path}}",
-    "urlRequired": "请填写作品集地址",
-    "dirRequired": "请选择克隆到的目录",
-    "cloneFailed": "克隆失败",
-    "cloning": "克隆中…",
-    "clone": "克隆"
-  },
   "featureShowcase": {
     "previous": "上一步",
     "finish": "完成",

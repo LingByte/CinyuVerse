@@ -71,21 +71,6 @@
     "creating": "Creating...",
     "createButton": "Create PR"
   },
-  "cloneRepo": {
-    "title": "Clone Library",
-    "description": "Enter a Git library URL and choose a local directory. It will be added to your volume automatically once cloning completes.",
-    "urlLabel": "Library URL",
-    "urlPlaceholder": "https://github.com/owner/repo.git or git@...",
-    "cloneToLabel": "Clone to",
-    "parentDirPlaceholder": "Select parent directory",
-    "browse": "Browse…",
-    "willCloneTo": "Will clone to: {{path}}",
-    "urlRequired": "Please enter a library URL",
-    "dirRequired": "Please select a directory to clone to",
-    "cloneFailed": "Clone failed",
-    "cloning": "Cloning…",
-    "clone": "Clone"
-  },
   "featureShowcase": {
     "previous": "Previous",
     "finish": "Finish",
