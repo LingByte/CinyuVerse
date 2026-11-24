@@ -24,7 +24,7 @@ fn prepare_host_sidecar_stubs() {
     let ext = if cfg!(windows) { ".exe" } else { "" };
     let binaries = manifest_dir.join("binaries");
     let _ = std::fs::create_dir_all(&binaries);
-    for name in ["cinyuverse-mcp", "cinyuverse-workflow-mcp"] {
+    for name in ["cinyuverse-mcp"] {
         let path = binaries.join(format!("{name}-{triple}{ext}"));
         if !path.is_file() {
             let _ = std::fs::write(&path, []);

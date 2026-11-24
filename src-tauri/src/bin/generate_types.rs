@@ -293,7 +293,6 @@ const DESKTOP_SHELL_COMMANDS: &[&str] = &[
     "backup_create",
     "backup_restore",
     "open_devtools",
-    "plugin_dev_connection",
     "activate_desktop_toast",
     "set_app_icon",
     "update_tray_badge",
@@ -341,7 +340,6 @@ const DESKTOP_SHELL_COMMANDS: &[&str] = &[
     "take_tauri_inspector_capture",
     "trash_item",
     "update_web_service_config",
-    "plugin_control_import_cli",
 ];
 
 fn workspace_root() -> PathBuf {

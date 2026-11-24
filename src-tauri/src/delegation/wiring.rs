@@ -43,7 +43,6 @@ pub(crate) fn build_delegation(
     runtime: Arc<AgentRuntime>,
     pool: SqlitePool,
     conversation_context: conversations::ConversationContext,
-    official_mcp: Arc<plugins::OfficialMcpRuntime>,
 ) -> DelegationState {
     let map = Arc::new(Mutex::new(HashMap::new()));
     let spawner = Arc::new(RuntimeSpawner {
@@ -87,7 +86,6 @@ pub(crate) fn build_delegation(
         crate::delegation::inject::VibexDelegationInjector {
             tokens: tokens.clone(),
             socket_path: socket_path.clone(),
-            official_mcp,
         },
     ));
 

@@ -71,7 +71,6 @@ automation = { path = "../crates/automation" }
 workflows = { path = "../crates/workflows" }
 application = { path = "../crates/application" }
 remote-protocol = { path = "../crates/remote-protocol" }
-plugins = { path = "../crates/plugins" }
 tomato-library = { path = "../crates/tomato-library" }
 server = { path = "../crates/server" }
 tool-runtime = { path = "../crates/tool-runtime" }

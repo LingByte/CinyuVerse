@@ -1,4 +1,4 @@
-//! Locate Host-family sidecar binaries (`cinyuverse-mcp`, `cinyuverse-workflow-mcp`).
+//! Locate Host-family sidecar binaries (`cinyuverse-mcp`).
 
 use std::{
     fs,

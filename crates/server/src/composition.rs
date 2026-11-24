@@ -15,7 +15,6 @@ use conversations::{ConversationAgentEventRecorder, ConversationContext, Default
 use db::models::automation_v2::SqliteAutomationStore;
 use deployment::{Deployment, DeploymentError};
 use local_deployment::LocalDeployment;
-use plugins::{PluginControlPlane, PluginPreviewHost, SqlitePluginRegistry};
 use sqlx::SqlitePool;
 use tokio::{sync::Mutex, task::JoinHandle};
 
@@ -97,9 +96,6 @@ impl HeadlessServer {
             .await?;
         let (agent_event_sink, mut agent_events) = runtime_event_channel();
         let agent_runtime = Arc::new(AgentRuntime::new(agent_event_sink));
-        let plugin_control_plane = Arc::new(PluginControlPlane::new(Arc::new(
-            SqlitePluginRegistry::new(pool.clone()),
-        )));
         let application_deployment: Arc<dyn Deployment> = deployment.clone();
         let row_projectors = Arc::new(Mutex::new(HashMap::new()));
         let conversation_context = ConversationContext {
@@ -108,10 +104,7 @@ impl HeadlessServer {
             turn_locks: Arc::new(Mutex::new(HashMap::new())),
             runtime_states: Arc::new(Mutex::new(HashMap::new())),
             row_projectors: row_projectors.clone(),
-            host: Arc::new(DefaultConversationHost::with_product_mcp_server_names({
-                let gate = plugin_control_plane.official_product_mcp_gate();
-                std::sync::Arc::new(move || gate.product_mcp_names())
-            })),
+            host: Arc::new(DefaultConversationHost::default()),
             event_publisher: Arc::new(crate::chat_notify::ChatDeliveryPublisher::new(Arc::new(
                 crate::host::HostRowOpPublisher::new(pool.clone(), row_projectors),
             ))),
@@ -216,73 +209,6 @@ impl HeadlessServer {
             .await
             .map_err(|error| ServerBootstrapError::Conversation(error.to_string()))?;
 
-        let preview_host: Arc<dyn PluginPreviewHost> = Arc::new(
-            plugins::ExternalProcessPreviewHost::new(plugin_control_plane.clone()),
-        );
-        let capability_broker = Arc::new(plugins::HostCapabilityBroker::new(
-            plugin_control_plane.clone(),
-            preview_host.clone(),
-        ));
-        let worker_runtime = Arc::new(plugins::PluginWorkerRuntimeProvider::new(
-            config.data_dir.clone(),
-        ));
-        plugin_control_plane
-            .install_bundled_official_plugins(&config.data_dir, None)
-            .await
-            .map_err(|error| ServerBootstrapError::Plugin(error.to_string()))?;
-        let enabled_worker_exists = plugin_control_plane
-            .catalog()
-            .await
-            .map_err(|error| ServerBootstrapError::Plugin(error.to_string()))?
-            .iter()
-            .any(|plugin| {
-                plugin.activation == plugins::PluginActivation::Enabled
-                    && plugin.entrypoints.worker.is_some()
-            });
-        let recovery_failures = if enabled_worker_exists {
-            match worker_runtime.resolve().await {
-                Ok(node) => plugin_control_plane
-                    .recover_enabled_workers(
-                        &node,
-                        &config.data_dir.join("plugins").join("dev-candidates"),
-                        capability_broker.clone(),
-                    )
-                    .await
-                    .map_err(|error| ServerBootstrapError::Plugin(error.to_string()))?,
-                Err(error) => {
-                    tracing::warn!(%error, "Plugin Worker Runtime could not be provisioned");
-                    Vec::new()
-                }
-            }
-        } else {
-            Vec::new()
-        };
-        for failure in recovery_failures {
-            tracing::warn!(
-                plugin_id = %failure.plugin_id,
-                code = %failure.code,
-                error = %failure.message,
-                "enabled plugin Worker could not be restored"
-            );
-        }
-        if let Err(error) = plugin_control_plane.import_queued_developer_links().await {
-            tracing::warn!(%error, "queued linked Plugin inbox import failed");
-        }
-        if let Ok(node) = worker_runtime.resolve().await {
-            let _ = plugins::PluginControlPlane::spawn_developer_link_refresh(
-                plugin_control_plane.clone(),
-                node,
-                config.data_dir.join("plugins").join("dev-candidates"),
-                capability_broker.clone(),
-            );
-        }
-        plugin_control_plane
-            .sync_official_product_mcp_gate()
-            .await
-            .map_err(|error| ServerBootstrapError::Plugin(error.to_string()))?;
-        let app_surfaces = Arc::new(plugins::PluginAppSurfaceHost::new(
-            plugin_control_plane.clone(),
-        ));
         let data_dir_key = config.data_dir.to_string_lossy().into_owned();
         let automation_owner =
             AutomationEngine::acquire(&data_dir_key, FileOwnerLock::default()).await?;
@@ -298,7 +224,6 @@ impl HeadlessServer {
         let automation_runtime = HeadlessAutomationRuntime::new(
             deployment.clone(),
             conversation_context.clone(),
-            plugin_control_plane.clone(),
         );
         let preview_proxy = PreviewProxyRegistry::default();
         crate::start_chat_inbound(pool.clone(), conversation_context.clone());
@@ -313,22 +238,16 @@ impl HeadlessServer {
             agent_runtime.clone(),
             pool.clone(),
             conversation_context.clone(),
-            plugin_control_plane.official_product_mcp_gate(),
         );
         let core = crate::host_application_core(
             pool.clone(),
             conversation_context.clone(),
-            plugin_control_plane,
             Some(companion_memory),
-            preview_host,
-            capability_broker,
-            app_surfaces,
             preview_proxy.clone(),
             automation_runtime.clone(),
             automation_owner.is_some(),
             deployment.clone(),
-            config.data_dir.join("plugins/runtimes"),
-            worker_runtime,
+            config.data_dir.clone(),
         );
         let workflow_dispatcher =
             application::WorkflowAgentDispatcher::new(conversation_context.clone());

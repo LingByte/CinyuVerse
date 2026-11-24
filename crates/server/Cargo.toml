@@ -27,7 +27,6 @@ git2 = { workspace = true }
 ignore = "0.4"
 local-deployment = { path = "../local-deployment" }
 prost = "0.13"
-plugins = { path = "../plugins" }
 remote-protocol = { path = "../remote-protocol" }
 regex = { workspace = true }
 reqwest = { workspace = true }

@@ -30,6 +30,12 @@ use crate::domains::{ServerApplicationDomains, internal_error, parse, serialize}
 
 const OPEN_TIMELINE_ROW_LIMIT: usize = 80;
 
+fn binding_has_delegation_mcp(mcp_servers_json: &str) -> bool {
+    serde_json::from_str::<Vec<String>>(mcp_servers_json)
+        .ok()
+        .is_some_and(|names| names.iter().any(|name| name == "cinyuverse-delegation-mcp"))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HostConversationDetail {
     pub summary: DbConversationSummary,
@@ -670,7 +676,7 @@ async fn active_binding_for_conversation(
         acp_session_id: binding.acp_session_id,
         status: binding.status,
         capabilities,
-        delegation_mcp_delivered: plugins::binding_has_delegation_mcp(&binding.mcp_servers_json),
+        delegation_mcp_delivered: binding_has_delegation_mcp(&binding.mcp_servers_json),
     }))
 }
 

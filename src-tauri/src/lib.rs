@@ -17,7 +17,6 @@ use browser_runtime::BrowserRuntime;
 use tauri::{Emitter, Manager, image::Image};
 
 mod app_icon;
-mod app_surface;
 pub mod commands;
 pub mod conversation_bundle;
 pub mod conversation_service;
@@ -38,7 +37,6 @@ mod remote_desktop;
 mod settings_watcher;
 mod state;
 mod tray;
-mod workflow_mcp_gateway;
 mod workspace_paths;
 use state::AppState;
 
@@ -419,57 +417,11 @@ pub fn run(cef_bootstrap: Result<CefBootstrap, String>) {
 
         let state = tauri::async_runtime::block_on(AppState::new(app.handle().clone()))
             .expect("Failed to initialize app state");
-        let _workflow_mcp_ready = match tauri::async_runtime::block_on(
-            workflow_mcp_gateway::start(&state),
-        ) {
-            Ok(connection) => {
-                tracing::info!(
-                    endpoint = %connection.endpoint,
-                    "Workflow Plugin MCP gateway is ready"
-                );
-                app.manage(connection);
-                true
-            }
-            Err(error) => {
-                tracing::error!(%error, "Workflow Plugin MCP gateway failed to start");
-                false
-            }
-        };
-        tauri::async_runtime::block_on(
-            commands::plugin_control::refresh_enabled_plugin_projections(&state),
-        );
         let preview_proxy = tauri::async_runtime::block_on(
             plugin_dev_server::DesktopPreviewProxy::start(),
         )
         .expect("Failed to start the capability-checked Desktop preview proxy");
         app.manage(preview_proxy);
-        let plugin_candidate_root = app
-            .path()
-            .app_data_dir()
-            .expect("Failed to resolve app data directory")
-            .join("plugins")
-            .join("dev-candidates");
-        let plugin_runtime_root = managed_artifacts::directory(app.handle())
-            .expect("Failed to resolve managed executable directory")
-            .join("plugins")
-            .join("runtimes");
-        match tauri::async_runtime::block_on(plugin_dev_server::start(
-            state.plugin_control_plane.clone(),
-            state.deployment.db().pool.clone(),
-            state.plugin_capability_broker.clone(),
-            state.plugin_worker_runtime.clone(),
-            plugin_runtime_root,
-            plugin_candidate_root,
-        )) {
-            Ok(connection) => {
-                tracing::info!(
-                    endpoint = %connection.endpoint,
-                    "Plugin Dev control server is ready; retrieve its token through the local app session"
-                );
-                app.manage(connection);
-            }
-            Err(error) => tracing::error!(%error, "Plugin Dev control server failed to start"),
-        }
         // Startup crash-recovery (ADR-0001): reconcile turns orphaned by a prior
         // process lifecycle before the UI connects. Best-effort — a failure here
         // must not block app launch; the worst case is a stale in-flight turn.
@@ -552,14 +504,6 @@ pub fn run(cef_bootstrap: Result<CefBootstrap, String>) {
         });
 
         app.manage(state);
-        {
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(error) = commands::plugin_control::import_cli_inbox(handle).await {
-                    tracing::warn!(%error, "CLI marketplace inbox import failed");
-                }
-            });
-        }
         // Recover Agent management, publish stable terminal commands, and
         // warm slow installation evidence without making Settings → Agent
         // responsible for startup work.
@@ -733,8 +677,6 @@ pub fn run(cef_bootstrap: Result<CefBootstrap, String>) {
         commands::host_client::host_client_delete,
         commands::settings_window::open_settings_window,
         commands::file_tree::trash_item,
-        commands::plugin_control::plugin_control_import_cli,
-        plugin_dev_server::plugin_dev_connection,
     ])
     .build(tauri::generate_context!())
     .expect("error while building tauri application")

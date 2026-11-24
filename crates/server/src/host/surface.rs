@@ -225,21 +225,6 @@ struct WorkspaceRepoSpec {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct PluginPathArgs {
-    path: String,
-    developer_link: Option<bool>,
-    #[allow(dead_code)]
-    package_kind: Option<String>,
-    plugin_id: Option<String>,
-    permission_ids: Option<Vec<String>>,
-    all_agents: Option<bool>,
-    agents: Option<Vec<String>>,
-    source: Option<Value>,
-    conflict: Option<String>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
 struct WeixinCheckArgs {
     channel_id: String,
     qrcode: String,
@@ -539,19 +524,6 @@ impl ServerApplicationDomains {
                 serialize(weixin_get_qrcode().await.map_err(internal_error)?)
             }
             DomainCommand::WeixinCheckQrcode => self.weixin_check(args).await,
-            DomainCommand::PluginWorkflowCatalog => self.plugin_workflow_catalog().await,
-            DomainCommand::PluginMarketplaceIndex => self.plugin_marketplace_index().await,
-            DomainCommand::PluginInstall => self.plugin_install(args).await,
-            DomainCommand::PluginUninstall => self.plugin_control_uninstall(args).await,
-            DomainCommand::PluginUpdate | DomainCommand::PluginControlUpdate => {
-                self.plugin_control_import(args).await
-            }
-            DomainCommand::PluginControlPreviewImport => self.plugin_preview_import(args).await,
-            DomainCommand::PluginControlRollback => self.plugin_rollback(args).await,
-            DomainCommand::PluginControlContributions => self.plugin_contributions(args).await,
-            DomainCommand::PluginControlConfigureAgents => self.plugin_configure_agents(args).await,
-            DomainCommand::PluginControlConfigureMcp => self.plugin_configure_mcp(args).await,
-            DomainCommand::PluginInvokeContribution => self.plugin_surface_invoke(args).await,
             DomainCommand::DshPlugins => {
                 super::native_commands::dispatch_dsh_plugins(&self.pool).await
             }
@@ -1476,7 +1448,7 @@ impl ServerApplicationDomains {
             .await
             .map_err(internal_error)?;
         if let Err(error) =
-            install_agent_unattended(&self.pool, &self.runtime_root, args.agent_id.as_str()).await
+            install_agent_unattended(&self.pool, &self.host_data_dir, args.agent_id.as_str()).await
         {
             tracing::warn!(agent_id = %args.agent_id, %error, "agent install after add failed");
         }
@@ -1525,7 +1497,7 @@ impl ServerApplicationDomains {
 
     async fn agent_management_install(&self, args: Value) -> Result<Value, ApplicationError> {
         let args: AgentInstallVersionArgs = parse(args)?;
-        install_agent_unattended(&self.pool, &self.runtime_root, args.agent_id.as_str())
+        install_agent_unattended(&self.pool, &self.host_data_dir, args.agent_id.as_str())
             .await
             .map_err(internal_error)?;
         self.agent_management_detail_value(json!({ "agentId": args.agent_id.to_string() }))
@@ -1796,176 +1768,6 @@ impl ServerApplicationDomains {
             }
         }
         serialize(json!({ "status": status.status }))
-    }
-
-    async fn plugin_workflow_catalog(&self) -> Result<Value, ApplicationError> {
-        let catalog = self.plugin_catalog().await?;
-        let actions = catalog.get("actions").cloned().unwrap_or(json!([]));
-        Ok(json!({ "workflows": actions }))
-    }
-
-    async fn plugin_marketplace_index(&self) -> Result<Value, ApplicationError> {
-        let page = self.plugin_marketplace_catalog(json!({})).await?;
-        let listings = page
-            .get("official")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .chain(
-                page.get("community")
-                    .and_then(Value::as_array)
-                    .into_iter()
-                    .flatten(),
-            )
-            .cloned()
-            .collect::<Vec<_>>();
-        Ok(json!({ "listings": listings }))
-    }
-
-    async fn plugin_install(&self, args: Value) -> Result<Value, ApplicationError> {
-        let args: PluginPathArgs = parse(args)?;
-        if let Some(path) = args
-            .source
-            .as_ref()
-            .and_then(|source| source.get("artifactId").and_then(Value::as_str))
-            .map(str::to_string)
-            .or(Some(args.path).filter(|path| !path.is_empty()))
-        {
-            return self
-                .plugin_control_import(json!({
-                    "path": path,
-                    "conflict": args.conflict.unwrap_or_else(|| "reject".to_string()),
-                }))
-                .await;
-        }
-        Err(ApplicationError::bad_request(
-            "plugin install source is invalid",
-        ))
-    }
-
-    async fn plugin_preview_import(&self, args: Value) -> Result<Value, ApplicationError> {
-        let args: PluginPathArgs = parse(args)?;
-        let source = PathBuf::from(&args.path);
-        if !source.exists() {
-            return Err(ApplicationError::not_found(format!(
-                "plugin path {}",
-                args.path
-            )));
-        }
-        let source_kind = if args.developer_link.unwrap_or(false) {
-            plugins::PluginSourceKind::DeveloperLink
-        } else {
-            plugins::PluginSourceKind::Snapshot
-        };
-        let package = plugins::PluginPackage::inspect(&source, source_kind)
-            .map_err(|error| ApplicationError::bad_request(error.to_string()))?;
-        let conflict = self
-            .plugin_control_plane
-            .preview_import(&package)
-            .await
-            .map_err(|error| ApplicationError::internal(error.to_string()))?;
-        serialize(json!({
-            "plugin": {
-                "id": package.id.as_str(),
-                "sourcePath": args.path,
-            },
-            "conflict": conflict.map(|item| json!({
-                "pluginId": item.plugin_id,
-                "installedSource": item.installed_source,
-                "incomingSource": item.incoming_source,
-            })),
-        }))
-    }
-
-    async fn plugin_rollback(&self, args: Value) -> Result<Value, ApplicationError> {
-        let args: PluginPathArgs = parse(args)?;
-        let plugin_id = args
-            .plugin_id
-            .ok_or_else(|| ApplicationError::bad_request("pluginId required"))?;
-        let node = self
-            .worker_runtime
-            .resolve()
-            .await
-            .map_err(internal_error)?;
-        let plugin = self
-            .plugin_control_plane
-            .rollback_and_activate(
-                &node,
-                &plugin_id,
-                args.permission_ids.as_deref().unwrap_or(&[]),
-                self.capability_broker.clone(),
-            )
-            .await
-            .map_err(|error| ApplicationError::internal(format!("{}: {error}", error.code())))?;
-        serialize(json!({ "id": plugin.id().to_string() }))
-    }
-
-    async fn plugin_contributions(&self, args: Value) -> Result<Value, ApplicationError> {
-        let args: PluginPathArgs = parse(args)?;
-        let plugin_id = args
-            .plugin_id
-            .ok_or_else(|| ApplicationError::bad_request("pluginId required"))?;
-        let plugin = self
-            .plugin_control_plane
-            .plugin(&plugin_id)
-            .await
-            .map_err(|error| ApplicationError::internal(error.to_string()))?
-            .ok_or_else(|| ApplicationError::not_found(plugin_id))?;
-        serialize(json!({
-            "skills": plugin.skills,
-            "mcp": plugin.mcp,
-        }))
-    }
-
-    async fn plugin_configure_agents(&self, args: Value) -> Result<Value, ApplicationError> {
-        let args: PluginPathArgs = parse(args)?;
-        let plugin_id = args
-            .plugin_id
-            .ok_or_else(|| ApplicationError::bad_request("pluginId required"))?;
-        let plugin = self
-            .plugin_control_plane
-            .plugin(&plugin_id)
-            .await
-            .map_err(|error| ApplicationError::internal(error.to_string()))?
-            .ok_or_else(|| ApplicationError::not_found(plugin_id.clone()))?;
-        let known = agents::skills::skill_capable_agent_ids();
-        let desired = if args.all_agents.unwrap_or(false) {
-            known.clone()
-        } else {
-            args.agents.unwrap_or_default()
-        };
-        let memberships = self.management().list().await.map_err(internal_error)?;
-        let installed = memberships
-            .into_iter()
-            .map(|view| view.agent_id.to_string())
-            .collect::<Vec<_>>();
-        let targets = desired
-            .into_iter()
-            .filter(|agent| installed.iter().any(|item| item == agent))
-            .collect::<Vec<_>>();
-        let skill_sources = plugin
-            .skills
-            .iter()
-            .map(|skill| (skill.id.clone(), plugin.source.path.join(&skill.path)))
-            .collect::<Vec<_>>();
-        let projected =
-            agents::skills::project_plugin_skills(&plugin_id, &skill_sources, targets, true)
-                .map_err(|error| ApplicationError::internal(error.to_string()))?;
-        serialize(json!({ "projections": projected }))
-    }
-
-    async fn plugin_configure_mcp(&self, args: Value) -> Result<Value, ApplicationError> {
-        let args: PluginPathArgs = parse(args)?;
-        let plugin_id = args
-            .plugin_id
-            .ok_or_else(|| ApplicationError::bad_request("pluginId required"))?;
-        let plugin = self
-            .plugin_control_plane
-            .plugin(&plugin_id)
-            .await
-            .map_err(|error| ApplicationError::internal(error.to_string()))?
-            .ok_or_else(|| ApplicationError::not_found(plugin_id))?;
-        serialize(json!({ "mcp": plugin.mcp }))
     }
 }
 

@@ -16,7 +16,7 @@ use agents::{
     },
 };
 use automation::{
-    AgentSelectionIntent, ComposerCanonicalInput, IsolationSpec, PluginActionRef, TurnLaunchSpec,
+    AgentSelectionIntent, ComposerCanonicalInput, IsolationSpec, PromptBlock, TurnLaunchSpec,
     TurnLaunchSpecInput, WorkspaceTarget,
 };
 use conversations::{
@@ -34,11 +34,12 @@ use db::models::{
     workspace::Workspace,
 };
 use executors::profile::ExecutorProfileId;
-use plugins::PromptBlock;
 use serde::{Deserialize, Serialize};
 use sqlx::{SqliteConnection, SqlitePool};
 use ts_rs::TS;
 use uuid::Uuid;
+
+use tauri::Manager;
 
 use crate::{
     conversation_bundle::{
@@ -51,6 +52,12 @@ use crate::{
     error::AppError,
     state::AppState,
 };
+
+fn binding_has_delegation_mcp(mcp_servers_json: &str) -> bool {
+    serde_json::from_str::<Vec<String>>(mcp_servers_json)
+        .ok()
+        .is_some_and(|names| names.iter().any(|name| name == "cinyuverse-delegation-mcp"))
+}
 
 /// A conversation's metadata plus its event-sourced projection.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -413,24 +420,23 @@ pub async fn application_call(
 ) -> Result<remote_protocol::CommandResponse<serde_json::Value>, remote_protocol::ErrorEnvelope> {
     use application::{CommandRegistry, Principal};
 
+    let host_data_dir = state
+        .app_handle
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| utils::assets::asset_dir());
     let core = server::host_application_core(
         state.deployment.db().pool.clone(),
         state.conversation_context(),
-        state.plugin_control_plane.clone(),
         Some(state.delegation.features.clone()),
-        state.plugin_preview_host.clone(),
-        state.plugin_capability_broker.clone(),
-        state.plugin_app_surfaces.clone(),
         preview_proxy.registry(),
         server::HeadlessAutomationRuntime::new(
             state.local_deployment.clone(),
             state.conversation_context(),
-            state.plugin_control_plane.clone(),
         ),
         crate::commands::automation::this_host_owns_automation_engine(),
         state.local_deployment.clone(),
-        utils::assets::asset_dir().join("plugins/runtimes"),
-        state.plugin_worker_runtime.clone(),
+        host_data_dir,
     );
     CommandRegistry::new(core)
         .execute_name(&Principal::local_desktop(), &command, operation_id, args)
@@ -629,25 +635,7 @@ pub async fn conversation_start_turn(
     let workspace = Workspace::find_by_id(&pool, workspace_id)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("workspace {workspace_id} not found")))?;
-    let mut plugin_actions = Vec::with_capacity(request.workflow_refs.len());
-    for invocation in &request.workflow_refs {
-        let action = state
-            .plugin_control_plane
-            .resolve_action(&invocation.plugin_id, &invocation.workflow_id)
-            .await
-            .map_err(|error| AppError::BadRequest(error.to_string()))?;
-        let plugin = state
-            .plugin_control_plane
-            .plugin(&invocation.plugin_id)
-            .await
-            .map_err(|error| AppError::BadRequest(error.to_string()))?
-            .ok_or_else(|| AppError::NotFound(invocation.plugin_id.clone()))?;
-        plugin_actions.push(PluginActionRef {
-            plugin_id: plugin.id.clone(),
-            action,
-        });
-    }
-    let effective_text = if !request.text.trim().is_empty() || !plugin_actions.is_empty() {
+    let effective_text = if !request.text.trim().is_empty() || !display_text.trim().is_empty() {
         let launch = TurnLaunchSpec::from_composer(ComposerCanonicalInput(TurnLaunchSpecInput {
             prompt_blocks: vec![PromptBlock::Text {
                 text: request.text.clone(),
@@ -659,7 +647,6 @@ pub async fn conversation_start_turn(
             },
             mode_id: request.mode_override.clone(),
             config_values: request.config_overrides.clone(),
-            plugin_actions,
             skills: Vec::new(),
             workspace: WorkspaceTarget {
                 project_id: workspace.project_id,
@@ -676,12 +663,6 @@ pub async fn conversation_start_turn(
         launch
             .prompt_blocks
             .iter()
-            .chain(
-                launch
-                    .plugin_actions
-                    .iter()
-                    .flat_map(|reference| reference.action.prompt_blocks.iter()),
-            )
             .map(|block| match block {
                 PromptBlock::Text { text } => text.as_str(),
             })
@@ -777,7 +758,6 @@ pub async fn conversation_respond_question(
         Some(std::sync::Arc::new(server::CompanionSessionAdapter::new(
             state.delegation.features.clone(),
             state.conversation_context(),
-            state.plugin_control_plane.official_product_mcp_gate(),
         ))),
     )
     .respond_question(application::RespondConversationQuestion {
@@ -800,7 +780,6 @@ pub async fn conversation_submit_feedback(
         Some(std::sync::Arc::new(server::CompanionSessionAdapter::new(
             state.delegation.features.clone(),
             state.conversation_context(),
-            state.plugin_control_plane.official_product_mcp_gate(),
         ))),
     )
     .submit_feedback(application::SubmitConversationFeedback {
@@ -1241,7 +1220,7 @@ async fn active_binding_for_conversation(
         acp_session_id: binding.acp_session_id,
         status: binding.status,
         capabilities,
-        delegation_mcp_delivered: plugins::binding_has_delegation_mcp(&binding.mcp_servers_json),
+        delegation_mcp_delivered: binding_has_delegation_mcp(&binding.mcp_servers_json),
     }))
 }
 

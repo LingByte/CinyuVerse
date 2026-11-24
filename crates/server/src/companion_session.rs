@@ -9,28 +9,18 @@ use agents::{
 use application::{ApplicationError, CompanionSessionPort, ConversationLiveFeedbackNote};
 use async_trait::async_trait;
 use conversations::ConversationContext;
-use delegation::{FeedbackError, FeedbackNote, InMemoryCompanionFeatures};
-use plugins::{OfficialMcpRuntime, SESSION_FEAT_FEEDBACK};
+use delegation::{FeedbackNote, InMemoryCompanionFeatures};
 use serde_json::json;
 use uuid::Uuid;
 
 pub struct CompanionSessionAdapter {
     memory: Arc<InMemoryCompanionFeatures>,
     context: ConversationContext,
-    official_mcp: Arc<OfficialMcpRuntime>,
 }
 
 impl CompanionSessionAdapter {
-    pub fn new(
-        memory: Arc<InMemoryCompanionFeatures>,
-        context: ConversationContext,
-        official_mcp: Arc<OfficialMcpRuntime>,
-    ) -> Self {
-        Self {
-            memory,
-            context,
-            official_mcp,
-        }
+    pub fn new(memory: Arc<InMemoryCompanionFeatures>, context: ConversationContext) -> Self {
+        Self { memory, context }
     }
 }
 
@@ -38,43 +28,10 @@ impl CompanionSessionAdapter {
 impl CompanionSessionPort for CompanionSessionAdapter {
     async fn submit_feedback(
         &self,
-        conversation_id: Uuid,
-        text: &str,
+        _conversation_id: Uuid,
+        _text: &str,
     ) -> Result<ConversationLiveFeedbackNote, ApplicationError> {
-        let gate = &self.official_mcp;
-        if !gate.allow_session_mcp() || gate.session_features() & SESSION_FEAT_FEEDBACK == 0 {
-            return Err(ApplicationError::conflict("live feedback is off"));
-        }
-        let runtime = self
-            .context
-            .runtime_states
-            .lock()
-            .await
-            .get(&conversation_id)
-            .cloned()
-            .ok_or_else(|| ApplicationError::conflict("no live session"))?;
-        let connection_id = runtime
-            .connection_id
-            .clone()
-            .ok_or_else(|| ApplicationError::conflict("no live session"))?;
-        if !runtime.turn_in_flight {
-            return Err(ApplicationError::conflict("no active turn"));
-        }
-        let note = self
-            .memory
-            .push_feedback(
-                delegation::DelegationScope {
-                    parent_connection_id: connection_id,
-                    parent_conversation_id: conversation_id,
-                },
-                text,
-            )
-            .await
-            .map_err(|error| match error {
-                FeedbackError::Empty => ApplicationError::bad_request("feedback is empty"),
-                FeedbackError::TooLong => ApplicationError::bad_request("feedback is too long"),
-            })?;
-        Ok(note_view(note))
+        Err(ApplicationError::conflict("live feedback is off"))
     }
 
     async fn list_feedback(

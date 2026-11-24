@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use agents::{
     AgentConnectionStatus, AgentContentBlock, AgentEvent, AgentId, AgentRuntime,
-    CompanionInjection, CompanionInjectionContext, DelegationInjector, InjectedMcpServer,
+    CompanionInjection, CompanionInjectionContext, DelegationInjector,
     events::DelegationResultSummary,
     ids::{AgentConnectionId, AgentSessionId},
     runtime::{CancelAgentPromptInput, ConnectAgentInput, SendAgentPromptInput},
@@ -21,7 +21,6 @@ use delegation::{
     ParentSessionLookup, SpawnerError, TaskStatus, TokenEntry, TokenPermissions, TokenRegistry,
     outcome_from_turn,
 };
-use plugins::OfficialMcpRuntime;
 use sqlx::SqlitePool;
 use tokio::{
     sync::{Mutex, broadcast::error::RecvError},
@@ -40,7 +39,6 @@ impl HeadlessDelegationRuntime {
         runtime: Arc<AgentRuntime>,
         pool: SqlitePool,
         conversation_context: ConversationContext,
-        official_mcp: Arc<OfficialMcpRuntime>,
     ) -> (Self, Arc<InMemoryCompanionFeatures>) {
         let map = Arc::new(Mutex::new(HashMap::new()));
         let broker = Arc::new(DelegationBroker::new(
@@ -63,7 +61,6 @@ impl HeadlessDelegationRuntime {
         runtime.install_delegation_injector(Arc::new(HeadlessDelegationInjector {
             tokens: tokens.clone(),
             socket_path: socket_path.clone(),
-            official_mcp: official_mcp.clone(),
         }));
         let listener = Arc::new(DelegationListener::new_with_features(
             broker.clone(),
@@ -81,13 +78,11 @@ impl HeadlessDelegationRuntime {
         let listen_path = socket_path.clone();
         let gateway_listener = listener.clone();
         let gateway_tokens = tokens.clone();
-        let gateway_gate = official_mcp.clone();
         let gateway_runtime = runtime.clone();
         tokio::spawn(async move {
             let _ = crate::start_product_mcp_gateway(
                 gateway_listener,
                 gateway_tokens,
-                gateway_gate,
                 Arc::new(RuntimeConversationLookup {
                     runtime: gateway_runtime,
                 }),
@@ -431,7 +426,6 @@ impl DelegationMetaWriter for NoopMetaWriter {
 struct HeadlessDelegationInjector {
     tokens: Arc<TokenRegistry>,
     socket_path: PathBuf,
-    official_mcp: Arc<OfficialMcpRuntime>,
 }
 
 impl DelegationInjector for HeadlessDelegationInjector {
@@ -458,78 +452,9 @@ impl DelegationInjector for HeadlessDelegationInjector {
                 code: "delegation_parent_unsupported",
             };
         }
-        let mut servers = Vec::new();
-        for binding in self.official_mcp.bindings() {
-            match binding.product.as_str() {
-                "delegation" => servers.push(self.product_server(
-                    context,
-                    "cinyuverse-delegation-mcp",
-                    "delegation",
-                    true,
-                )),
-                "session" => servers.push(self.product_server(
-                    context,
-                    "cinyuverse-session-mcp",
-                    "feedback,ask,sessions,session-control",
-                    false,
-                )),
-                "workflow" => servers.push(InjectedMcpServer {
-                    name: "cinyuverse-workflow-mcp".to_string(),
-                    command: locate_named_sibling("cinyuverse-workflow-mcp"),
-                    args: Vec::new(),
-                }),
-                _ => {}
-            }
-        }
-        if servers.is_empty() {
-            return agents::CompanionInjectionList::Unsupported {
-                code: "official_product_mcp_disabled",
-            };
-        }
-        agents::CompanionInjectionList::Injected(servers)
-    }
-}
-
-impl HeadlessDelegationInjector {
-    fn product_server(
-        &self,
-        context: CompanionInjectionContext<'_>,
-        name: &str,
-        features: &str,
-        delegation: bool,
-    ) -> InjectedMcpServer {
-        let token = Uuid::new_v4().to_string();
-        self.tokens.register_with_permissions(
-            token.clone(),
-            TokenEntry {
-                parent_connection_id: context.parent_connection_id.to_string(),
-                parent_conversation_id: context.parent_conversation_id,
-                working_root: context.working_root.to_path_buf(),
-            },
-            TokenPermissions {
-                delegation,
-                feedback: !delegation,
-                ask: !delegation,
-                session_info: !delegation,
-                session_control: !delegation,
-            },
-        );
-        let args = vec![
-            "--parent-connection-id".to_string(),
-            context.parent_connection_id.to_string(),
-            "--socket-path".to_string(),
-            self.socket_path.to_string_lossy().into_owned(),
-            "--token".to_string(),
-            token,
-            "--features".to_string(),
-            features.to_string(),
-            "--conversation-id".to_string(),
-            context.parent_conversation_id.to_string(),
-        ];
-        InjectedMcpServer {
-            name: name.to_string(),
-            command: locate_companion(),
-            args,
+        let _ = context;
+        agents::CompanionInjectionList::Unsupported {
+            code: "official_product_mcp_disabled",
         }
     }
 }
@@ -637,40 +562,19 @@ fn process_socket_path() -> PathBuf {
     ))
 }
 
-fn locate_companion() -> PathBuf {
-    utils::host_bin::locate_host_family_binary("cinyuverse-mcp")
-}
-
-fn locate_named_sibling(base: &str) -> PathBuf {
-    utils::host_bin::locate_host_family_binary(base)
-}
-
 #[cfg(test)]
 mod official_mcp_tests {
     use std::path::Path;
 
     use agents::{CompanionCapabilities, CompanionInjection, CompanionInjectionContext};
-    use plugins::{OfficialMcpBinding, OfficialMcpRuntime, SESSION_FEAT_ALL};
 
     use super::*;
 
-    fn binding(product: &str) -> OfficialMcpBinding {
-        OfficialMcpBinding {
-            plugin_id: format!("cinyuverse.{product}"),
-            binary_id: "cinyuverse-mcp".into(),
-            product: product.into(),
-            features: SESSION_FEAT_ALL,
-            token: "test-token".into(),
-        }
-    }
-
     #[test]
-    fn headless_companion_stays_off_until_a_host_family_binding_is_published() {
-        let gate = Arc::new(OfficialMcpRuntime::default());
+    fn headless_product_mcp_injection_is_disabled() {
         let injector = HeadlessDelegationInjector {
             tokens: Arc::new(TokenRegistry::new()),
             socket_path: PathBuf::from("/tmp/cinyuverse-delegation-test.sock"),
-            official_mcp: gate.clone(),
         };
         let agent_id = AgentId::parse("vendor.capable-agent").unwrap();
         let context = CompanionInjectionContext {
@@ -688,28 +592,6 @@ mod official_mcp_tests {
             CompanionInjection::Unsupported {
                 code: "official_product_mcp_disabled"
             }
-        );
-
-        gate.publish_binding(binding("delegation"));
-        assert!(matches!(
-            injector.companion(context),
-            CompanionInjection::Injected(_)
-        ));
-
-        gate.reset();
-        gate.publish_binding(binding("delegation"));
-        gate.publish_binding(binding("session"));
-        let agents::CompanionInjectionList::Injected(servers) =
-            injector.injected_stdio_servers(context)
-        else {
-            panic!("expected both product servers");
-        };
-        assert_eq!(
-            servers
-                .iter()
-                .map(|server| server.name.as_str())
-                .collect::<Vec<_>>(),
-            ["cinyuverse-delegation-mcp", "cinyuverse-session-mcp"]
         );
     }
 }

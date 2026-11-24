@@ -7,7 +7,6 @@ use std::{
 use agents::{AgentEventEnvelope, AgentId, AgentRuntime, runtime_event_channel};
 use deployment::Deployment;
 use local_deployment::{LocalDeployment, pty::PtyService};
-use tauri::Manager;
 use tokio::sync::{Mutex, mpsc};
 
 use crate::commands::{
@@ -194,11 +193,6 @@ pub struct AppState {
     /// of re-projecting the turn every frame. Bounded by least recent use, and dropped
     /// when a conversation closes (`forget_conversation_runtime`).
     pub conversation_row_projectors: conversations::ConversationRowProjectors,
-    pub plugin_preview_host: Arc<dyn plugins::PluginPreviewHost>,
-    pub plugin_control_plane: Arc<plugins::PluginControlPlane>,
-    pub plugin_worker_runtime: Arc<plugins::PluginWorkerRuntimeProvider>,
-    pub plugin_capability_broker: Arc<plugins::HostCapabilityBroker>,
-    pub plugin_app_surfaces: Arc<plugins::PluginAppSurfaceHost>,
     pub remote_desktop: Arc<crate::remote_desktop::RemoteDesktopRegistry>,
     pub local_history_import: Arc<StdMutex<LocalHistoryImportRuntime>>,
     pub imitate_jobs: Arc<crate::commands::library_imitate::ImitateJobRegistry>,
@@ -215,93 +209,10 @@ impl AppState {
         // runtime events now flow through one lossless receiver into that log.
         let (agent_event_sink, conversation_agent_events) = runtime_event_channel();
         let agent_runtime = Arc::new(AgentRuntime::new(agent_event_sink));
-        let plugin_control_plane = Arc::new(plugins::PluginControlPlane::new(Arc::new(
-            plugins::SqlitePluginRegistry::new(pool.clone()),
-        )));
-        let plugin_worker_runtime = Arc::new(plugins::PluginWorkerRuntimeProvider::new(
-            crate::managed_artifacts::directory(&app_handle).map_err(|error| {
-                deployment::DeploymentError::Other(anyhow::anyhow!(error.to_string()))
-            })?,
-        ));
-        let plugin_preview_host: Arc<dyn plugins::PluginPreviewHost> = Arc::new(
-            plugins::ExternalProcessPreviewHost::new(plugin_control_plane.clone()),
-        );
-        let plugin_capability_broker = Arc::new(plugins::HostCapabilityBroker::new(
-            plugin_control_plane.clone(),
-            plugin_preview_host.clone(),
-        ));
-        plugin_control_plane
-            .install_bundled_official_plugins(&utils::assets::asset_dir(), None)
-            .await
-            .map_err(|error| deployment::DeploymentError::Other(anyhow::anyhow!(error)))?;
-        let enabled_worker_exists = plugin_control_plane
-            .catalog()
-            .await
-            .map_err(|error| deployment::DeploymentError::Other(anyhow::anyhow!(error)))?
-            .iter()
-            .any(|plugin| {
-                plugin.activation == plugins::PluginActivation::Enabled
-                    && plugin.entrypoints.worker.is_some()
-            });
-        let recovery_failures = if enabled_worker_exists {
-            match plugin_worker_runtime.resolve().await {
-                Ok(node) => {
-                    let candidate_root = app_handle
-                        .path()
-                        .app_data_dir()
-                        .map_err(|error| {
-                            deployment::DeploymentError::Other(anyhow::anyhow!(error.to_string()))
-                        })?
-                        .join("plugins")
-                        .join("dev-candidates");
-                    plugin_control_plane
-                        .recover_enabled_workers(
-                            &node,
-                            &candidate_root,
-                            plugin_capability_broker.clone(),
-                        )
-                        .await
-                        .map_err(|error| {
-                            deployment::DeploymentError::Other(anyhow::anyhow!(error))
-                        })?
-                }
-                Err(error) => {
-                    tracing::warn!(%error, "Plugin Worker Runtime could not be provisioned");
-                    Vec::new()
-                }
-            }
-        } else {
-            Vec::new()
-        };
-        for failure in recovery_failures {
-            tracing::warn!(
-                plugin_id = %failure.plugin_id,
-                code = %failure.code,
-                error = %failure.message,
-                "enabled plugin Worker could not be restored"
-            );
-        }
-        if let Ok(node) = plugin_worker_runtime.resolve().await {
-            if let Ok(candidate_root) = app_handle
-                .path()
-                .app_data_dir()
-                .map(|dir| dir.join("plugins").join("dev-candidates"))
-            {
-                let _ = plugins::PluginControlPlane::spawn_developer_link_refresh(
-                    plugin_control_plane.clone(),
-                    node,
-                    candidate_root,
-                    plugin_capability_broker.clone(),
-                );
-            }
-        }
         let remote_desktop = Arc::new(
             crate::remote_desktop::RemoteDesktopRegistry::new()
                 .map_err(|error| deployment::DeploymentError::Other(anyhow::anyhow!(error)))?,
         );
-        let plugin_app_surfaces = Arc::new(plugins::PluginAppSurfaceHost::new(
-            plugin_control_plane.clone(),
-        ));
         let conversation_turn_locks = Arc::new(Mutex::new(HashMap::new()));
         let conversation_runtime_states = Arc::new(Mutex::new(HashMap::new()));
         let conversation_row_projectors = Arc::new(Mutex::new(HashMap::new()));
@@ -313,7 +224,6 @@ impl AppState {
             row_projectors: conversation_row_projectors.clone(),
             host: Arc::new(crate::conversation_service::AppConversationHost {
                 deployment: deployment.clone(),
-                official_mcp: plugin_control_plane.official_product_mcp_gate(),
             }),
             event_publisher: Arc::new(server::ChatDeliveryPublisher::new(Arc::new(
                 crate::conversation_service::AppConversationEventPublisher {
@@ -323,22 +233,16 @@ impl AppState {
                 },
             ))),
         };
-        plugin_control_plane
-            .sync_official_product_mcp_gate()
-            .await
-            .map_err(|error| deployment::DeploymentError::Other(anyhow::anyhow!(error)))?;
         // Build the delegation broker over the same ConversationContext used by
         // desktop commands, so companion send/wait cannot grow a second runtime.
         let delegation = crate::delegation::build_delegation(
             agent_runtime.clone(),
             pool,
             conversation_context,
-            plugin_control_plane.official_product_mcp_gate(),
         );
         if let Err(error) = server::start_product_mcp_gateway(
             delegation.listener.clone(),
             delegation.tokens.clone(),
-            plugin_control_plane.official_product_mcp_gate(),
             Arc::new(crate::delegation::RuntimeConversationLookup {
                 runtime: agent_runtime.clone(),
             }),
@@ -347,12 +251,6 @@ impl AppState {
         {
             tracing::error!(%error, "product MCP gateway failed to start");
         }
-        crate::commands::plugin_control::refresh_official_product_runtime(
-            &plugin_control_plane,
-            &delegation.broker,
-        )
-        .await
-        .map_err(|error| deployment::DeploymentError::Other(anyhow::anyhow!(error.to_string())))?;
         Ok(Self {
             app_handle,
             local_deployment,
@@ -368,11 +266,6 @@ impl AppState {
             conversation_turn_locks,
             conversation_runtime_states,
             conversation_row_projectors,
-            plugin_preview_host,
-            plugin_control_plane,
-            plugin_worker_runtime,
-            plugin_capability_broker,
-            plugin_app_surfaces,
             remote_desktop,
             local_history_import: Arc::new(StdMutex::new(LocalHistoryImportRuntime::default())),
             imitate_jobs: Arc::new(crate::commands::library_imitate::ImitateJobRegistry::default()),
@@ -390,7 +283,6 @@ impl AppState {
             row_projectors: self.conversation_row_projectors.clone(),
             host: Arc::new(crate::conversation_service::AppConversationHost {
                 deployment: self.deployment.clone(),
-                official_mcp: self.plugin_control_plane.official_product_mcp_gate(),
             }),
             event_publisher: Arc::new(server::ChatDeliveryPublisher::new(Arc::new(
                 crate::conversation_service::AppConversationEventPublisher {

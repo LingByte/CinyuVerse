@@ -41,80 +41,6 @@ fn coding_loop_commands_share_the_workstation_application_scope() {
     }
 }
 
-#[test]
-fn product_plugin_inventory_and_file_opener_are_remote_read_contracts() {
-    for name in [
-        "plugin_control_catalog",
-        "plugin_contribution_catalog",
-        "plugin_resolve_file_opener",
-        "plugin_marketplace_catalog",
-        "plugin_marketplace_listing",
-        "plugin_check_updates",
-        "plugin_control_logs",
-    ] {
-        let command = name.parse::<DomainCommand>().expect("plugin read command");
-        assert_eq!(command.required_scope(), "plugin.read");
-    }
-    assert_eq!(
-        "plugin_control_set_enabled"
-            .parse::<DomainCommand>()
-            .expect("plugin write command")
-            .required_scope(),
-        "plugin.write"
-    );
-    assert_eq!(
-        "plugin_control_grant_permissions"
-            .parse::<DomainCommand>()
-            .expect("permission write command")
-            .required_scope(),
-        "plugin.write"
-    );
-    assert_eq!(
-        "plugin_control_import"
-            .parse::<DomainCommand>()
-            .expect("plugin import command")
-            .required_scope(),
-        "plugin.write"
-    );
-    assert_eq!(
-        "plugin_marketplace_install"
-            .parse::<DomainCommand>()
-            .expect("marketplace install command")
-            .required_scope(),
-        "plugin.write"
-    );
-    assert_eq!(
-        "plugin_control_uninstall"
-            .parse::<DomainCommand>()
-            .expect("plugin uninstall command")
-            .required_scope(),
-        "plugin.write"
-    );
-    assert_eq!(
-        "plugin_control_gc_runtimes"
-            .parse::<DomainCommand>()
-            .expect("plugin runtime gc command")
-            .required_scope(),
-        "plugin.write"
-    );
-}
-
-#[test]
-fn app_extension_host_uses_a_dedicated_remote_scope() {
-    for name in [
-        "plugin_surface_open",
-        "plugin_surface_invoke",
-        "plugin_surface_revoke",
-    ] {
-        assert_eq!(
-            name.parse::<DomainCommand>()
-                .expect("App surface command")
-                .required_scope(),
-            "plugin.surface"
-        );
-    }
-}
-
 #[async_trait]
 impl ApplicationDomainPort for CatalogDomain {
     async fn execute(
@@ -123,9 +49,9 @@ impl ApplicationDomainPort for CatalogDomain {
         command: DomainCommand,
         args: serde_json::Value,
     ) -> Result<serde_json::Value, application::ApplicationError> {
-        assert_eq!(command, DomainCommand::PluginActionCatalog);
+        assert_eq!(command, DomainCommand::ProjectList);
         assert_eq!(args, json!({}));
-        Ok(json!({"plugin": {"id": "cinyuverse.office"}}))
+        Ok(json!({"projects": []}))
     }
 }
 
@@ -333,11 +259,8 @@ async fn registered_product_command_uses_the_application_domain_port() {
     let operation_id = OperationId::new();
     let response = registry
         .execute_name(
-            &Principal::remote(
-                "web-user",
-                ["plugin.read".to_string(), "plugin.write".to_string()],
-            ),
-            "plugin_action_catalog",
+            &Principal::remote("web-user", ["application.call".to_string()]),
+            "get_projects",
             operation_id,
             json!({}),
         )
@@ -345,5 +268,5 @@ async fn registered_product_command_uses_the_application_domain_port() {
         .expect("registered product command");
 
     assert_eq!(response.operation_id, operation_id);
-    assert_eq!(response.data["plugin"]["id"], "cinyuverse.office");
+    assert_eq!(response.data["projects"], json!([]));
 }

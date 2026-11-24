@@ -23,7 +23,7 @@ use db::models::{
 };
 use deployment::Deployment;
 use local_deployment::LocalDeployment;
-use plugins::PromptBlock;
+use automation::PromptBlock;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -31,20 +31,17 @@ pub struct HeadlessAutomationRuntime {
     deployment: Arc<LocalDeployment>,
     conversation_context: conversations::ConversationContext,
     store: SqliteAutomationStore,
-    plugin_control_plane: Arc<plugins::PluginControlPlane>,
 }
 
 impl HeadlessAutomationRuntime {
     pub fn new(
         deployment: Arc<LocalDeployment>,
         conversation_context: conversations::ConversationContext,
-        plugin_control_plane: Arc<plugins::PluginControlPlane>,
     ) -> Self {
         Self {
             store: SqliteAutomationStore::new(deployment.db().pool.clone()),
             deployment,
             conversation_context,
-            plugin_control_plane,
         }
     }
 
@@ -123,7 +120,6 @@ impl HeadlessAutomationRuntime {
                     ServerTurnLauncher {
                         deployment: self.deployment.clone(),
                         conversation_context: self.conversation_context.clone(),
-                        plugin_control_plane: self.plugin_control_plane.clone(),
                     },
                 );
                 if let Err(error) = runner
@@ -648,7 +644,6 @@ async fn find_or_create_shared_workspace(
 struct ServerTurnLauncher {
     deployment: Arc<LocalDeployment>,
     conversation_context: conversations::ConversationContext,
-    plugin_control_plane: Arc<plugins::PluginControlPlane>,
 }
 
 #[async_trait]
@@ -669,58 +664,6 @@ impl TurnLauncherPort for ServerTurnLauncher {
         .fetch_optional(pool)
         .await
         .map_err(launcher_error)?;
-        let mut plugins = Vec::new();
-        let mut tool_locks = Vec::new();
-        let runtime_inventory = self
-            .plugin_control_plane
-            .runtime_inventory()
-            .await
-            .map_err(launcher_error)?;
-        for action in &spec.plugin_actions {
-            self.plugin_control_plane
-                .resolve_action(action.plugin_id.as_str(), action.action.id.as_str())
-                .await
-                .map_err(launcher_error)?;
-            let plugin = self
-                .plugin_control_plane
-                .plugin(action.plugin_id.as_str())
-                .await
-                .map_err(launcher_error)?
-                .ok_or_else(|| {
-                    RunError::Launcher(format!(
-                        "plugin {} is unavailable",
-                        action.plugin_id.as_str()
-                    ))
-                })?;
-            plugins.push(ComponentVersionEvidence {
-                id: action.plugin_id.as_str().to_string(),
-                version: plugin.version.clone(),
-            });
-            for required in &plugin.runtimes {
-                let lock = runtime_inventory
-                    .iter()
-                    .find(|runtime| {
-                        runtime.id == required.id
-                            && required
-                                .version
-                                .as_deref()
-                                .is_none_or(|version| version == runtime.version)
-                    })
-                    .ok_or_else(|| {
-                        RunError::Launcher(format!(
-                            "plugin {} Runtime {} is not ready",
-                            action.plugin_id.as_str(),
-                            required.id
-                        ))
-                    })?;
-                tool_locks.push(ToolLockVersionEvidence {
-                    tool_id: lock.id.clone(),
-                    version: lock.version.clone(),
-                    target: "user-global".to_owned(),
-                    sha256: String::new(),
-                });
-            }
-        }
         Ok(ResolvedVersionEvidence {
             agent_runtime: match managed_lock {
                 Some((lock_id, registry_version)) => AgentRuntimeVersionEvidence::Managed {
@@ -737,8 +680,8 @@ impl TurnLauncherPort for ServerTurnLauncher {
                 id: "cinyuverse-acp".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
             },
-            plugins,
-            tool_locks,
+            plugins: Vec::new(),
+            tool_locks: Vec::new(),
         })
     }
 
@@ -790,24 +733,15 @@ impl TurnLauncherPort for ServerTurnLauncher {
         conversation_id: Uuid,
         _connection_id: &str,
     ) -> Result<Uuid, RunError> {
-        let mut prompt_parts = spec
+        let text = spec
             .prompt_blocks
             .iter()
             .map(|block| match block {
                 PromptBlock::Text { text } => text.as_str(),
             })
             .filter(|text| !text.trim().is_empty())
-            .collect::<Vec<_>>();
-        prompt_parts.extend(spec.plugin_actions.iter().flat_map(|reference| {
-            reference
-                .action
-                .prompt_blocks
-                .iter()
-                .map(|block| match block {
-                    PromptBlock::Text { text } => text.as_str(),
-                })
-        }));
-        let text = prompt_parts.join("\n");
+            .collect::<Vec<_>>()
+            .join("\n");
         let (turn, _) =
             conversations::ConversationSessionService::new(self.conversation_context.clone())
                 .start_turn_with_origin(
@@ -821,14 +755,7 @@ impl TurnLauncherPort for ServerTurnLauncher {
                         images: Vec::new(),
                         mode_override: spec.mode_id.clone(),
                         config_overrides: spec.config_values.clone(),
-                        workflow_refs: spec
-                            .plugin_actions
-                            .iter()
-                            .map(|invocation| agents::ConversationWorkflowRef {
-                                plugin_id: invocation.plugin_id.as_str().to_owned(),
-                                workflow_id: invocation.action.id.as_str().to_owned(),
-                            })
-                            .collect(),
+                        workflow_refs: Vec::new(),
                         file_refs: Vec::new(),
                         queued_input_claim: None,
                         operation_id: None,

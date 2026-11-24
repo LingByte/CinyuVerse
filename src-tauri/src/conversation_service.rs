@@ -36,7 +36,6 @@ fn app_err_to_service(error: crate::error::AppError) -> ConversationServiceError
 /// `AppState` and the command layer.
 pub struct AppConversationHost {
     pub deployment: Arc<dyn deployment::Deployment>,
-    pub official_mcp: Arc<plugins::OfficialMcpRuntime>,
 }
 
 /// Desktop projection publisher injected at the conversation-core commit boundary.
@@ -113,6 +112,6 @@ impl conversations::ConversationHost for AppConversationHost {
     }
 
     fn product_mcp_server_names(&self) -> Vec<String> {
-        self.official_mcp.product_mcp_names()
+        Vec::new()
     }
 }

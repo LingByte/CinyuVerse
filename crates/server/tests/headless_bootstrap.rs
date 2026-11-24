@@ -2,14 +2,13 @@ use std::net::SocketAddr;
 
 use agents::{AgentConnectionId, AgentContentBlock, AgentEvent, AgentId, AgentSessionId};
 use automation::{
-    AgentSelectionIntent, AutomationDraft, AutomationDraftInput, IsolationSpec, ScheduleSpec,
-    TurnLaunchSpecInput, WorkspaceTarget,
+    AgentSelectionIntent, AutomationDraft, AutomationDraftInput, IsolationSpec, PromptBlock,
+    ScheduleSpec, TurnLaunchSpecInput, WorkspaceTarget,
 };
 use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
-use plugins::PromptBlock;
 use server::{HeadlessServer, ServerBootstrapConfig, ServerConfig};
 use tempfile::TempDir;
 use tower::ServiceExt;
@@ -167,7 +166,6 @@ async fn owner_runs_the_scheduler_instead_of_only_holding_the_lock() {
                     },
                     mode_id: None,
                     config_values: Vec::new(),
-                    plugin_actions: Vec::new(),
                     skills: Vec::new(),
                     workspace: WorkspaceTarget {
                         project_id: Uuid::new_v4(),
