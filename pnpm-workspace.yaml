@@ -1,9 +1,6 @@
 packages:
   - frontend
   - packages/*
-  # Duplicate @cinyuverse/plugin-workflow-creator name plus unpublished vendored
-  # tarballs; keep it out of the workspace.
-  - '!packages/cinyuverse-workflow-mcp'
 
 onlyBuiltDependencies:
   - core-js
