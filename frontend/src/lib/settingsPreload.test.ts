@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { isSettingsSurfacePath } from './settingsPreload';
 
 describe('isSettingsSurfacePath', () => {
-  it.each(['/settings', '/settings/agents', '/plugins', '/plugins/office'])(
+  it.each(['/settings', '/settings/agents'])(
     'treats %s as the settings surface',
     (pathname) => {
       expect(isSettingsSurfacePath(pathname)).toBe(true);

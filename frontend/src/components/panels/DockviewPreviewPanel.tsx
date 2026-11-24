@@ -52,12 +52,6 @@ import { extractImageFilesFromClipboardData } from '@/utils/clipboard';
 import { insertPastedImagesAsMarkdown } from '@/utils/markdownImagePaste';
 import { FilePreviewLoading } from './FilePreviewLoading';
 import { resolveImagePreviewSource } from '@/lib/imagePreviewRegistry';
-import { PluginFilePreview } from '@/components/previews/PluginFilePreview';
-import { PluginArtifactEditor } from '@/components/previews/PluginArtifactEditor';
-import {
-  pluginControlApi,
-  type ResolvedPluginFileOpener,
-} from '@/lib/api/plugins';
 import { preloadMonacoEditor } from '@/lib/monacoPreload';
 
 const LazyMarkdown = lazy(
@@ -115,12 +109,6 @@ function isMarkdownFile(filePath: string): boolean {
   return ext === 'md' || ext === 'mdx' || ext === 'markdown';
 }
 
-function fileExtension(filePath: string) {
-  const name = filePath.replace(/\\/g, '/').split('/').pop() ?? '';
-  const index = name.lastIndexOf('.');
-  return index >= 0 ? name.slice(index + 1).toLowerCase() : undefined;
-}
-
 function getPathSegments(filePath: string): string[] {
   return filePath
     .replace(/\\/g, '/')
@@ -158,14 +146,6 @@ function PreviewPlaceholder({
   );
 }
 
-function ContentLoadingFallback({ label }: { label: string }) {
-  return (
-    <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-      {label}
-    </div>
-  );
-}
-
 const markdownRenderStateMap = new Map<string, boolean>();
 
 function DockviewPreviewPanel(props: IDockviewPanelProps) {
@@ -188,45 +168,11 @@ function DockviewPreviewPanel(props: IDockviewPanelProps) {
   useEffect(() => {
     void preloadMonacoEditor();
   }, []);
-  const [pluginResolution, setPluginResolution] = useState<{
-    filePath: string;
-    opener: ResolvedPluginFileOpener | null;
-  } | null>(null);
-  const pluginResolutionPending =
-    Boolean(filePath) && pluginResolution?.filePath !== filePath;
-  const pluginOpener =
-    pluginResolution?.filePath === filePath ? pluginResolution.opener : null;
-  useEffect(() => {
-    let cancelled = false;
-    if (!filePath) {
-      setPluginResolution(null);
-      return;
-    }
-    void pluginControlApi
-      .resolveFileOpener(fileExtension(filePath))
-      .then((resolved) => {
-        if (!cancelled) {
-          setPluginResolution({ filePath, opener: resolved });
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setPluginResolution({ filePath, opener: null });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [filePath]);
   const previewKind = useMemo(() => getFilePreviewKind(filePath), [filePath]);
   const shouldFetchFileContent =
-    !pluginResolutionPending &&
-    !pluginOpener &&
     previewKind === 'text' &&
     !(mode === 'diff' && modifiedContentOverride !== null);
   const shouldFetchHeadContent =
-    !pluginResolutionPending &&
-    !pluginOpener &&
     previewKind === 'text' &&
     !(mode === 'diff' && originalContentOverride !== null);
 
@@ -576,9 +522,7 @@ function DockviewPreviewPanel(props: IDockviewPanelProps) {
           )}
         </div>
 
-        {pluginResolutionPending ? (
-          <ContentLoadingFallback label="Loading file handler..." />
-        ) : isDiffMode ? (
+        {isDiffMode ? (
           <>
             <span className="flex select-none items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
               <GitCompare className="h-3 w-3" />
@@ -627,12 +571,7 @@ function DockviewPreviewPanel(props: IDockviewPanelProps) {
       </div>
 
       <div className="min-h-0 flex-1">
-        {pluginResolutionPending ? (
-          <FilePreviewLoading
-            fileName={resolvedDisplayPath ?? filePath}
-            label={`Opening ${resolvedDisplayPath ?? filePath}`}
-          />
-        ) : isDiffMode ? (
+        {isDiffMode ? (
           effectivePreviewKind === 'binary' ? (
             <PreviewPlaceholder
               icon={FileWarning}
@@ -650,12 +589,6 @@ function DockviewPreviewPanel(props: IDockviewPanelProps) {
               icon={FileText}
               title="PDF diff is not supported here"
               description="Open the PDF in read-only preview mode instead of the text diff panel."
-            />
-          ) : pluginOpener ? (
-            <PreviewPlaceholder
-              icon={FileText}
-              title="Office document diff is not supported here"
-              description="Open this document in read-only preview mode instead of the text diff panel."
             />
           ) : isDiffLoading ? (
             <FilePreviewLoading
@@ -684,19 +617,6 @@ function DockviewPreviewPanel(props: IDockviewPanelProps) {
                 />
               </Suspense>
             </div>
-          )
-        ) : pluginOpener ? (
-          pluginOpener.target === 'app_surface' ? (
-            <PluginArtifactEditor
-              key={`${pluginOpener.pluginId}:${pluginOpener.generation}:${resolvedFilePath ?? filePath}`}
-              opener={pluginOpener}
-              filePath={resolvedFilePath ?? filePath}
-            />
-          ) : (
-            <PluginFilePreview
-              key={`${pluginOpener.pluginId}:${pluginOpener.generation}:${resolvedFilePath ?? filePath}`}
-              filePath={resolvedFilePath ?? filePath}
-            />
           )
         ) : effectivePreviewKind === 'binary' ? (
           <PreviewPlaceholder

@@ -90,7 +90,7 @@ function getEditor(): HTMLDivElement {
 describe('agentMentionCapabilityFromDetail', () => {
   it('supports a new conversation with the plugin on and no binding', () => {
     expect(
-      agentMentionCapabilityFromDetail(true, 'conv-1', {
+      agentMentionCapabilityFromDetail('conv-1', {
         active_binding: null,
       })
     ).toBe('supported');
@@ -98,7 +98,7 @@ describe('agentMentionCapabilityFromDetail', () => {
 
   it('rejects an existing binding that was never delivered', () => {
     expect(
-      agentMentionCapabilityFromDetail(true, 'conv-1', {
+      agentMentionCapabilityFromDetail('conv-1', {
         active_binding: { delegation_mcp_delivered: false },
       })
     ).toBe('unsupported');

@@ -1,8 +1,4 @@
-import type {
-  OfficePluginCatalog,
-  SlashCommandDescription,
-} from 'shared/types';
-import type { PluginActionCatalog } from '@/lib/api/plugins';
+import type { SlashCommandDescription } from 'shared/types';
 import type { DollarCommandDescription } from '@/lib/dollarCommands';
 import { filterDollarCommands } from '@/lib/dollarCommands';
 import type { SearchResultItem } from '@/lib/searchTagsAndFiles';
@@ -33,81 +29,6 @@ export type ComposerTypeaheadOption = {
 
 export const MAX_TYPEAHEAD_OPTIONS = 50;
 export const MAX_REFERENCE_OPTIONS = 10;
-
-export function pluginActionsToTypeaheadOptions(
-  catalog:
-    | {
-        actions: PluginActionCatalog['actions'];
-        readiness?: OfficePluginCatalog['readiness'];
-      }
-    | null
-    | undefined,
-  query: string,
-  hostedSkillIds: ReadonlySet<string>
-): ComposerTypeaheadOption[] {
-  if (!catalog) return [];
-  const readiness = catalog.readiness;
-  if (
-    readiness &&
-    (!readiness.enabled ||
-      readiness.overall !== 'ready' ||
-      readiness.dependency.status !== 'ready')
-  ) {
-    return [];
-  }
-
-  const readySkills = new Set(
-    (readiness?.skills ?? [])
-      .filter((skill) => skill.status === 'ready')
-      .map((skill) => skill.id)
-  );
-  const normalized = query.trim().toLocaleLowerCase();
-
-  return catalog.actions
-    .filter(
-      (action) =>
-        (!readiness ||
-          action.requiredSkills.every((skill) => readySkills.has(skill))) &&
-        action.requiredSkills.every((skill) => hostedSkillIds.has(skill)) &&
-        (!readiness ||
-          action.requiredTools.every(
-            (tool) =>
-              tool === readiness.dependency.id &&
-              readiness.dependency.status === 'ready'
-          ))
-    )
-    .filter((action) => {
-      if (!normalized) return true;
-      return [
-        action.actionId,
-        action.label,
-        ...action.requiredSkills,
-        ...action.requiredTools,
-        ...action.promptBlocks.map((block) => block.text),
-      ]
-        .join(' ')
-        .toLocaleLowerCase()
-        .includes(normalized);
-    })
-    .slice(0, MAX_TYPEAHEAD_OPTIONS)
-    .map((action) => {
-      const prompt = action.promptBlocks
-        .filter((block) => block.type === 'text')
-        .map((block) => block.text.trim())
-        .filter(Boolean)
-        .join('\n');
-      return {
-        key: `plugin-${action.pluginId}-${action.actionId}`,
-        label: `!${action.label}`,
-        description: prompt || undefined,
-        insertText: `${formatSessionComposerCommand({
-          type: '!',
-          key: `${action.pluginId}/${action.actionId}|${action.label}`,
-          value: '',
-        })}${prompt}`,
-      };
-    });
-}
 
 export function agentMentionsToTypeaheadOptions(
   candidates: AgentMentionCandidate[],
@@ -193,8 +114,7 @@ export function slashCommandsToTypeaheadOptions(
     const sourceId = composerCommand.sourceId ?? command.name;
     const presentation = getSlashCommandPresentation(command, executor);
     const invocation = slashInvocation(command, executor);
-    const isPlugin = sourceKind === 'plugin';
-    const type = isPlugin ? '/' : invocation.type;
+    const type = invocation.type;
     const name = invocation.name || command.name;
     return {
       key: `slash-${sourceKind}-${sourceId}-${command.name}`,
@@ -204,9 +124,7 @@ export function slashCommandsToTypeaheadOptions(
       insertText: formatSessionComposerCommand({
         type,
         key: type === '$' ? name : `${sourceKind}:${sourceId}:${name}`,
-        value: isPlugin
-          ? (composerCommand.prompt ?? `/${name}`)
-          : `${type}${name}`,
+        value: `${type}${name}`,
       }),
     };
   });

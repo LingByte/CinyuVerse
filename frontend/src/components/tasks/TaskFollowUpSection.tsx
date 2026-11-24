@@ -109,7 +109,6 @@ import {
   deriveCodexGoalState,
 } from '@/lib/codexGoalState';
 import { configuredBackendTransport } from '@/lib/backendTransport';
-import { createPluginControlApi } from '@/lib/api/plugins';
 import { deriveWorkspaceRootPath } from '@/components/panels/workspaceRootPath';
 import { useConversationAvailableCommands } from '@/features/conversation/useConversationAvailableCommands';
 
@@ -236,23 +235,7 @@ export function TaskFollowUpSection({
     enabled: Boolean(sessionId && isComposerExecutionRunning),
     refetchInterval: isComposerExecutionRunning ? 2_000 : false,
   });
-  const pluginApi = useMemo(
-    () => createPluginControlApi(configuredBackendTransport),
-    []
-  );
-  const { data: liveFeedbackOn } = useQuery({
-    queryKey: ['session-enhance-feedback'],
-    queryFn: async () => {
-      const catalog = await pluginApi.catalog();
-      const plugin = catalog.plugins.find(
-        (item) => item.id === 'cinyuverse.session-enhance'
-      );
-      if (!plugin?.enabled) return false;
-      const detail = await pluginApi.productDetail(plugin.id);
-      return detail.config.feedback !== false;
-    },
-    staleTime: 5_000,
-  });
+  const liveFeedbackOn = false;
   const { data: liveFeedbackNotes = [] } = useQuery({
     queryKey: ['conversation-live-feedback', sessionId],
     queryFn: async () => {

@@ -45,16 +45,12 @@ import {
   configuredBackendTransport,
   type BackendTransport,
 } from '@/lib/backendTransport';
-import { createPluginApi, createPluginControlApi } from '@/lib/api/plugins';
 import { DOLLAR_COMMANDS, mergeDollarCommands } from '@/lib/dollarCommands';
 import {
   agentAvailableCommandsToSlashCommands,
   localSkillsToDollarCommands,
   mergeComposerSlashCommands,
-  pluginComposerSlashContributions,
-  pluginInvocationsToSlashCommands,
 } from '@/lib/conversation-rendering/commandSources';
-import { usePluginHostContributions } from '@/hooks/usePluginHostContributions';
 import { cn } from '@/lib/utils';
 import { useOptionalUserSystem } from '@/components/ConfigProvider';
 import { useComposerSelectionStore } from '@/stores/useComposerSelectionStore';
@@ -77,7 +73,6 @@ import {
 import {
   agentMentionsToTypeaheadOptions,
   dollarCommandsToTypeaheadOptions,
-  pluginActionsToTypeaheadOptions,
   slashCommandsToTypeaheadOptions,
   type ComposerTypeaheadOption,
 } from './sessionComposerTypeaheadOptions';
@@ -896,23 +891,6 @@ export function SessionComposerInput({
     return () => observer.disconnect();
   }, []);
 
-  const pluginApi = useMemo(() => createPluginApi(transport), [transport]);
-  const pluginControlApi = useMemo(
-    () => createPluginControlApi(transport),
-    [transport]
-  );
-  const { data: pluginCatalog } = useQuery({
-    queryKey: ['session-composer-plugin-actions', transport.environment],
-    queryFn: () => pluginApi.catalog(),
-    staleTime: 5_000,
-  });
-  const { data: pluginControlCatalog } = useQuery({
-    queryKey: ['session-composer-plugin-control', transport.environment],
-    queryFn: () => pluginControlApi.catalog(),
-    staleTime: 5_000,
-  });
-  const composerSlashContributions =
-    usePluginHostContributions('composer_slash');
   const { data: agentSkills } = useQuery({
     queryKey: [
       'session-composer-agent-skills',
@@ -928,10 +906,6 @@ export function SessionComposerInput({
     enabled: executor === 'codex',
     staleTime: 0,
   });
-  const hostedPluginSkillIds = useMemo(
-    () => new Set(agentSkills?.skills.map((skill) => skill.id) ?? []),
-    [agentSkills]
-  );
   const localSkills = useMemo<AgentLocalSkill[]>(
     () =>
       (agentSkills?.skills ?? []).map((skill) => ({
@@ -950,12 +924,8 @@ export function SessionComposerInput({
           availableCommands ?? []
         ),
         skillCommands: [],
-        pluginCommands: [
-          ...pluginInvocationsToSlashCommands(pluginControlCatalog),
-          ...pluginComposerSlashContributions(composerSlashContributions),
-        ],
       }),
-    [availableCommands, composerSlashContributions, pluginControlCatalog]
+    [availableCommands]
   );
   const allDollarCommands = useMemo(
     () =>
@@ -1037,23 +1007,6 @@ export function SessionComposerInput({
     }),
     [agentMentions.candidates]
   );
-  const pluginSource = useMemo<SearchSource>(
-    () => ({
-      search: (query) =>
-        pluginActionsToTypeaheadOptions(
-          pluginCatalog,
-          query,
-          hostedPluginSkillIds
-        ).map(toSearchableItem),
-      bootstrap: () =>
-        pluginActionsToTypeaheadOptions(
-          pluginCatalog,
-          '',
-          hostedPluginSkillIds
-        ).map(toSearchableItem),
-    }),
-    [hostedPluginSkillIds, pluginCatalog]
-  );
   const makeToken = useCallback((item: SearchableItem): ChatComposerToken => {
     const data = item.auxiliaryData as ComposerSearchItemData | undefined;
     const insertText = data?.insertText ?? '';
@@ -1073,13 +1026,6 @@ export function SessionComposerInput({
         ) : undefined,
     };
   }, []);
-  const pluginOnSelect = useCallback((item: SearchableItem): string => {
-    const insertText =
-      (item.auxiliaryData as { insertText?: string } | undefined)?.insertText ??
-      '';
-    return insertText;
-  }, []);
-
   const renderItem = useCallback(
     (item: SearchableItem) => <ComposerTriggerMenuItem item={item} />,
     []
@@ -1115,22 +1061,12 @@ export function SessionComposerInput({
             },
           ]
         : []),
-      {
-        character: '!',
-        searchSource: pluginSource,
-        onSelect: pluginOnSelect,
-        renderItem,
-        loadingText: t('pluginActions.loading'),
-        emptySearchResultsText: t('pluginActions.noMatches'),
-      },
     ],
     [
       agentMentionSource,
       agentMentions.capability,
       dollarSource,
       makeToken,
-      pluginOnSelect,
-      pluginSource,
       renderItem,
       slashSource,
       t,

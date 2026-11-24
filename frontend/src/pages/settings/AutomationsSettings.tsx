@@ -20,10 +20,6 @@ import type {
   GitBranch,
 } from 'shared/types';
 
-import {
-  PluginActionEditor,
-  type PluginActionDraft,
-} from '@/components/plugins/PluginActionEditor';
 import { SessionControlsFields } from '@/components/sessions/SessionControlsFields';
 import { SessionComposerInput } from '@/components/tasks/follow-up/SessionComposerInput';
 import RepoBranchSelector from '@/components/tasks/RepoBranchSelector';
@@ -88,7 +84,6 @@ type EditorDraft = {
   timezone: string;
   modeId: string | null;
   configValues: Record<string, string>;
-  pluginAction: PluginActionDraft | null;
   projectId: string;
   branch: string | null;
   agentId: string;
@@ -106,7 +101,6 @@ function emptyDraft(projectId = '', agentId = 'codex'): EditorDraft {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     modeId: null,
     configValues: {},
-    pluginAction: null,
     projectId,
     branch: null,
     agentId,
@@ -182,7 +176,6 @@ export function AutomationsSettings({
   );
   const [controlsLoading, setControlsLoading] = useState(false);
   const [controlsError, setControlsError] = useState<string | null>(null);
-  const [pluginActionReady, setPluginActionReady] = useState(true);
   const [runsByAutomation, setRunsByAutomation] = useState<
     Record<string, AutomationRunView[]>
   >({});
@@ -458,7 +451,7 @@ export function AutomationsSettings({
       toast.error(t('automations.timezoneRequired'));
       return;
     }
-    const input: AutomationDraftRequest = {
+    const input = {
       name: draft.name.trim(),
       enabled: draft.enabled,
       trigger:
@@ -483,35 +476,8 @@ export function AutomationsSettings({
             value,
           })
         ),
-        pluginActions: draft.pluginAction
-          ? [
-              {
-                pluginId: draft.pluginAction.pluginId,
-                action: {
-                  id: draft.pluginAction.actionId,
-                  label: draft.pluginAction.label,
-                  requiredSkills: [...draft.pluginAction.requiredSkills],
-                  requiredTools: [...draft.pluginAction.requiredTools],
-                  promptBlocks: draft.pluginAction.promptBlocks.map(
-                    (block) => ({
-                      ...block,
-                    })
-                  ),
-                  artifactIntent: draft.pluginAction.artifactIntent
-                    ? {
-                        ...draft.pluginAction.artifactIntent,
-                        mediaTypes: [
-                          ...draft.pluginAction.artifactIntent.mediaTypes,
-                        ],
-                      }
-                    : null,
-                },
-              },
-            ]
-          : [],
-        skills: draft.pluginAction
-          ? [...draft.pluginAction.requiredSkills]
-          : [],
+        pluginActions: [],
+        skills: [],
         workspace: {
           projectId: draft.projectId,
           rootFolder: selectedBranch.rootFolder,
@@ -520,7 +486,7 @@ export function AutomationsSettings({
         },
         labelSnapshot: draft.name.trim(),
       },
-    };
+    } as AutomationDraftRequest;
     setSaving(true);
     try {
       const saved = editingId
@@ -580,26 +546,6 @@ export function AutomationsSettings({
         configValues: Object.fromEntries(
           automation.launch.configValues.map(({ key, value }) => [key, value])
         ),
-        pluginAction: automation.launch.pluginActions[0]
-          ? {
-              pluginId: automation.launch.pluginActions[0].pluginId,
-              actionId: automation.launch.pluginActions[0].action.id,
-              label: automation.launch.pluginActions[0].action.label,
-              requiredSkills: [
-                ...automation.launch.pluginActions[0].action.requiredSkills,
-              ],
-              requiredTools: [
-                ...automation.launch.pluginActions[0].action.requiredTools,
-              ],
-              promptBlocks:
-                automation.launch.pluginActions[0].action.promptBlocks.map(
-                  (block) => ({ ...block })
-                ),
-              artifactIntent:
-                automation.launch.pluginActions[0].action.artifactIntent ??
-                null,
-            }
-          : null,
         projectId: automation.launch.workspace.projectId,
         branch: automation.launch.workspace.branch,
         agentId: automation.launch.agent.agentId,
@@ -700,7 +646,6 @@ export function AutomationsSettings({
       const projectId = projects[0]?.id ?? '';
       const fallbackAgentId = agents[0]?.agent_id ?? 'codex';
       const templateLaunch = template.draft.launch;
-      const templateAction = templateLaunch.pluginActions[0];
       setEditingId(null);
       setDraft({
         ...emptyDraft(projectId, fallbackAgentId),
@@ -726,13 +671,6 @@ export function AutomationsSettings({
         configValues: Object.fromEntries(
           templateLaunch.configValues.map(({ key, value }) => [key, value])
         ),
-        pluginAction: templateAction
-          ? {
-              pluginId: templateAction.pluginId,
-              actionId: templateAction.action.id,
-              ...templateAction.action,
-            }
-          : null,
         isolation: templateLaunch.workspace.isolation,
         branch: templateLaunch.workspace.branch,
       });
@@ -1069,18 +1007,6 @@ export function AutomationsSettings({
                   ) : null}
                 </div>
 
-                <div className="space-y-2 rounded-lg border border-border p-3">
-                  <Label>{t('automations.pluginAction')}</Label>
-                  <PluginActionEditor
-                    transport={transport}
-                    value={draft.pluginAction}
-                    onChange={(pluginAction) =>
-                      setDraft({ ...draft, pluginAction })
-                    }
-                    onReadyChange={setPluginActionReady}
-                  />
-                </div>
-
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label>{t('automations.agent')}</Label>
@@ -1183,7 +1109,7 @@ export function AutomationsSettings({
                     <Button
                       type="submit"
                       className="bg-foreground text-background hover:bg-foreground/90"
-                      disabled={saving || !pluginActionReady}
+                      disabled={saving}
                     >
                       {saving ? (
                         <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />

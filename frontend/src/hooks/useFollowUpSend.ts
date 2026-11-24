@@ -15,7 +15,6 @@ import {
 } from '@/utils/promptMessage';
 import {
   getSessionComposerFileRefs,
-  getSessionComposerPluginActionInvocations,
   serializeSessionComposerBackendMessage,
 } from '@/components/tasks/follow-up/sessionComposerStructuredTokens';
 
@@ -89,8 +88,6 @@ export function useFollowUpSend({
       const displayMessage = acceptedMessage.trim();
       const backendMessage =
         serializeSessionComposerBackendMessage(acceptedMessage).trim();
-      const pluginActions =
-        getSessionComposerPluginActionInvocations(acceptedMessage);
       const fileRefs = getSessionComposerFileRefs(acceptedMessage);
       const { prompt, isSlashCommand } = buildAgentPrompt(backendMessage, [
         conflictMarkdown,
@@ -203,10 +200,7 @@ export function useFollowUpSend({
             images,
             modeOverride,
             configOverrides,
-            workflowRefs: pluginActions.map((action) => ({
-              pluginId: action.pluginId,
-              workflowId: action.actionId,
-            })),
+            workflowRefs: [],
             fileRefs,
             operationId,
           });

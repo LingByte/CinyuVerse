@@ -23,7 +23,6 @@ import {
   Keyboard,
   MessageSquareText,
   PlugZap,
-  Puzzle,
   SendHorizontal,
   Settings,
   SlidersHorizontal,
@@ -110,12 +109,6 @@ const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     labelKey: 'automations',
     icon: Clock,
     capability: 'automation.read',
-  },
-  {
-    path: '/plugins',
-    labelKey: 'plugins',
-    icon: Puzzle,
-    capability: 'plugin.read',
   },
   {
     path: '/settings/web-service',
@@ -247,12 +240,7 @@ export function SettingsLayout() {
 
         <section
           data-settings-content
-          className={cn(
-            'min-h-0 min-w-0 flex-1 p-4',
-            location.pathname === '/plugins'
-              ? 'flex flex-col overflow-hidden'
-              : 'overflow-y-auto'
-          )}
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4"
         >
           <Suspense fallback={<SettingsContentFallback />}>
             <Outlet />

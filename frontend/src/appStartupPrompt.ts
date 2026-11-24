@@ -15,7 +15,7 @@ export function getStartupPromptStep({
   pathname: string;
 }): StartupPromptStep {
   if (!config) return 'none';
-  if (pathname.startsWith('/settings') || pathname.startsWith('/plugins')) {
+  if (pathname.startsWith('/settings')) {
     return 'none';
   }
   if (!config.disclaimer_acknowledged || !config.onboarding_acknowledged) {

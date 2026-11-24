@@ -128,17 +128,6 @@ vi.mock('@/pages/FullAttemptLogs', () => ({
   FullAttemptLogsPage: () => <div data-testid="full-attempt-logs-page" />,
 }));
 
-vi.mock('@/pages/Plugins', () => ({
-  PluginsPage: () => <div data-testid="plugins-page" />,
-}));
-
-vi.mock('@/pages/plugins/ProductPlugins', () => ({
-  PluginDetailPage: () => <div data-testid="plugin-detail-page" />,
-  MarketplacePluginDetailPage: () => (
-    <div data-testid="marketplace-plugin-detail-page" />
-  ),
-}));
-
 function renderAt(pathname: string) {
   render(
     <MemoryRouter initialEntries={[pathname]}>
@@ -190,33 +179,10 @@ describe('MainAppRoutes', () => {
     expect(screen.queryByTestId('settings-devices')).not.toBeInTheDocument();
   });
 
-  it('keeps the product plugin module inside the settings layout', async () => {
-    renderAt('/plugins');
-
-    expect(await screen.findByTestId('plugins-page')).toBeInTheDocument();
-    expect(screen.getByTestId('settings-layout')).toBeInTheDocument();
-  });
-
-  it('keeps the settings layout around an independent plugin detail page', async () => {
-    renderAt('/plugins/cinyuverse.office');
-
-    expect(await screen.findByTestId('plugin-detail-page')).toBeInTheDocument();
-    expect(screen.getByTestId('settings-layout')).toBeInTheDocument();
-  });
-
-  it('keeps the settings layout around a marketplace plugin detail page', async () => {
-    renderAt('/plugins/marketplace/cinyuverse/drawio');
-
-    expect(
-      await screen.findByTestId('marketplace-plugin-detail-page')
-    ).toBeInTheDocument();
-    expect(screen.getByTestId('settings-layout')).toBeInTheDocument();
-  });
-
-  it('redirects the legacy settings plugin path to the product module', async () => {
+  it('redirects legacy settings plugin path to agent settings', async () => {
     renderAt('/settings/plugins');
 
-    expect(await screen.findByTestId('plugins-page')).toBeInTheDocument();
+    expect(await screen.findByTestId('settings-agents')).toBeInTheDocument();
     expect(screen.getByTestId('settings-layout')).toBeInTheDocument();
   });
 

@@ -75,7 +75,6 @@ describe('SettingsLayout capability gating', () => {
         protocol_version: '1.0',
         minimum_client_version: '0.1.0',
         capabilities: [
-          'plugin.read',
           'artifact.read',
           'automation.read',
           'delegation.read',
@@ -104,8 +103,8 @@ describe('SettingsLayout capability gating', () => {
       ).toBeInTheDocument()
     );
     expect(
-      screen.getByRole('button', { name: /plugins|插件/i })
-    ).toBeInTheDocument();
+      screen.queryByRole('button', { name: /plugins|插件/i })
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /remote connection|远程连接/i })
     ).toBeInTheDocument();
@@ -125,7 +124,7 @@ describe('SettingsLayout capability gating', () => {
         server_version: '1.0.0',
         protocol_version: '1.0',
         minimum_client_version: '0.1.0',
-        capabilities: ['application.call', 'plugin.read', 'device.pair'],
+        capabilities: ['application.call', 'device.pair'],
       }),
     };
     render(
@@ -150,38 +149,6 @@ describe('SettingsLayout capability gating', () => {
     ).toBeInTheDocument();
   });
 
-  it('opens Plugins as a top-level product module', async () => {
-    const user = userEvent.setup();
-    const transport: BackendTransport = {
-      environment: 'web',
-      call: vi.fn(),
-      capabilities: vi.fn().mockResolvedValue({
-        server_version: '1.0.0',
-        protocol_version: '1.0',
-        minimum_client_version: '0.1.0',
-        capabilities: ['plugin.read'],
-      }),
-    };
-    render(
-      <BackendTransportProvider transport={transport}>
-        <MemoryRouter initialEntries={['/settings/agents']}>
-          <Routes>
-            <Route path="/settings" element={<SettingsLayout />}>
-              <Route path="agents" element={<div>Agent content</div>} />
-            </Route>
-            <Route path="/plugins" element={<div>Product plugins</div>} />
-          </Routes>
-        </MemoryRouter>
-      </BackendTransportProvider>
-    );
-
-    await user.click(
-      await screen.findByRole('button', { name: /plugins|插件/i })
-    );
-
-    expect(screen.getByText('Product plugins')).toBeInTheDocument();
-    expect(screen.queryByText('Agent content')).not.toBeInTheDocument();
-  });
 });
 
 describe('SettingsLayout search', () => {

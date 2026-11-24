@@ -43,7 +43,6 @@ import {
 import { SubagentLifecycleProvider } from '@/components/NormalizedConversation/tools/SubagentLifecycleContext';
 import { ConversationStatusDock } from '@/components/tasks/follow-up/ConversationStatusDock';
 import { ArtifactTimelineCard } from '@/components/NormalizedConversation/ArtifactTimelineCard';
-import { PluginTimelineCards } from '@/components/plugins/PluginTimelineCards';
 import { agentsApi } from '@/features/agents/api';
 import { publishLiveSessionControls } from '@/features/agents/sessionControlsQuery';
 import { conversationApi } from '@/features/conversation/conversationApi';
@@ -1295,7 +1294,6 @@ const AgentTimelineConversation = forwardRef<
         data-panel="conversation-logs"
         onScroll={handleScroll}
       >
-        <PluginTimelineCards />
         {detailLoading && timeline.length === 0 ? (
           <div className="flex h-full min-h-[160px] items-center justify-center text-muted-foreground">
             <div className="flex items-center gap-2 rounded-full border bg-background/90 px-3 py-1.5 text-xs shadow-sm">

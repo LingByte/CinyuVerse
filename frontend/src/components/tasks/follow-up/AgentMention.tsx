@@ -35,14 +35,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function pluginEnabled(catalog: unknown, pluginId: string): boolean {
-  if (!isRecord(catalog) || !Array.isArray(catalog.plugins)) return false;
-  return catalog.plugins.some(
-    (plugin) =>
-      isRecord(plugin) && plugin.id === pluginId && plugin.enabled === true
-  );
-}
-
 function readCandidates(value: unknown): AgentMentionCandidate[] {
   if (!Array.isArray(value)) return [];
 
@@ -67,11 +59,10 @@ function readCandidates(value: unknown): AgentMentionCandidate[] {
 }
 
 export function agentMentionCapabilityFromDetail(
-  pluginOn: boolean,
   conversationId: string | null | undefined,
   detail: unknown
 ): AgentMentionContextValue['capability'] {
-  if (!pluginOn || !conversationId) return 'unsupported';
+  if (!conversationId) return 'unsupported';
   if (!isRecord(detail)) return 'unsupported';
   const binding = detail.active_binding;
   if (binding == null) return 'supported';
@@ -111,17 +102,14 @@ export function AgentMentionProvider({
         if (active) setLoading(false);
       });
 
-    void Promise.all([
-      conversationId
-        ? transport.call('conversation_detail', { conversationId })
-        : Promise.resolve(null),
-      transport.call('plugin_control_catalog'),
-    ])
-      .then(([detail, catalog]) => {
+    void (conversationId
+      ? transport.call('conversation_detail', { conversationId })
+      : Promise.resolve(null)
+    )
+      .then((detail) => {
         if (!active) return;
-        const pluginOn = pluginEnabled(catalog, 'cinyuverse.multi-agent');
         setCapability(
-          agentMentionCapabilityFromDetail(pluginOn, conversationId, detail)
+          agentMentionCapabilityFromDetail(conversationId, detail)
         );
       })
       .catch(() => {

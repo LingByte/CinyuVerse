@@ -139,10 +139,7 @@ function MainAppContent() {
       pathname: location.pathname,
     });
     if (startupPromptStep !== 'none') return;
-    if (
-      location.pathname.startsWith('/settings') ||
-      location.pathname.startsWith('/plugins')
-    ) {
+    if (location.pathname.startsWith('/settings')) {
       return;
     }
 

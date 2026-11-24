@@ -46,7 +46,6 @@ const PAGES = {
   automations: page('automations', '/settings/automations', {
     capability: 'automation.read',
   }),
-  plugins: page('plugins', '/plugins', { capability: 'plugin.read' }),
   webService: page('webService', '/settings/web-service', {
     anyOf: ['desktop.tauri', 'device.pair'],
   }),
@@ -177,7 +176,6 @@ export const SETTINGS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     'automations.newAutomation',
     'automations.templatesTitle',
   ]),
-  ...entriesFor('plugins', ['plugins.pageTitle', 'plugins.developerTools']),
   ...entriesFor('webService', ['webService.title']),
   ...entriesFor('logs', [
     'logs.title',

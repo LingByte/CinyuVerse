@@ -1,7 +1,7 @@
 import { scheduleIdleWork } from '@/lib/scheduleIdleWork';
 
 export function isSettingsSurfacePath(pathname: string): boolean {
-  return pathname.startsWith('/settings') || pathname.startsWith('/plugins');
+  return pathname.startsWith('/settings');
 }
 
 export function loadAgentSettings() {
@@ -68,14 +68,6 @@ export function loadWebServiceSettings() {
   return import('@/pages/settings/WebServiceSettings');
 }
 
-export function loadPluginsPage() {
-  return import('@/pages/Plugins');
-}
-
-export function loadPluginDetailPage() {
-  return import('@/pages/plugins/ProductPlugins');
-}
-
 const SETTINGS_PATH_LOADERS: Record<string, () => Promise<unknown>> = {
   '/settings/agents': loadAgentSettings,
   '/settings/appearance': loadAppearanceSettings,
@@ -93,17 +85,11 @@ const SETTINGS_PATH_LOADERS: Record<string, () => Promise<unknown>> = {
   '/settings/devices': loadWebServiceSettings,
   '/settings/logs': loadLogsSettings,
   '/settings/system': loadSystemSettings,
-  '/plugins': loadPluginsPage,
 };
 
 export function warmDefaultSettingsSurface(
   pathname = typeof window === 'undefined' ? '' : window.location.pathname
 ): void {
-  if (pathname.startsWith('/plugins')) {
-    void loadPluginsPage();
-    void loadPluginDetailPage();
-    return;
-  }
   if (pathname.startsWith('/settings')) {
     void loadAgentSettings();
   }

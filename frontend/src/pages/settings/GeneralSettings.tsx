@@ -20,7 +20,6 @@ import {
   type NotificationWhen,
 } from 'shared/types';
 
-import { PluginSettingsSections } from '@/components/plugins/PluginSettingsSections';
 import { ImportLocalSessionsDialog } from '@/components/sessions/ImportLocalSessionsDialog';
 import { LocalHistoryImportStatus } from '@/features/history-import/LocalHistoryImportStatus';
 import { useLocalHistoryImportJob } from '@/features/history-import/useLocalHistoryImportJob';
@@ -612,7 +611,6 @@ export function GeneralSettings() {
             </div>
           </div>
         </SettingsSection>
-        <PluginSettingsSections />
       </div>
 
       <SettingsActionBar

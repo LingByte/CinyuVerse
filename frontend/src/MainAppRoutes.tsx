@@ -15,8 +15,6 @@ import {
   loadInstructionsSettings,
   loadLogsSettings,
   loadMcpSettings,
-  loadPluginDetailPage,
-  loadPluginsPage,
   loadShortcutSettings,
   loadSkillsSettings,
   loadSystemSettings,
@@ -45,12 +43,6 @@ const ProjectTasks = lazyNamed(
 const FullAttemptLogsPage = lazyNamed(
   () => import('@/pages/FullAttemptLogs'),
   'FullAttemptLogsPage'
-);
-const PluginsPage = lazyNamed(loadPluginsPage, 'PluginsPage');
-const PluginDetailPage = lazyNamed(loadPluginDetailPage, 'PluginDetailPage');
-const MarketplacePluginDetailPage = lazyNamed(
-  loadPluginDetailPage,
-  'MarketplacePluginDetailPage'
 );
 const WorkflowInspector = lazyNamed(
   () => import('@/pages/workflows/WorkflowInspector'),
@@ -187,7 +179,10 @@ export function MainAppRoutes() {
             path="automations/:automationId/edit"
             element={<AutomationEditRoute />}
           />
-          <Route path="plugins" element={<Navigate to="/plugins" replace />} />
+          <Route
+            path="plugins"
+            element={<Navigate to="/settings/agents" replace />}
+          />
           <Route path="web-service" element={<WebServiceSettings />} />
           <Route
             path="devices"
@@ -196,12 +191,6 @@ export function MainAppRoutes() {
           <Route path="logs" element={<LogsSettings />} />
           <Route path="system" element={<SystemSettings />} />
         </Route>
-        <Route path="/plugins" element={<PluginsPage />} />
-        <Route
-          path="/plugins/marketplace/:owner/:pluginName"
-          element={<MarketplacePluginDetailPage />}
-        />
-        <Route path="/plugins/:pluginId" element={<PluginDetailPage />} />
       </Route>
 
       <Route

@@ -17,7 +17,6 @@ import {
   useManagedAgentOptions,
 } from '@/features/agent-management';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
 import { persistFrontendPreference } from '@/lib/frontendPreferences';
 import {
   AlertCircle,
@@ -29,7 +28,6 @@ import {
   FileText,
   Globe,
   Loader2,
-  Puzzle,
   RefreshCw,
   Search,
   Trash2,
@@ -53,7 +51,6 @@ import {
   type LocalSkill,
   type SkillMarketItem,
 } from '@/lib/api';
-import { pluginControlApi, type PluginControlItem } from '@/lib/api/plugins';
 import { useTemporaryFlag } from '@/hooks/useTemporaryFlag';
 import { cn } from '@/lib/utils';
 
@@ -174,8 +171,6 @@ function SkillTargetSelector({
 
 export function SkillsSettings() {
   const { t } = useTranslation(['settings', 'common']);
-  const [searchParams, setSearchParams] = useSearchParams();
-  const pluginId = searchParams.get('plugin');
   const agentOptions = useManagedAgentOptions('native_skills');
   const agentLabels = useMemo(
     () =>
@@ -187,12 +182,6 @@ export function SkillsSettings() {
   const [error, setError] = useState<string | null>(null);
   const [success, triggerSuccess] = useTemporaryFlag(2500);
   const [runningAction, setRunningAction] = useState<string | null>(null);
-  const [pluginCatalog, setPluginCatalog] = useState<PluginControlItem | null>(
-    null
-  );
-  const [pluginAssignmentOpen, setPluginAssignmentOpen] = useState(false);
-  const [pluginAssignmentLoading, setPluginAssignmentLoading] = useState(false);
-  const [pluginAgents, setPluginAgents] = useState<AgentsDraft>({});
 
   // Persisted display/hosting preferences (live below the local list).
   const [grouping, setGrouping] = useState<boolean>(
@@ -269,51 +258,6 @@ export function SkillsSettings() {
   useEffect(() => {
     void refreshLocal();
   }, [refreshLocal]);
-
-  useEffect(() => {
-    if (!pluginId) {
-      setPluginAssignmentOpen(false);
-      setPluginCatalog(null);
-      return;
-    }
-    let alive = true;
-    setPluginAssignmentOpen(true);
-    setPluginAssignmentLoading(true);
-    setError(null);
-    void Promise.all([pluginControlApi.catalog(), skillsMarketApi.scanLocal()])
-      .then(([catalog, localSkills]) => {
-        if (!alive) return;
-        const plugin = catalog.plugins.find((item) => item.id === pluginId);
-        if (!plugin) {
-          throw new Error(t('skills.pluginAssignmentNotFound', { pluginId }));
-        }
-        const skillIds = plugin.skills.map((skill) => skill.id);
-        const draft = emptyAgents(agentOptions);
-        for (const agent of agentOptions) {
-          draft[agent.value] =
-            skillIds.length > 0 &&
-            skillIds.every((skillId) => {
-              const hosted = localSkills.find((skill) => skill.id === skillId);
-              return (
-                hosted != null &&
-                (hosted.global || hosted.apps.includes(agent.value))
-              );
-            });
-        }
-        setPluginCatalog(plugin);
-        setPluginAgents(draft);
-        setSkills(localSkills);
-      })
-      .catch((err) => {
-        if (alive) setError(errorMessage(err));
-      })
-      .finally(() => {
-        if (alive) setPluginAssignmentLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [agentOptions, pluginId, t]);
 
   const filtered = useMemo(() => {
     const query = localFilter.trim().toLowerCase();
@@ -528,39 +472,6 @@ export function SkillsSettings() {
     [selection, triggerSuccess]
   );
 
-  const closePluginAssignment = useCallback(() => {
-    const next = new URLSearchParams(searchParams);
-    next.delete('plugin');
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
-
-  const savePluginAssignment = useCallback(async () => {
-    if (!pluginCatalog) return;
-    setRunningAction('plugin-skills');
-    setError(null);
-    try {
-      await pluginControlApi.configureAgents(
-        pluginCatalog.id,
-        false,
-        selectedAgents(agentOptions, pluginAgents)
-      );
-      const list = await skillsMarketApi.scanLocal();
-      setSkills(list);
-      triggerSuccess();
-      closePluginAssignment();
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setRunningAction(null);
-    }
-  }, [
-    agentOptions,
-    closePluginAssignment,
-    pluginAgents,
-    pluginCatalog,
-    triggerSuccess,
-  ]);
-
   /* ── render ───────────────────────────────────────────── */
 
   return (
@@ -730,111 +641,6 @@ export function SkillsSettings() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={pluginAssignmentOpen}
-        onOpenChange={(open) => {
-          if (!open) closePluginAssignment();
-        }}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="plugin-skill-assignment-title"
-      >
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <div className="mb-1 flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Puzzle className="h-4 w-4" />
-            </div>
-            <DialogTitle id="plugin-skill-assignment-title">
-              {t('skills.pluginAssignmentTitle', {
-                name: pluginCatalog?.name ?? pluginId,
-              })}
-            </DialogTitle>
-            <DialogDescription>
-              {t('skills.pluginAssignmentDescription')}
-            </DialogDescription>
-          </DialogHeader>
-
-          {pluginAssignmentLoading ? (
-            <div className="flex items-center gap-2 py-5 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {t('skills.pluginAssignmentLoading')}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">
-                  {t('skills.pluginSkills')}
-                </Label>
-                <div className="flex flex-wrap gap-1.5">
-                  {pluginCatalog?.skills.map((skill) => (
-                    <Badge key={skill.id} variant="secondary">
-                      {skill.id}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">
-                  {t('skills.assignAgents')}
-                </Label>
-                <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-                  {agentOptions.map((agent) => (
-                    <label
-                      key={agent.value}
-                      className="flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-xs"
-                    >
-                      <input
-                        type="checkbox"
-                        aria-label={agent.label}
-                        checked={Boolean(pluginAgents[agent.value])}
-                        onChange={(event) =>
-                          setPluginAgents((previous) => ({
-                            ...previous,
-                            [agent.value]: event.target.checked,
-                          }))
-                        }
-                      />
-                      <AgentTypeIcon
-                        agentType={agent.value}
-                        className="h-4 w-4"
-                      />
-                      <span>{agent.label}</span>
-                    </label>
-                  ))}
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  {t('skills.pluginAssignmentHint')}
-                </p>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={closePluginAssignment}
-              disabled={runningAction === 'plugin-skills'}
-            >
-              {t('common:cancel')}
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void savePluginAssignment()}
-              disabled={
-                pluginAssignmentLoading ||
-                pluginCatalog == null ||
-                runningAction === 'plugin-skills'
-              }
-            >
-              {runningAction === 'plugin-skills' ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              ) : null}
-              {t('skills.savePluginAssignment')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

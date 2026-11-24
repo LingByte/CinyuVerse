@@ -16,15 +16,8 @@ import type {
   ConversationSearchHit,
 } from 'shared/types';
 import { usePanelActionsContext } from '@/contexts/PanelActionsContext';
-import {
-  contributionMetadata,
-  usePluginHostContributions,
-} from '@/hooks/usePluginHostContributions';
-import { createPluginControlApi } from '@/lib/api/plugins';
-import { useBackendTransport } from '@/lib/transport';
-import { Command } from 'lucide-react';
 
-type PaletteResultKind = 'file' | 'directory' | 'conversation' | 'command';
+type PaletteResultKind = 'file' | 'directory' | 'conversation';
 
 interface PaletteResult {
   id: string;
@@ -34,8 +27,6 @@ interface PaletteResult {
   filePath?: string;
   conversationId?: string;
   workspaceId?: string;
-  pluginId?: string;
-  handler?: string;
 }
 
 export function SearchPalette() {
@@ -50,9 +41,6 @@ export function SearchPalette() {
 
   const { t } = useTranslation(['panels', 'common']);
   const { openFilePreview } = usePanelActionsContext();
-  const pluginCommands = usePluginHostContributions('command');
-  const transport = useBackendTransport();
-  const pluginApi = useMemo(() => createPluginControlApi(transport), [transport]);
   const { projectId } = useProject();
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -147,34 +135,12 @@ export function SearchPalette() {
       conversationId: hit.conversation_id,
       workspaceId: hit.workspace_id,
     }));
-    const needle = paletteQuery.trim().toLocaleLowerCase();
-    const commands: PaletteResult[] = pluginCommands
-      .filter((item) => {
-        if (!needle) return true;
-        return (
-          item.label.toLocaleLowerCase().includes(needle) ||
-          item.id.toLocaleLowerCase().includes(needle)
-        );
-      })
-      .map((item) => {
-        const metadata = contributionMetadata(item);
-        return {
-          id: `cmd:${item.pluginId}:${item.id}`,
-          kind: 'command' as const,
-          title: String(metadata.title ?? item.label),
-          subtitle: typeof metadata.subtitle === 'string' ? metadata.subtitle : item.pluginId,
-          pluginId: item.pluginId,
-          handler: typeof metadata.handler === 'string' ? metadata.handler : item.id,
-        };
-      });
-    return [...commands, ...conversations, ...files];
-  }, [fileResults, conversationResults, pluginCommands, paletteQuery, t]);
+    return [...conversations, ...files];
+  }, [fileResults, conversationResults, t]);
 
   const handleSelect = useCallback(
     (result: PaletteResult) => {
-      if (result.kind === 'command' && result.pluginId && result.handler) {
-        void pluginApi.invokeContribution(result.pluginId, result.handler);
-      } else if (result.kind === 'file' && result.filePath) {
+      if (result.kind === 'file' && result.filePath) {
         openFilePreview(result.filePath);
       } else if (
         result.kind === 'conversation' &&
@@ -188,7 +154,7 @@ export function SearchPalette() {
       }
       closeSearchPalette();
     },
-    [openFilePreview, closeSearchPalette, navigate, projectId, pluginApi]
+    [openFilePreview, closeSearchPalette, navigate, projectId]
   );
 
   // Keyboard navigation
@@ -295,8 +261,6 @@ export function SearchPalette() {
                   <File className="h-4 w-4 text-muted-foreground shrink-0" />
                 ) : result.kind === 'conversation' ? (
                   <MessagesSquare className="h-4 w-4 text-muted-foreground shrink-0" />
-                ) : result.kind === 'command' ? (
-                  <Command className="h-4 w-4 text-muted-foreground shrink-0" />
                 ) : (
                   <KanbanSquare className="h-4 w-4 text-muted-foreground shrink-0" />
                 )}

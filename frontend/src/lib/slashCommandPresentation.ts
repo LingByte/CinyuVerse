@@ -31,8 +31,7 @@ export function getSlashCommandPresentation(
   executor: string | null | undefined
 ): SlashCommandPresentation {
   const composerCommand = command as Partial<ComposerSlashCommand>;
-  const providerCommand =
-    composerCommand.sourceKind === 'plugin' || isSlashCommandSkill(command)
+  const providerCommand = isSlashCommandSkill(command)
       ? undefined
       : agentSlashCommandCatalog(executor).find(
           (item) => item.name === command.name

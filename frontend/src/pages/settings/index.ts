@@ -14,7 +14,6 @@ export { GeneralSettings } from './GeneralSettings';
 export { InstructionsSettings } from './InstructionsSettings';
 export { LogsSettings } from './LogsSettings';
 export { McpSettings } from './McpSettings';
-export { PluginsSettings } from './PluginsSettings';
 export { SkillsSettings } from './SkillsSettings';
 export { ShortcutSettings } from './ShortcutSettings';
 export { SystemSettings } from './SystemSettings';

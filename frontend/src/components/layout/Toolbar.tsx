@@ -28,7 +28,6 @@ import {
   Columns2,
   MessagesSquare,
   Monitor,
-  Puzzle,
   BookOpen,
   Library,
 } from 'lucide-react';
@@ -66,13 +65,6 @@ import { useWorkspaceBranchStatus } from '@/hooks/useWorkspaceBranchStatus';
 import { resolveDefaultProjectWorkspace } from '@/lib/workspaceDefault';
 import { WorktreeSelector } from '@/components/layout/WorktreeSelector';
 import { useProjectSwitcher } from '@/hooks/useProjectSwitcher';
-import {
-  contributionMetadata,
-  usePluginHostContributions,
-} from '@/hooks/usePluginHostContributions';
-import { createPluginControlApi } from '@/lib/api/plugins';
-import { useBackendTransport } from '@/lib/transport';
-import { MoreHorizontal } from 'lucide-react';
 
 function ToolbarDivider() {
   return (
@@ -506,15 +498,6 @@ export function Toolbar() {
     [projects]
   );
   const isTerminalOpen = isPanelOpen(PANEL_IDS.TERMINAL);
-  const toolbarItems = usePluginHostContributions('toolbar');
-  const transport = useBackendTransport();
-  const pluginApi = useMemo(
-    () => createPluginControlApi(transport),
-    [transport]
-  );
-  const visibleToolbar = toolbarItems.slice(0, 4);
-  const overflowToolbar = toolbarItems.slice(4);
-
   const handleCreateSession = () => {
     if (!projectId) return;
 
@@ -568,72 +551,6 @@ export function Toolbar() {
           </div>
 
           <div className="ml-auto flex items-center shrink-0 gap-0.5">
-            {visibleToolbar.map((item) => {
-              const metadata = contributionMetadata(item);
-              const title = String(metadata.title ?? item.label);
-              const handler =
-                typeof metadata.handler === 'string'
-                  ? metadata.handler
-                  : item.id;
-              return (
-                <Tooltip key={`${item.pluginId}:${item.id}`}>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="workspace-toolbar-button h-7 w-7"
-                      aria-label={title}
-                      onClick={() =>
-                        void pluginApi.invokeContribution(
-                          item.pluginId,
-                          handler
-                        )
-                      }
-                    >
-                      <Puzzle className="h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">{title}</TooltipContent>
-                </Tooltip>
-              );
-            })}
-            {overflowToolbar.length > 0 ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="workspace-toolbar-button h-7 w-7"
-                    aria-label={t('common:more')}
-                  >
-                    <MoreHorizontal className="h-3.5 w-3.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {overflowToolbar.map((item) => {
-                    const metadata = contributionMetadata(item);
-                    const title = String(metadata.title ?? item.label);
-                    const handler =
-                      typeof metadata.handler === 'string'
-                        ? metadata.handler
-                        : item.id;
-                    return (
-                      <DropdownMenuItem
-                        key={`${item.pluginId}:${item.id}`}
-                        onSelect={() =>
-                          void pluginApi.invokeContribution(
-                            item.pluginId,
-                            handler
-                          )
-                        }
-                      >
-                        {title}
-                      </DropdownMenuItem>
-                    );
-                  })}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
             {isWorkspaceTab ? (
               <div className="flex items-center gap-0.5">
                 <Tooltip>

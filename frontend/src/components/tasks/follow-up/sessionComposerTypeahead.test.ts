@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { type SlashCommandDescription } from 'shared/types';
-import type { OfficePluginCatalog } from 'shared/types';
 import { DOLLAR_COMMANDS } from '@/lib/dollarCommands';
 import type { SearchResultItem } from '@/lib/searchTagsAndFiles';
 import { formatSessionComposerCommand } from './sessionComposerStructuredTokens';
@@ -11,84 +10,9 @@ import {
   rootEntriesToFileReferenceOptions,
   searchResultToTypeaheadOption,
   slashCommandsToTypeaheadOptions,
-  pluginActionsToTypeaheadOptions,
 } from './sessionComposerTypeaheadOptions';
 
 describe('session composer typeahead option derivation', () => {
-  it('maps only ready plugin actions into prompt-backed command tokens', () => {
-    const catalog = {
-      plugin: {
-        id: 'cinyuverse.office',
-        name: 'Office',
-        version: '2.0.0',
-        membership: 'builtin',
-      },
-      actions: [
-        {
-          pluginId: 'cinyuverse.office',
-          actionId: 'create-presentation',
-          label: '创建 PPT',
-          requiredSkills: ['office-pptx'],
-          requiredTools: ['officecli'],
-          promptBlocks: [
-            {
-              type: 'text',
-              text: '澄清受众与目标后，创建新的 PPTX 并验证输出。',
-            },
-          ],
-          artifactIntent: null,
-        },
-      ],
-      readiness: {
-        enabled: true,
-        dependency: {
-          id: 'officecli',
-          status: 'ready',
-          version: '1.0.0',
-          error: null,
-        },
-        skills: [
-          {
-            id: 'office-pptx',
-            status: 'ready',
-            version: null,
-            error: null,
-          },
-        ],
-        providers: [],
-        overall: 'ready',
-      },
-    } satisfies OfficePluginCatalog;
-
-    expect(
-      pluginActionsToTypeaheadOptions(catalog, 'PPT', new Set(['office-pptx']))
-    ).toEqual([
-      {
-        key: 'plugin-cinyuverse.office-create-presentation',
-        label: '!创建 PPT',
-        description: '澄清受众与目标后，创建新的 PPTX 并验证输出。',
-        insertText: `${formatSessionComposerCommand({
-          type: '!',
-          key: 'cinyuverse.office/create-presentation|创建 PPT',
-          value: '',
-        })}澄清受众与目标后，创建新的 PPTX 并验证输出。`,
-      },
-    ]);
-
-    expect(
-      pluginActionsToTypeaheadOptions(
-        {
-          ...catalog,
-          readiness: { ...catalog.readiness, enabled: false },
-        },
-        '',
-        new Set(['office-pptx'])
-      )
-    ).toEqual([]);
-
-    expect(pluginActionsToTypeaheadOptions(catalog, '', new Set())).toEqual([]);
-  });
-
   it('filters slash commands and keeps commands before skills', () => {
     const commands: SlashCommandDescription[] = [
       {

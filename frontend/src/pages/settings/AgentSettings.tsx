@@ -52,7 +52,6 @@ import { DshAuthPanel } from './DshAuthPanel';
 import { DshPluginManager } from './DshPluginManager';
 import { GrokPluginManager } from './GrokPluginManager';
 import { DshSessionDefaults } from './DshSessionDefaults';
-import { PluginsSettings, type PluginEcosystem } from './PluginsSettings';
 import { SettingsSection as CollapsibleSettingsSection } from './SettingsSection';
 import { AgentLockedSurface } from './SettingsUi';
 import { UserAgentDefinitionPanel } from './UserAgentDefinitionPanel';
@@ -174,12 +173,6 @@ export function AgentSettings() {
   const agentLocked =
     selectedAgentLifecycle === 'uninstalled' ||
     selectedAgentLifecycle === 'platform_unsupported';
-  const nativePluginEcosystem: PluginEcosystem | null =
-    selectedAgentId === 'codex'
-      ? 'codex'
-      : selectedAgentId === 'claude_code'
-        ? 'claude_code'
-        : null;
   const refreshManagement = management.refresh;
   const authWatchGeneration = useRef(0);
   const inspectGeneration = useRef(0);
@@ -1349,16 +1342,6 @@ export function AgentSettings() {
                 onChanged={runPreflight}
                 onCount={setPluginCount}
               />
-            </CollapsibleSettingsSection>
-          ) : nativePluginEcosystem ? (
-            <CollapsibleSettingsSection
-              id={`${selectedAgent.agent_id}-native-plugins`}
-              title={t('settings:agents.pluginsTab')}
-              expanded={nativePluginsExpanded}
-              onToggle={() => setNativePluginsExpanded((current) => !current)}
-              summary={t('settings:agents.pluginCount', { count: pluginCount })}
-            >
-              <PluginsSettings ecosystem={nativePluginEcosystem} embedded />
             </CollapsibleSettingsSection>
           ) : null}
         </div>

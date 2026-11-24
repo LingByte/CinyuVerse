@@ -3,7 +3,6 @@ import type {
   ExecutorProfileId,
 } from 'shared/types';
 
-import type { PluginActionDefinition } from '@/components/plugins/PluginActionEditor';
 import {
   configuredBackendTransport,
   type BackendTransport,
@@ -20,13 +19,6 @@ export type AutomationSchedule =
 
 export type AutomationIsolation = 'worktree_per_run' | 'shared_in_root';
 
-export type AutomationPluginActionRef = {
-  pluginId: string;
-  action: Omit<PluginActionDefinition, 'pluginId' | 'actionId'> & {
-    id: string;
-  };
-};
-
 export type AutomationLaunchInput = {
   promptBlocks: AutomationPromptBlock[];
   displayText: string;
@@ -36,7 +28,6 @@ export type AutomationLaunchInput = {
   };
   modeId: string | null;
   configValues: AgentSessionConfigOverride[];
-  pluginActions: AutomationPluginActionRef[];
   skills: string[];
   workspace: {
     projectId: string;

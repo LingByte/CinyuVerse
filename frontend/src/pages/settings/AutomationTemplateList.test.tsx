@@ -25,7 +25,6 @@ describe('AutomationTemplateList', () => {
                 agent: { agentId: 'codex', executorProfileId: null },
                 modeId: null,
                 configValues: [],
-                pluginActions: [],
                 skills: [],
                 workspace: {
                   projectId: 'project-1',

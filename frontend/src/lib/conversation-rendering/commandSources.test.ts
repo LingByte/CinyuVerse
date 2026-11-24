@@ -4,8 +4,6 @@ import {
   localSkillsToDollarCommands,
   localSkillsToSlashCommands,
   mergeComposerSlashCommands,
-  pluginComposerSlashContributions,
-  pluginInvocationsToSlashCommands,
 } from './commandSources';
 
 describe('composer command sources', () => {
@@ -85,7 +83,7 @@ describe('composer command sources', () => {
     ]);
   });
 
-  it('keeps same-name plugin, skill, and native candidates with structured identity', () => {
+  it('keeps same-name skill and native candidates with structured identity', () => {
     expect(
       mergeComposerSlashCommands({
         catalogCommands: [{ name: 'review', description: 'Built in' }],
@@ -101,14 +99,6 @@ describe('composer command sources', () => {
             description: 'Runtime compact',
             sourceKind: 'native',
             sourceId: 'runtime:compact',
-          },
-        ],
-        pluginCommands: [
-          {
-            name: 'review',
-            displayLabel: 'Review workflow',
-            sourceKind: 'plugin',
-            sourceId: 'dev.cinyuverse.review/review',
           },
         ],
         skillCommands: [
@@ -135,83 +125,9 @@ describe('composer command sources', () => {
       },
       {
         name: 'review',
-        displayLabel: 'Review workflow',
-        sourceKind: 'plugin',
-        sourceId: 'dev.cinyuverse.review/review',
-      },
-      {
-        name: 'review',
         kind: 'SKILL',
         sourceKind: 'skill',
         sourceId: '/skills/review/SKILL.md',
-      },
-    ]);
-  });
-
-  it('maps enabled PluginAction and Plugin Command contributions to slash candidates', () => {
-    expect(
-      pluginInvocationsToSlashCommands({
-        plugins: [
-          {
-            id: 'dev.cinyuverse.review',
-            name: 'Review',
-            version: '1.0.0',
-            description: null,
-            enabled: true,
-            builtin: false,
-            sourceKind: 'snapshot',
-            sourcePath: '/plugins/review',
-            formats: ['cinyuverse'],
-            skills: [],
-            runtimes: [],
-            warnings: [],
-            invocations: [
-              {
-                id: 'review',
-                label: 'Review',
-                prompt: 'Review this.',
-                kind: 'action',
-              },
-            ],
-          },
-        ],
-        runtimes: [],
-      })
-    ).toMatchObject([
-      {
-        name: 'review',
-        sourceKind: 'plugin',
-        sourceId: 'dev.cinyuverse.review/review',
-        prompt: 'Review this.',
-      },
-    ]);
-  });
-
-  it('maps composer.slash contributions to plugin slash candidates', () => {
-    expect(
-      pluginComposerSlashContributions([
-        {
-          pluginId: 'cinyuverse.office',
-          id: 'create-slides',
-          kind: 'composer_slash',
-          label: 'Create slides',
-          generation: 1,
-          metadata: {
-            command: '/slides',
-            description: 'Start a presentation',
-            prompt: 'Create a presentation',
-          },
-        },
-      ])
-    ).toEqual([
-      {
-        name: 'slides',
-        displayLabel: 'Create slides',
-        description: 'Start a presentation',
-        kind: 'COMMAND',
-        sourceKind: 'plugin',
-        sourceId: 'cinyuverse.office/create-slides',
-        prompt: 'Create a presentation',
       },
     ]);
   });
