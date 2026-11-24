@@ -1,11 +1,10 @@
 use agents::AgentId;
-use plugins::PromptBlock;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    AgentSelectionIntent, AutomationDraftInput, IsolationSpec, ScheduleSpec, TurnLaunchSpecInput,
-    WorkflowLaunchSpec, WorkspaceTarget,
+    AgentSelectionIntent, AutomationDraftInput, IsolationSpec, PromptBlock, ScheduleSpec,
+    TurnLaunchSpecInput, WorkflowLaunchSpec, WorkspaceTarget,
 };
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -98,7 +97,6 @@ fn ordinary_draft(name: &str, prompt: &str) -> AutomationDraft {
             },
             mode_id: None,
             config_values: Vec::new(),
-            plugin_actions: Vec::new(),
             skills: Vec::new(),
             workspace: WorkspaceTarget {
                 project_id: Uuid::nil(),

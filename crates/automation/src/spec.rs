@@ -1,6 +1,5 @@
 use agents::{AgentId, AgentSessionConfigOverride};
 use executors::profile::ExecutorProfileId;
-use plugins::{PluginAction, PluginId, PromptBlock, SkillId};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
@@ -8,6 +7,12 @@ use uuid::Uuid;
 pub const AUTOMATION_SPEC_VERSION: u16 = 1;
 pub const WORKFLOW_AUTOMATION_SPEC_VERSION: u16 = 1;
 pub const PORTABLE_AUTOMATION_SPEC_VERSION: u16 = 1;
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum PromptBlock {
+    Text { text: String },
+}
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,10 +40,8 @@ pub struct PortableTurnLaunchSpec {
     pub mode_id: Option<String>,
     #[serde(default)]
     pub config_values: Vec<AgentSessionConfigOverride>,
-    #[serde(default, alias = "workflowRefs")]
-    pub plugin_actions: Vec<PluginActionRef>,
     #[serde(default)]
-    pub skills: Vec<SkillId>,
+    pub skills: Vec<String>,
     pub workspace: PortableWorkspaceRef,
     #[serde(default)]
     pub label_snapshot: Option<String>,
@@ -82,12 +85,7 @@ impl AutomationSpec {
                     branch: spec.workspace.branch.clone(),
                     isolation: spec.workspace.isolation.clone(),
                 };
-                validate_input(
-                    &spec.prompt_blocks,
-                    &spec.display_text,
-                    &spec.plugin_actions,
-                    &placeholder,
-                )?;
+                validate_input(&spec.prompt_blocks, &spec.display_text, &placeholder)?;
                 &spec.workspace
             }
             PortableAutomationTarget::Workflow(spec) => {
@@ -164,8 +162,7 @@ pub struct TurnLaunchSpec {
     pub agent: AgentSelectionIntent,
     pub mode_id: Option<String>,
     pub config_values: Vec<AgentSessionConfigOverride>,
-    pub plugin_actions: Vec<PluginActionRef>,
-    pub skills: Vec<SkillId>,
+    pub skills: Vec<String>,
     pub workspace: WorkspaceTarget,
     #[serde(default)]
     pub label_snapshot: Option<String>,
@@ -181,10 +178,8 @@ pub struct TurnLaunchSpecInput {
     pub mode_id: Option<String>,
     #[serde(default)]
     pub config_values: Vec<AgentSessionConfigOverride>,
-    #[serde(default, alias = "workflowRefs")]
-    pub plugin_actions: Vec<PluginActionRef>,
     #[serde(default)]
-    pub skills: Vec<SkillId>,
+    pub skills: Vec<String>,
     pub workspace: WorkspaceTarget,
     #[serde(default)]
     pub label_snapshot: Option<String>,
@@ -204,61 +199,6 @@ pub struct AgentSelectionIntent {
     pub agent_id: AgentId,
     #[serde(default)]
     pub executor_profile_id: Option<ExecutorProfileId>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginActionRef {
-    pub plugin_id: PluginId,
-    pub action: PluginAction,
-}
-
-impl<'de> Deserialize<'de> for PluginActionRef {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Raw {
-            plugin_id: PluginId,
-            #[serde(default)]
-            action: Option<PluginAction>,
-            #[serde(default)]
-            workflow_id: Option<String>,
-            #[serde(default)]
-            action_id: Option<String>,
-            #[serde(default)]
-            version: Option<String>,
-        }
-        let raw = Raw::deserialize(deserializer)?;
-        if let Some(action) = raw.action {
-            return Ok(Self {
-                plugin_id: raw.plugin_id,
-                action,
-            });
-        }
-        let workflow_id = raw
-            .workflow_id
-            .or(raw.action_id)
-            .ok_or_else(|| serde::de::Error::missing_field("workflowId"))?;
-        let _ = raw.version;
-        Ok(Self {
-            plugin_id: raw.plugin_id,
-            action: PluginAction {
-                id: plugins::ActionId::from_string(workflow_id.clone()),
-                label: workflow_id,
-                required_skills: Vec::new(),
-                required_tools: Vec::new(),
-                prompt_blocks: Vec::new(),
-                artifact_intent: None,
-            },
-        })
-    }
-}
-
-pub trait PluginActionCatalogPort {
-    fn contains(&self, action: &PluginActionRef) -> bool;
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -291,15 +231,8 @@ pub enum AutomationError {
     EmptyPrompt,
     #[error("workspace root folder is required")]
     MissingWorkspaceRoot,
-    #[error("plugin action reference is invalid")]
-    InvalidPluginAction,
     #[error("portable Automation reference is invalid")]
     InvalidPortableReference,
-    #[error("plugin action {plugin_id}/{action_id} is unavailable")]
-    UnavailablePluginAction {
-        plugin_id: String,
-        action_id: String,
-    },
 }
 
 impl AutomationError {
@@ -308,9 +241,7 @@ impl AutomationError {
             Self::UnsupportedSpecVersion(_) => "automation_unsupported_spec_version",
             Self::EmptyPrompt => "automation_empty_prompt",
             Self::MissingWorkspaceRoot => "automation_missing_workspace_root",
-            Self::InvalidPluginAction => "automation_invalid_plugin_action",
             Self::InvalidPortableReference => "automation_invalid_portable_reference",
-            Self::UnavailablePluginAction { .. } => "automation_plugin_action_unavailable",
         }
     }
 }
@@ -328,36 +259,13 @@ impl TurnLaunchSpec {
         if self.spec_version != AUTOMATION_SPEC_VERSION {
             return Err(AutomationError::UnsupportedSpecVersion(self.spec_version));
         }
-        validate_input(
-            &self.prompt_blocks,
-            &self.display_text,
-            &self.plugin_actions,
-            &self.workspace,
-        )
-    }
-
-    pub fn validate_plugin_actions(
-        &self,
-        catalog: &impl PluginActionCatalogPort,
-    ) -> Result<(), AutomationError> {
-        if let Some(reference) = self
-            .plugin_actions
-            .iter()
-            .find(|reference| !catalog.contains(reference))
-        {
-            return Err(AutomationError::UnavailablePluginAction {
-                plugin_id: reference.plugin_id.as_str().to_owned(),
-                action_id: reference.action.id.as_str().to_owned(),
-            });
-        }
-        Ok(())
+        validate_input(&self.prompt_blocks, &self.display_text, &self.workspace)
     }
 
     fn normalize(input: TurnLaunchSpecInput) -> Result<Self, AutomationError> {
         validate_input(
             &input.prompt_blocks,
             &input.display_text,
-            &input.plugin_actions,
             &input.workspace,
         )?;
         Ok(Self {
@@ -367,7 +275,6 @@ impl TurnLaunchSpec {
             agent: input.agent,
             mode_id: input.mode_id,
             config_values: input.config_values,
-            plugin_actions: input.plugin_actions,
             skills: input.skills,
             workspace: input.workspace,
             label_snapshot: input.label_snapshot,
@@ -378,7 +285,6 @@ impl TurnLaunchSpec {
 fn validate_input(
     prompt_blocks: &[PromptBlock],
     display_text: &str,
-    plugin_actions: &[PluginActionRef],
     workspace: &WorkspaceTarget,
 ) -> Result<(), AutomationError> {
     let has_prompt = prompt_blocks.iter().any(|block| match block {
@@ -389,12 +295,6 @@ fn validate_input(
     }
     if workspace.root_folder.trim().is_empty() {
         return Err(AutomationError::MissingWorkspaceRoot);
-    }
-    if plugin_actions.iter().any(|reference| {
-        reference.plugin_id.as_str().trim().is_empty()
-            || reference.action.id.as_str().trim().is_empty()
-    }) {
-        return Err(AutomationError::InvalidPluginAction);
     }
     Ok(())
 }
@@ -410,31 +310,6 @@ mod tests {
             branch: Some("main".to_string()),
             isolation: IsolationSpec::WorktreePerRun,
         }
-    }
-
-    #[test]
-    fn workflow_refs_json_deserializes_as_plugin_action_refs() {
-        let spec: PortableTurnLaunchSpec = serde_json::from_value(serde_json::json!({
-            "promptBlocks": [{"type":"text","text":"run"}],
-            "displayText": "run",
-            "agent": {"agentId": "codex"},
-            "workspace": {
-                "projectName": "Cinyuverse",
-                "rootFolderName": "Cinyuverse"
-            },
-            "workflowRefs": [{
-                "pluginId": "office",
-                "workflowId": "create-presentation",
-                "version": "4.0.0"
-            }]
-        }))
-        .unwrap();
-        assert_eq!(spec.plugin_actions.len(), 1);
-        assert_eq!(spec.plugin_actions[0].plugin_id.as_str(), "office");
-        assert_eq!(
-            spec.plugin_actions[0].action.id.as_str(),
-            "create-presentation"
-        );
     }
 
     #[test]
@@ -454,7 +329,6 @@ mod tests {
                 },
                 mode_id: None,
                 config_values: Vec::new(),
-                plugin_actions: Vec::new(),
                 skills: Vec::new(),
                 workspace: portable_workspace(),
                 label_snapshot: None,
