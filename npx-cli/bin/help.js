@@ -25,45 +25,6 @@ Install the Agent Runtime and ACP into the user environment
   --yes, -y         Do not prompt
 `,
 
-  plugin: `Usage: cinyuverse plugin pack [dir] [--output file.vxp]
-       cinyuverse plugin add --web <git-or-url[#ref]> [--plugin ID] [--yes]
-       cinyuverse plugin add --profile <file.vxp|archive> [--plugin ID] [--yes]
-       cinyuverse plugin add --dev <dir> [--yes] [--detach]
-       cinyuverse plugin publish [dir|file.vxp] [--owner USER] [--password PASS] [--show-tree]
-       cinyuverse plugin publish --web <github-owner/repo[#tag]> [--owner USER] [--password PASS]
-       cinyuverse plugin list [--json]
-       cinyuverse plugin update <id> [--ref tag] [--yes]
-       cinyuverse plugin remove <id> [--yes] [--delete-data]
-       cinyuverse plugin gc-runtimes
-       cinyuverse plugin test --host [dir]
-
-pack    Validate and write a .vxp
-add     Install onto the local Desktop or Server Host
-  --web URL       Git repository, GitHub, marketplace, or archive URL
-                  Pin with #tag, #branch, or #commit
-  --profile FILE  Local .vxp / .zip / archive
-  --dev DIR       Link a development directory; Host reloads on change
-  --plugin ID     Choose one package when the archive has several
-  --yes, -y       Install without a prompt
-  --detach        With --dev, return after linking
-publish Submit a packed .vxp or GitHub repo to marketplace review
-  --web URL       GitHub owner/repo[#tag]; GitHub owner must match marketplace user
-  --owner USER    Marketplace username (or CINYUVERSE_MARKET_OWNER)
-  --password PASS Marketplace password (or CINYUVERSE_MARKET_PASSWORD)
-  --show-tree     Show package structure for uploads
-list    Show installed plugins on the running Host
-  --json          Print JSON
-update  Refresh a snapshot from its locked origin
-  --ref tag       New Git tag, branch, or commit
-remove  Uninstall a non-built-in plugin
-  --delete-data   Delete snapshot and config; reclaim unreferenced Runtimes
-gc-runtimes  Delete managed Runtimes with no plugin references
-test --host  Install, Skill-reload, and uninstall against the running Host
-        Looks up a local Host token if CINYUVERSE_TOKEN is unset.
-        If no Host is running, .vxp and --dev links stay in ~/.cinyuverse/imports
-        and Desktop or Server imports them on the next launch.
-`,
-
   conversation: `Usage: cinyuverse conversation <command>
   create    --workspace ID --agent ID [--title T] [--prompt T]
   send      --conversation ID --workspace ID --agent ID --text T
@@ -139,14 +100,6 @@ Control (needs a running Host, CINYUVERSE_URL, CINYUVERSE_TOKEN)
   file, git, agent
 
 Other
-  plugin pack             Package a .vxp
-  plugin add              Install from --web, --profile, or --dev onto the local Host
-  plugin publish          Submit a packed .vxp or GitHub repo to marketplace review
-  plugin list             List plugins on the running Host
-  plugin update <id>      Refresh a snapshot from its locked origin
-  plugin remove <id>      Uninstall a plugin
-  plugin gc-runtimes      Reclaim unreferenced Runtimes
-  plugin test --host      Host install / Skill reload / uninstall journey
   help [command]          This help
   --version, -V
 

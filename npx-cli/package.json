@@ -14,10 +14,6 @@
   },
   "license": "",
   "description": "NPX launcher for the Cinyuverse Host family (cinyuverse-server)",
-  "scripts": {
-    "prepack": "node bin/prepare-plugin-cli.js",
-    "postpack": "node bin/prepare-plugin-cli.js --clean"
-  },
   "dependencies": {
     "adm-zip": "^0.5.16"
   },
@@ -26,9 +22,7 @@
     "bin/control.js",
     "bin/download.js",
     "bin/help.js",
-    "bin/plugin.js",
     "bin/release-assets.js",
-    "dist",
-    "plugin-cli"
+    "dist"
   ]
 }

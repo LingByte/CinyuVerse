@@ -493,7 +493,6 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "executors",
- "plugins",
  "serde",
  "serde_json",
  "tempfile",
@@ -1050,7 +1049,6 @@ dependencies = [
  "local-deployment",
  "notify",
  "os_info",
- "plugins",
  "prost",
  "rand 0.8.6",
  "raw-window-handle",
@@ -1111,26 +1109,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
-]
-
-[[package]]
-name = "cinyuverse-plugin-sdk"
-version = "1.0.0"
-dependencies = [
- "async-trait",
- "futures",
- "regex",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
-]
-
-[[package]]
-name = "cinyuverse-workflow-mcp"
-version = "0.2.0"
-dependencies = [
- "utils",
 ]
 
 [[package]]
@@ -4952,36 +4930,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "plugins"
-version = "0.2.0"
-dependencies = [
- "async-trait",
- "dirs 5.0.1",
- "flate2",
- "libc",
- "notify",
- "reqwest 0.12.28",
- "semver",
- "serde",
- "serde_json",
- "sha2",
- "shlex",
- "sqlx",
- "tar",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "tool-runtime",
- "tracing",
- "url",
- "utils",
- "uuid",
- "windows-sys 0.59.0",
- "xattr",
- "zip 4.6.1",
-]
-
-[[package]]
 name = "png"
 version = "0.17.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6200,7 +6148,6 @@ dependencies = [
  "git2",
  "ignore",
  "local-deployment",
- "plugins",
  "prost",
  "regex",
  "remote-protocol",

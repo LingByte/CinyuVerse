@@ -25,7 +25,7 @@ function rustcHost() {
 }
 
 function sidecarBuildArgs({ debug, target }) {
-  const args = ["build", "-p", "cinyuverse-mcp", "-p", "cinyuverse-workflow-mcp"];
+  const args = ["build", "-p", "cinyuverse-mcp"];
   if (!debug) {
     args.push("--release");
   }

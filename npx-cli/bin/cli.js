@@ -92,10 +92,6 @@ async function main() {
     help.print(help.helpTopic(args));
     return;
   }
-  if (args[0] === "plugin") {
-    await require("./plugin").run(args.slice(1));
-    return;
-  }
   if (
     [
       "conversation",

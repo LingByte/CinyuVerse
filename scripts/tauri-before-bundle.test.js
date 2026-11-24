@@ -13,7 +13,7 @@ test('sidecar cargo build uses the same release target as the desktop binary', (
 
   assert.equal(args[0], 'build');
   assert.ok(args.includes('cinyuverse-mcp'));
-  assert.ok(args.includes('cinyuverse-workflow-mcp'));
+  assert.equal(args.includes('cinyuverse-workflow-mcp'), false);
   assert.ok(args.includes('--release'));
   assert.deepEqual(
     args.slice(args.indexOf('--target'), args.indexOf('--target') + 2),

@@ -48,10 +48,7 @@ function sidecarBinsExist({
 } = {}) {
   const { binDir } = resolveSidecarBinDir({ repo, env, hostTriple });
   const ext = platform === "win32" ? ".exe" : "";
-  return (
-    fs.existsSync(path.join(binDir, `cinyuverse-mcp${ext}`)) &&
-    fs.existsSync(path.join(binDir, `cinyuverse-workflow-mcp${ext}`))
-  );
+  return fs.existsSync(path.join(binDir, `cinyuverse-mcp${ext}`));
 }
 
 function copySidecar(name, source, destinationDir, triple) {
@@ -73,12 +70,6 @@ function main(env = process.env) {
   const { triple, binDir } = resolveSidecarBinDir({ repo, env });
   const sidecarDir = path.join(repo, "src-tauri", "binaries");
   copySidecar("cinyuverse-mcp", path.join(binDir, "cinyuverse-mcp"), sidecarDir, triple);
-  copySidecar(
-    "cinyuverse-workflow-mcp",
-    path.join(binDir, "cinyuverse-workflow-mcp"),
-    sidecarDir,
-    triple,
-  );
 }
 
 if (require.main === module) {

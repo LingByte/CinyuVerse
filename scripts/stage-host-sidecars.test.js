@@ -71,7 +71,6 @@ test('sidecar rebuild is skipped only when both Host binaries exist', () => {
   );
 
   fs.writeFileSync(path.join(binDir, 'cinyuverse-mcp'), '');
-  fs.writeFileSync(path.join(binDir, 'cinyuverse-workflow-mcp'), '');
   assert.equal(
     sidecarBinsExist({
       repo,

@@ -418,7 +418,7 @@ function refreshBundleExecutables(paths, profileDirectory) {
     return;
   }
   const macosDir = path.dirname(paths.appExecutable);
-  for (const name of ['cinyuverse-mcp', 'cinyuverse-workflow-mcp']) {
+  for (const name of ['cinyuverse-mcp']) {
     const source = hostSidecarPath(profileDirectory, name);
     if (fs.existsSync(source) && fs.statSync(source).size > 0) {
       replaceExecutable(source, path.join(macosDir, name));
