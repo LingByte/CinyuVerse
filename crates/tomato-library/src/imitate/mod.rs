@@ -33,7 +33,7 @@ pub use parse::{
 pub use prompt::build_analysis_prompt;
 pub use sample::{ChapterSample, SamplePlan, select_sample_plan};
 pub use scenes::{SceneSample, extract_scenes};
-pub use seed::{apply_seed_to_project, read_cards, write_cards_bundle};
+pub use seed::{apply_seed_to_project, read_cards, recover_cards_from_raw, write_cards_bundle};
 pub use status::{
     ImitatePhase, ImitateStatus, STEP_AGENT_RUNNING, STEP_HOST_EXTRACT, STEP_PARSE_SAVE,
     STEP_QUEUED, STEP_START_AGENT, STEP_TOTAL, read_status, write_status,

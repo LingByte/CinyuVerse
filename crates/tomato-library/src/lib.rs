@@ -27,8 +27,8 @@ pub use imitate::{
     ImitatePhase, ImitateStatus, STEP_AGENT_RUNNING, STEP_HOST_EXTRACT, STEP_PARSE_SAVE,
     STEP_QUEUED, STEP_START_AGENT, STEP_TOTAL, SettingCard, StorylineCard, apply_seed_to_project,
     build_analysis_prompt, ensure_imitate_dir, imitate_root, parse_imitate_cards_json,
-    prepare_analysis_pack, read_cards, read_status, resolve_book_dir_for_imitate, write_cards,
-    write_status,
+    prepare_analysis_pack, read_cards, read_status, recover_cards_from_raw,
+    resolve_book_dir_for_imitate, write_cards, write_status,
 };
 pub use local::{LocalBook, list_local_books, read_local_text, write_cover_bytes};
 pub use runtime::{

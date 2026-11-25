@@ -662,6 +662,7 @@ pub fn run(cef_bootstrap: Result<CefBootstrap, String>) {
         commands::tomato::library_stop_downloader,
         commands::library_imitate::library_imitate_status,
         commands::library_imitate::library_imitate_pack,
+        commands::library_imitate::library_imitate_recover,
         commands::library_imitate::library_imitate_seed_project,
         commands::library_imitate::library_start_imitate_analysis,
         commands::library_imitate::library_cancel_imitate_analysis,

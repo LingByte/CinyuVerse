@@ -24,7 +24,7 @@ use tomato_library::{
     ImitateCards, ImitatePhase, ImitateStatus, STEP_AGENT_RUNNING, STEP_HOST_EXTRACT,
     STEP_PARSE_SAVE, STEP_QUEUED, STEP_START_AGENT, STEP_TOTAL, apply_seed_to_project,
     build_analysis_prompt, parse_imitate_cards_json, prepare_analysis_pack, read_cards,
-    read_status, resolve_book_dir_for_imitate, write_cards, write_status,
+    read_status, recover_cards_from_raw, resolve_book_dir_for_imitate, write_cards, write_status,
 };
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
@@ -136,6 +136,28 @@ pub async fn library_imitate_pack(path: String) -> Result<ImitateCards, String> 
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())
+}
+
+/// Re-parse saved Agent output without re-running the expensive analysis turn.
+#[tauri::command]
+pub async fn library_imitate_recover(path: String) -> Result<LibraryImitateStatusView, String> {
+    let book_dir = resolve_book_dir_for_imitate(Path::new(&path)).map_err(|e| e.to_string())?;
+    tokio::task::spawn_blocking({
+        let book_dir = book_dir.clone();
+        move || recover_cards_from_raw(&book_dir)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    let completed = ImitateStatus::with_step(
+        ImitatePhase::Completed,
+        STEP_PARSE_SAVE,
+        "已从原文重新解析",
+        None,
+    );
+    write_status(&book_dir, &completed).map_err(|e| e.to_string())?;
+    Ok(completed.into())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

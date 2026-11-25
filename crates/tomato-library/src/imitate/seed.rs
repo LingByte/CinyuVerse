@@ -9,9 +9,9 @@ use std::{
 use anyhow::{Context, Result, bail};
 
 use super::{
-    AntiPlagiarismCard, CharacterCard, CraftCard, ImitateCards, SettingCard, StorylineCard,
-    ensure_imitate_dir, imitate_root, parse_imitate_cards_json, resolve_book_dir_for_imitate,
-    write_json,
+    AntiPlagiarismCard, CharacterCard, CraftCard, ImitateCards, ImitatePhase, ImitateStatus,
+    SettingCard, StorylineCard, STEP_PARSE_SAVE, ensure_imitate_dir, imitate_root,
+    parse_imitate_cards_json, resolve_book_dir_for_imitate, write_json, write_status,
 };
 
 #[derive(Debug, Clone)]
@@ -34,6 +34,38 @@ pub fn read_cards(book_dir: &Path) -> Result<ImitateCards> {
     let raw = fs::read_to_string(&pack_path)
         .with_context(|| format!("Failed to read {}", pack_path.display()))?;
     parse_imitate_cards_json(&raw)
+}
+
+/// Re-parse `raw_assistant.txt` after a failed analysis (e.g. curly-quote JSON).
+pub fn recover_cards_from_raw(book_dir: &Path) -> Result<ImitateCards> {
+    let book_dir = resolve_book_dir_for_imitate(book_dir)?;
+    let raw_path = imitate_root(&book_dir).join("raw_assistant.txt");
+    if !raw_path.is_file() {
+        bail!("没有可恢复的原文（缺少 raw_assistant.txt）");
+    }
+    let raw = fs::read_to_string(&raw_path)
+        .with_context(|| format!("Failed to read {}", raw_path.display()))?;
+    let cards = parse_imitate_cards_json(&raw)?;
+    let agent_id = {
+        let meta_path = imitate_root(&book_dir).join("meta.json");
+        if meta_path.is_file() {
+            let meta: super::ImitateMeta = serde_json::from_str(&fs::read_to_string(&meta_path)?)?;
+            meta.agent_id.unwrap_or_else(|| "recover".into())
+        } else {
+            "recover".into()
+        }
+    };
+    write_cards_bundle(&book_dir, &cards, &agent_id, None)?;
+    write_status(
+        &book_dir,
+        &ImitateStatus::with_step(
+            ImitatePhase::Completed,
+            STEP_PARSE_SAVE,
+            "已从原文重新解析",
+            None,
+        ),
+    )?;
+    Ok(cards)
 }
 
 pub fn render_seed_files(cards: &ImitateCards, new_title: &str) -> Result<SeedFiles> {
