@@ -1,8 +1,16 @@
 /**
- * Novel Library — search/download books via the Tomato platform and keep them
- * in a configurable local directory.
+ * Novel Library — local books + Tomato search/download via the managed
+ * local `--server` process.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Library,
@@ -12,17 +20,40 @@ import {
   BookOpen,
   Download,
   FileText,
-  Settings,
   FolderOpen,
   ExternalLink,
   ChevronLeft,
   ChevronRight,
   Trash2,
   Sparkles,
+  Play,
+  Square,
+  HardDriveDownload,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { invoke } from '@tauri-apps/api/core';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from '@/components/ui/toast';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { ConfirmDialog } from '@/components/dialogs/shared/ConfirmDialog';
 import { pickHostDirectory } from '@/lib/hostFs';
 import { cn } from '@/lib/utils';
 
@@ -94,6 +125,26 @@ type EpubChapter = {
 
 type Mode = 'local' | 'search';
 
+type DownloaderPhase =
+  | 'missing'
+  | 'installing'
+  | 'ready'
+  | 'starting'
+  | 'running'
+  | 'stopping'
+  | 'error';
+
+type DownloaderStatus = {
+  phase: DownloaderPhase;
+  installed: boolean;
+  running: boolean;
+  version: string | null;
+  binaryPath: string | null;
+  apiBase: string;
+  message: string | null;
+  installProgress: number | null;
+};
+
 type ImitateStatusView = {
   phase: 'idle' | 'queued' | 'running' | 'completed' | 'failed' | string;
   progress: string | null;
@@ -126,8 +177,6 @@ export function NovelLibraryPanel() {
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [selectedLocal, setSelectedLocal] = useState<LocalBook | null>(null);
   const [selectedRemote, setSelectedRemote] = useState<SearchItem | null>(null);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
@@ -137,7 +186,6 @@ export function NovelLibraryPanel() {
   const [epubBook, setEpubBook] = useState<EpubBook | null>(null);
   const [epubChapter, setEpubChapter] = useState<EpubChapter | null>(null);
   const [epubLoading, setEpubLoading] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<LibrarySettings | null>(null);
   const [pathDraft, setPathDraft] = useState('');
   const [pathSaving, setPathSaving] = useState(false);
@@ -145,6 +193,10 @@ export function NovelLibraryPanel() {
     null
   );
   const [imitateStarting, setImitateStarting] = useState(false);
+  const [downloader, setDownloader] = useState<DownloaderStatus | null>(null);
+  const [downloaderBusy, setDownloaderBusy] = useState(false);
+  const [downloaderPromptOpen, setDownloaderPromptOpen] = useState(false);
+  const pendingSearchRef = useRef(false);
   const localPreviewRequestRef = useRef(0);
   const readerScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -154,14 +206,80 @@ export function NovelLibraryPanel() {
     setPathDraft(cfg.libraryPath);
   }, []);
 
+  const loadDownloaderStatus = useCallback(async () => {
+    try {
+      const status = await invoke<DownloaderStatus>('library_downloader_status');
+      setDownloader(status);
+    } catch (err) {
+      setDownloader({
+        phase: 'error',
+        installed: false,
+        running: false,
+        version: null,
+        binaryPath: null,
+        apiBase: 'http://127.0.0.1:18423',
+        message: err instanceof Error ? err.message : String(err),
+        installProgress: null,
+      });
+    }
+  }, []);
+
+  const runDownloaderAction = useCallback(
+    async (command: string) => {
+      setDownloaderBusy(true);
+      // Optimistic phase so the badge/polling update before the invoke returns.
+      setDownloader((prev) => {
+        if (!prev) return prev;
+        if (command === 'library_start_downloader') {
+          return {
+            ...prev,
+            phase: 'starting',
+            message: '正在启动本机番茄下载服务…',
+          };
+        }
+        if (command === 'library_install_downloader') {
+          return {
+            ...prev,
+            phase: 'installing',
+            message: '正在安装番茄下载器…',
+            installProgress: prev.installProgress ?? 0.05,
+          };
+        }
+        if (command === 'library_stop_downloader') {
+          return {
+            ...prev,
+            phase: 'stopping',
+            message: '正在停止本机服务…',
+          };
+        }
+        return prev;
+      });
+      try {
+        const status = await invoke<DownloaderStatus>(command);
+        setDownloader(status);
+        if (command === 'library_start_downloader') {
+          await loadSettings();
+        }
+        return status;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        toast.error(message);
+        await loadDownloaderStatus();
+        return null;
+      } finally {
+        setDownloaderBusy(false);
+      }
+    },
+    [loadDownloaderStatus, loadSettings]
+  );
+
   const loadLocal = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       const books = await invoke<LocalBook[]>('library_list_local');
       setLocalBooks(books);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
@@ -170,7 +288,22 @@ export function NovelLibraryPanel() {
   useEffect(() => {
     void loadSettings();
     void loadLocal();
-  }, [loadLocal, loadSettings]);
+    void loadDownloaderStatus();
+  }, [loadDownloaderStatus, loadLocal, loadSettings]);
+
+  useEffect(() => {
+    const phase = downloader?.phase;
+    const transitional =
+      phase === 'installing' ||
+      phase === 'starting' ||
+      phase === 'stopping' ||
+      downloaderBusy;
+    if (!transitional) return;
+    const timer = window.setInterval(() => {
+      void loadDownloaderStatus();
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [downloader?.phase, downloaderBusy, loadDownloaderStatus]);
 
   const filteredLocal = useMemo(() => {
     if (!searchQuery.trim() || mode !== 'local') return localBooks;
@@ -197,21 +330,16 @@ export function NovelLibraryPanel() {
       const trimmed = nextPath.trim();
       if (!trimmed || trimmed === settings.libraryPath) return;
       setPathSaving(true);
-      setError(null);
       try {
         const updated = await invoke<LibrarySettings>('library_set_settings', {
-          settings: {
-            apiBase: settings.apiBase,
-            apiPassword: settings.apiPassword,
-            libraryPath: trimmed,
-          },
+          settings: { libraryPath: trimmed },
         });
         setSettings(updated);
         setPathDraft(updated.libraryPath);
-        setNotice(`书库路径已更新：${updated.libraryPath}`);
+        toast.success(`已切换到 ${updated.libraryPath}`);
         await loadLocal();
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        toast.error(err instanceof Error ? err.message : String(err));
         setPathDraft(settings.libraryPath);
       } finally {
         setPathSaving(false);
@@ -230,26 +358,68 @@ export function NovelLibraryPanel() {
     await saveLibraryPath(selected);
   }, [pathDraft, saveLibraryPath, settings?.libraryPath]);
 
+  const runSearch = useCallback(
+    async (query: string) => {
+      setMode('search');
+      setSearching(true);
+      setSelectedRemote(null);
+      setPreview(null);
+      try {
+        const resp = await invoke<{ items: SearchItem[] }>('library_search', {
+          query,
+        });
+        setSearchResults(resp.items ?? []);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : String(err));
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    },
+    []
+  );
+
   const handleSearch = useCallback(async () => {
     const q = searchQuery.trim();
     if (!q) return;
-    setMode('search');
-    setSearching(true);
-    setError(null);
-    setSelectedRemote(null);
-    setPreview(null);
-    try {
-      const resp = await invoke<{ items: SearchItem[] }>('library_search', {
-        query: q,
-      });
-      setSearchResults(resp.items ?? []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setSearchResults([]);
-    } finally {
-      setSearching(false);
+    if (!downloader?.running) {
+      pendingSearchRef.current = true;
+      setDownloaderPromptOpen(true);
+      return;
     }
-  }, [searchQuery]);
+    pendingSearchRef.current = false;
+    await runSearch(q);
+  }, [downloader?.running, runSearch, searchQuery]);
+
+  const handleDownloaderPromptAction = useCallback(async () => {
+    const phase = downloader?.phase ?? 'missing';
+    const needsInstall =
+      phase === 'missing' || (phase === 'error' && !downloader?.installed);
+    const command = needsInstall
+      ? 'library_install_downloader'
+      : 'library_start_downloader';
+
+    const status = await runDownloaderAction(command);
+    if (needsInstall && status?.phase === 'ready') {
+      const started = await runDownloaderAction('library_start_downloader');
+      if (started?.running) {
+        setDownloaderPromptOpen(false);
+        if (pendingSearchRef.current && searchQuery.trim()) {
+          pendingSearchRef.current = false;
+          await runSearch(searchQuery.trim());
+        }
+      }
+      return;
+    }
+
+    if (status?.running) {
+      setDownloaderPromptOpen(false);
+      if (pendingSearchRef.current && searchQuery.trim()) {
+        pendingSearchRef.current = false;
+        await runSearch(searchQuery.trim());
+      }
+    }
+  }, [downloader, runDownloaderAction, runSearch, searchQuery]);
 
   const loadEpubChapter = useCallback(
     async (bookPath: string, index: number, requestId: number) => {
@@ -263,7 +433,7 @@ export function NovelLibraryPanel() {
         readerScrollRef.current?.scrollTo({ top: 0 });
       } catch (err) {
         if (localPreviewRequestRef.current !== requestId) return;
-        setError(err instanceof Error ? err.message : String(err));
+        toast.error(err instanceof Error ? err.message : String(err));
       } finally {
         if (localPreviewRequestRef.current === requestId) {
           setEpubLoading(false);
@@ -297,14 +467,13 @@ export function NovelLibraryPanel() {
         : null
     );
     setPreviewLoading(true);
-    setError(null);
     try {
       const data = await invoke<PreviewResponse>('library_preview', {
         bookId: item.bookId,
       });
       setPreview(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setPreviewLoading(false);
     }
@@ -319,7 +488,6 @@ export function NovelLibraryPanel() {
       setTextPreview(null);
       setEpubBook(null);
       setEpubChapter(null);
-      setError(null);
 
       if (book.ext === 'txt') {
         setTextPreviewLoading(true);
@@ -358,7 +526,6 @@ export function NovelLibraryPanel() {
             name: bookMeta.title || book.name,
           });
           setEpubBook(bookMeta);
-          // EPUB→folder conversion may have replaced the loose file — refresh list.
           if (resolvedPath !== book.path) {
             void loadLocal();
           }
@@ -375,7 +542,7 @@ export function NovelLibraryPanel() {
           await loadEpubChapter(resolvedPath, first, requestId);
         } catch (err) {
           if (localPreviewRequestRef.current !== requestId) return;
-          setError(err instanceof Error ? err.message : String(err));
+          toast.error(err instanceof Error ? err.message : String(err));
           setEpubLoading(false);
         }
       }
@@ -386,10 +553,14 @@ export function NovelLibraryPanel() {
   const handleDeleteLocal = useCallback(async () => {
     if (!selectedLocal) return;
     const name = displayBookName(selectedLocal.name);
-    if (!window.confirm(`删除「${name}」？此操作不可撤销。`)) {
-      return;
-    }
-    setError(null);
+    const result = await ConfirmDialog.show({
+      title: '删除本地书',
+      message: `删除「${name}」？此操作不可撤销。`,
+      confirmText: '删除',
+      cancelText: '取消',
+      variant: 'destructive',
+    });
+    if (result !== 'confirmed') return;
     try {
       await invoke('library_delete_local', { path: selectedLocal.path });
       setSelectedLocal(null);
@@ -397,10 +568,10 @@ export function NovelLibraryPanel() {
       setEpubChapter(null);
       setTextPreview(null);
       setImitateStatus(null);
-      setNotice(`已删除「${name}」`);
+      toast.success(`已删除「${name}」`);
       await loadLocal();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      toast.error(err instanceof Error ? err.message : String(err));
     }
   }, [loadLocal, selectedLocal]);
 
@@ -422,8 +593,7 @@ export function NovelLibraryPanel() {
       setImitateStatus(null);
       return;
     }
-    const path = selectedLocal.path;
-    void refreshImitateStatus(path);
+    void refreshImitateStatus(selectedLocal.path);
   }, [selectedLocal, refreshImitateStatus]);
 
   useEffect(() => {
@@ -445,17 +615,15 @@ export function NovelLibraryPanel() {
   const handleStartImitate = useCallback(async () => {
     if (!selectedLocal || selectedLocal.ext !== 'book') return;
     setImitateStarting(true);
-    setError(null);
-    setNotice(null);
     try {
       const status = await invoke<ImitateStatusView>(
         'library_start_imitate_analysis',
         { path: selectedLocal.path }
       );
       setImitateStatus(status);
-      setNotice('已开始仿写分析');
+      toast.success('已开始仿写分析');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setImitateStarting(false);
     }
@@ -463,9 +631,12 @@ export function NovelLibraryPanel() {
 
   const handleDownload = useCallback(
     async (item: SearchItem) => {
+      if (!downloader?.running) {
+        pendingSearchRef.current = false;
+        setDownloaderPromptOpen(true);
+        return;
+      }
       setDownloadingId(item.bookId);
-      setNotice(null);
-      setError(null);
       try {
         const result = await invoke<DownloadResult>('library_download', {
           args: {
@@ -473,106 +644,135 @@ export function NovelLibraryPanel() {
             preferredName: item.title,
           },
         });
-        setNotice(`已下载「${result.title}」→ ${result.local_path}`);
+        toast.success(`已下载「${result.title}」`);
         setMode('local');
         await loadLocal();
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        toast.error(err instanceof Error ? err.message : String(err));
       } finally {
         setDownloadingId(null);
       }
     },
-    [loadLocal]
+    [downloader?.running, loadLocal]
   );
 
   const currentChapterIndex = epubChapter?.index ?? 0;
   const chapterCount = epubBook?.chapters.length ?? 0;
+  const downloaderPhase = downloader?.phase ?? 'missing';
+  const installProgress =
+    typeof downloader?.installProgress === 'number'
+      ? Math.round(downloader.installProgress * 100)
+      : null;
 
   return (
-    <div className="library-overlay bg-background text-foreground flex h-full w-full flex-col overflow-hidden">
-      <div className="flex items-center justify-between gap-3 border-b px-4 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <Library className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <h2 className="shrink-0 text-sm font-semibold">{t('toolbar.library')}</h2>
-          <span className="shrink-0 text-xs text-muted-foreground">
-            {localBooks.length > 0 ? `${localBooks.length} 本本地藏书` : '本地书库'}
-          </span>
-        </div>
-        <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
-          <div className="flex min-w-0 max-w-md flex-1 items-center gap-1">
-            <span className="shrink-0 text-[11px] text-muted-foreground">
-              存储路径
-            </span>
+    <TooltipProvider delayDuration={300}>
+      <div
+        className="library-overlay flex h-full w-full flex-col overflow-hidden bg-background text-foreground"
+        data-panel="library"
+      >
+        <header className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <Library className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <h2 className="shrink-0 text-sm font-semibold">
+              {t('toolbar.library')}
+            </h2>
+            <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+              {localBooks.length}
+            </Badge>
+          </div>
+
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
             <Input
               value={pathDraft}
               onChange={(e) => setPathDraft(e.target.value)}
               onBlur={() => void saveLibraryPath(pathDraft)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.currentTarget.blur();
-                }
+                if (e.key === 'Enter') e.currentTarget.blur();
               }}
               placeholder={settings?.defaultLibraryPath || '本地书库路径'}
               className="h-7 min-w-0 flex-1 text-[11px]"
               title={pathDraft}
             />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2"
+                  disabled={pathSaving}
+                  onClick={() => void handleBrowsePath()}
+                >
+                  {pathSaving ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <FolderOpen className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>选择目录</TooltipContent>
+            </Tooltip>
+          </div>
+
+          <div className="flex items-center gap-1 rounded-md border border-border/60 bg-[var(--surface-control)] p-0.5">
             <Button
               size="sm"
-              variant="ghost"
-              className="h-7 px-2"
-              disabled={pathSaving}
-              onClick={() => void handleBrowsePath()}
-              title="选择目录"
+              variant={mode === 'local' ? 'secondary' : 'ghost'}
+              className="h-6 px-2.5 text-[11px]"
+              onClick={() => {
+                setMode('local');
+                setSelectedRemote(null);
+                setPreview(null);
+              }}
             >
-              {pathSaving ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <FolderOpen className="h-3.5 w-3.5" />
-              )}
+              本地
+            </Button>
+            <Button
+              size="sm"
+              variant={mode === 'search' ? 'secondary' : 'ghost'}
+              className="h-6 px-2.5 text-[11px]"
+              onClick={() => {
+                setMode('search');
+                setSelectedLocal(null);
+                setEpubBook(null);
+                setEpubChapter(null);
+                setTextPreview(null);
+                setImitateStatus(null);
+              }}
+            >
+              搜索
             </Button>
           </div>
-          <Button
-            size="sm"
-            variant={mode === 'local' ? 'secondary' : 'ghost'}
-            onClick={() => {
-              setMode('local');
-              setError(null);
-            }}
-          >
-            本地
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setShowSettings((v) => !v)}
-            title="书库设置"
-          >
-            <Settings className="h-3.5 w-3.5" />
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => void loadLocal()}>
-            <RefreshCw
-              className={cn('h-3.5 w-3.5', loading && 'animate-spin')}
-            />
-          </Button>
-        </div>
-      </div>
 
-      {showSettings && settings ? (
-        <LibrarySettingsPanel
-          settings={settings}
-          onClose={() => setShowSettings(false)}
-          onSaved={async () => {
-            await loadSettings();
-            await loadLocal();
-            setShowSettings(false);
-          }}
-        />
-      ) : null}
+          <TomatoDownloaderControls
+            status={downloader}
+            busy={downloaderBusy}
+            onInstall={() => void runDownloaderAction('library_install_downloader')}
+            onStart={() => void runDownloaderAction('library_start_downloader')}
+            onStop={() => void runDownloaderAction('library_stop_downloader')}
+            onRefresh={() => void loadDownloaderStatus()}
+            onPrompt={() => setDownloaderPromptOpen(true)}
+          />
 
-      <div className="border-b px-4 py-2">
-        <div className="flex max-w-xl items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2"
+                onClick={() => void loadLocal()}
+              >
+                <RefreshCw
+                  className={cn('h-3.5 w-3.5', loading && 'animate-spin')}
+                />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>刷新本地书库</TooltipContent>
+          </Tooltip>
+        </header>
+
+        <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -580,620 +780,844 @@ export function NovelLibraryPanel() {
                 if (e.key === 'Enter') void handleSearch();
               }}
               placeholder={
-                mode === 'local'
-                  ? '筛选本地书名，或输入关键词后点搜索'
-                  : '搜索番茄书库…'
+                mode === 'local' ? '筛选本地书名…' : '搜索书名或作者…'
               }
               className="h-8 pl-8 text-xs"
             />
           </div>
           <Button
             size="sm"
-            variant="secondary"
-            onClick={() => void handleSearch()}
+            className="h-8"
             disabled={searching || !searchQuery.trim()}
+            onClick={() => void handleSearch()}
           >
             {searching ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              '搜索下载'
+              <Search className="h-3.5 w-3.5" />
             )}
+            搜索下载
           </Button>
         </div>
+
+        {downloaderPhase === 'installing' && installProgress != null ? (
+          <div className="border-b px-3 py-2">
+            <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>{downloader?.message || '正在安装番茄下载器…'}</span>
+              <span>{installProgress}%</span>
+            </div>
+            <Progress value={installProgress} className="h-1.5" />
+          </div>
+        ) : null}
+
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <aside className="flex w-80 shrink-0 flex-col border-r">
+            <ScrollArea className="min-h-0 flex-1">
+              {mode === 'local' ? (
+                <LocalBookList
+                  loading={loading}
+                  books={filteredLocal}
+                  selectedPath={selectedLocal?.path ?? null}
+                  onSelect={(book) => void handleSelectLocal(book)}
+                />
+              ) : (
+                <SearchBookList
+                  searching={searching}
+                  items={searchResults}
+                  selectedId={selectedRemote?.bookId ?? null}
+                  downloadingId={downloadingId}
+                  isDownloaded={isDownloaded}
+                  onSelect={(item) => void handleSelectRemote(item)}
+                  onDownload={(item) => void handleDownload(item)}
+                />
+              )}
+            </ScrollArea>
+          </aside>
+
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            {!selectedLocal && !selectedRemote ? (
+              <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+                <Library className="h-10 w-10 text-muted-foreground/35" />
+                <p className="text-sm text-muted-foreground">
+                  选择左侧藏书，或搜索后下载到本地
+                </p>
+              </div>
+            ) : null}
+
+            {selectedLocal ? (
+              <LocalReader
+                book={selectedLocal}
+                epubBook={epubBook}
+                epubChapter={epubChapter}
+                epubLoading={epubLoading}
+                textPreview={textPreview}
+                textPreviewLoading={textPreviewLoading}
+                imitateStatus={imitateStatus}
+                imitateStarting={imitateStarting}
+                currentChapterIndex={currentChapterIndex}
+                chapterCount={chapterCount}
+                readerScrollRef={readerScrollRef}
+                onChapter={(index) => {
+                  const requestId = ++localPreviewRequestRef.current;
+                  void loadEpubChapter(selectedLocal.path, index, requestId);
+                }}
+                onImitate={() => void handleStartImitate()}
+                onDelete={() => void handleDeleteLocal()}
+              />
+            ) : null}
+
+            {selectedRemote ? (
+              <RemotePreview
+                item={selectedRemote}
+                preview={preview}
+                previewLoading={previewLoading}
+                downloaded={isDownloaded(selectedRemote.title)}
+                downloading={downloadingId === selectedRemote.bookId}
+                onDownload={() => void handleDownload(selectedRemote)}
+              />
+            ) : null}
+          </main>
+        </div>
+
+        <DownloaderRequiredDialog
+          open={downloaderPromptOpen}
+          status={downloader}
+          busy={downloaderBusy}
+          onOpenChange={(open) => {
+            setDownloaderPromptOpen(open);
+            if (!open) pendingSearchRef.current = false;
+          }}
+          onAction={() => void handleDownloaderPromptAction()}
+        />
       </div>
+    </TooltipProvider>
+  );
+}
 
-      {notice ? (
-        <div className="flex items-center justify-between gap-2 border-b bg-emerald-50 px-4 py-1.5 text-xs text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-          <span className="truncate">{notice}</span>
-          <button onClick={() => setNotice(null)}>×</button>
-        </div>
-      ) : null}
+function downloaderPhaseLabel(status: DownloaderStatus | null): string {
+  if (!status) return '检测中';
+  switch (status.phase) {
+    case 'missing':
+      return '未安装';
+    case 'installing':
+      return '安装中';
+    case 'ready':
+      return status.version ? `v${status.version}` : '已安装';
+    case 'starting':
+      return '启动中';
+    case 'running':
+      return status.version ? `运行中 · v${status.version}` : '运行中';
+    case 'stopping':
+      return '停止中';
+    case 'error':
+      return '异常';
+    default:
+      return status.phase;
+  }
+}
 
-      {error ? (
-        <div className="border-b px-4 py-2 text-xs text-rose-500">{error}</div>
-      ) : null}
+function TomatoDownloaderControls({
+  status,
+  busy,
+  onInstall,
+  onStart,
+  onStop,
+  onRefresh,
+  onPrompt,
+}: {
+  status: DownloaderStatus | null;
+  busy: boolean;
+  onInstall: () => void;
+  onStart: () => void;
+  onStop: () => void;
+  onRefresh: () => void;
+  onPrompt: () => void;
+}) {
+  const phase = status?.phase ?? 'missing';
+  const badgeVariant =
+    phase === 'running'
+      ? 'default'
+      : phase === 'error'
+        ? 'destructive'
+        : 'secondary';
 
-      <div className="flex flex-1 overflow-hidden">
-        <div className="w-80 overflow-y-auto border-r">
-          {mode === 'local' ? (
-            <>
-              {loading ? (
-                <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  加载本地书库…
-                </div>
-              ) : null}
-              {!loading && filteredLocal.length === 0 ? (
-                <div className="flex flex-col items-center px-4 py-12 text-center">
-                  <BookOpen className="mb-2 h-8 w-8 text-muted-foreground/40" />
-                  <p className="text-xs text-muted-foreground">
-                    本地还没有书。上方搜索后下载即可。
-                  </p>
-                </div>
-              ) : null}
-              <div className="space-y-0.5 p-1.5">
-                {filteredLocal.map((book) => {
-                  const selected = selectedLocal?.path === book.path;
-                  return (
-                    <button
-                      key={book.path}
-                      type="button"
-                      className={cn(
-                        'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors',
-                        selected ? 'bg-muted' : 'hover:bg-muted/60'
-                      )}
-                      onClick={() => void handleSelectLocal(book)}
-                    >
-                      <div className="h-14 w-10 shrink-0 overflow-hidden rounded-md bg-muted shadow-sm">
-                        {book.coverDataUrl ? (
-                          <img
-                            src={book.coverDataUrl}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div
-                            className={cn(
-                              'flex h-full w-full items-center justify-center',
-                          book.ext === 'epub' || book.ext === 'book'
-                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                            : 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
-                            )}
-                          >
-                            {book.ext === 'epub' || book.ext === 'book' ? (
-                              <BookOpen className="h-4 w-4" />
-                            ) : (
-                              <FileText className="h-4 w-4" />
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] font-medium leading-snug">
-                          {displayBookName(book.name)}
-                        </div>
-                        <div className="mt-0.5 text-[10px] text-muted-foreground">
-                          {book.ext.toUpperCase()} · {formatSize(book.size)}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </>
+  return (
+    <div className="flex items-center gap-1">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex"
+            onClick={onPrompt}
+          >
+            <Badge
+              variant={badgeVariant}
+              className="h-6 cursor-pointer gap-1 px-2 text-[10px] font-medium"
+            >
+              <HardDriveDownload className="h-3 w-3" />
+              {downloaderPhaseLabel(status)}
+            </Badge>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {status?.message || '番茄下载器状态'}
+        </TooltipContent>
+      </Tooltip>
+
+      {phase === 'missing' || (phase === 'error' && !status?.installed) ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          className="h-7"
+          disabled={busy}
+          onClick={onInstall}
+        >
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <>
-              {searching ? (
-                <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  搜索中…
-                </div>
-              ) : null}
-              {!searching && searchResults.length === 0 ? (
-                <div className="px-4 py-8 text-center text-xs text-muted-foreground">
-                  没有搜索结果
-                </div>
-              ) : null}
-              <div className="space-y-0.5 p-1.5">
-                {searchResults.map((item) => {
-                  const selected = selectedRemote?.bookId === item.bookId;
-                  const downloaded = isDownloaded(item.title);
-                  const downloading = downloadingId === item.bookId;
-                  return (
-                    <div
-                      key={item.bookId}
-                      className={cn(
-                        'rounded-lg px-2.5 py-2 transition-colors',
-                        selected ? 'bg-muted' : 'hover:bg-muted/60'
-                      )}
-                    >
-                      <div className="flex items-start gap-2.5">
-                        <button
-                          type="button"
-                          className="flex min-w-0 flex-1 items-start gap-2.5 text-left"
-                          onClick={() => void handleSelectRemote(item)}
-                        >
-                          <div className="h-14 w-10 shrink-0 overflow-hidden rounded-md bg-muted shadow-sm">
-                            {item.coverDataUrl ? (
-                              <img
-                                src={item.coverDataUrl}
-                                alt=""
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center">
-                                <BookOpen className="h-4 w-4 text-muted-foreground/50" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1 pt-0.5">
-                            <div className="line-clamp-2 text-[13px] font-medium leading-snug">
-                              {item.title}
-                            </div>
-                            <div className="mt-1 text-[10px] text-muted-foreground">
-                              {item.author || '未知作者'}
-                            </div>
-                          </div>
-                        </button>
-                      </div>
-                      <div className="mt-2 flex justify-end">
-                        {downloaded ? (
-                          <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-300">
-                            已在本地
-                          </span>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="h-7 px-2.5 text-[11px]"
-                            disabled={downloading}
-                            onClick={() => void handleDownload(item)}
-                          >
-                            {downloading ? (
-                              <>
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                下载中…
-                              </>
-                            ) : (
-                              <>
-                                <Download className="h-3.5 w-3.5" />
-                                下载到本地
-                              </>
-                            )}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
+            <Download className="h-3.5 w-3.5" />
           )}
+          安装
+        </Button>
+      ) : null}
+
+      {phase === 'ready' || (phase === 'error' && status?.installed) ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          className="h-7"
+          disabled={busy}
+          onClick={onStart}
+        >
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Play className="h-3.5 w-3.5" />
+          )}
+          启动
+        </Button>
+      ) : null}
+
+      {phase === 'running' ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2"
+          disabled={busy}
+          onClick={onStop}
+        >
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Square className="h-3.5 w-3.5" />
+          )}
+        </Button>
+      ) : null}
+
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-7 px-2"
+        disabled={busy}
+        onClick={onRefresh}
+      >
+        <RefreshCw className={cn('h-3.5 w-3.5', busy && 'animate-spin')} />
+      </Button>
+    </div>
+  );
+}
+
+function DownloaderRequiredDialog({
+  open,
+  status,
+  busy,
+  onOpenChange,
+  onAction,
+}: {
+  open: boolean;
+  status: DownloaderStatus | null;
+  busy: boolean;
+  onOpenChange: (open: boolean) => void;
+  onAction: () => void;
+}) {
+  const phase = status?.phase ?? 'missing';
+  const needsInstall =
+    phase === 'missing' || (phase === 'error' && !status?.installed);
+  const installing = phase === 'installing' || phase === 'starting';
+  const progress =
+    typeof status?.installProgress === 'number'
+      ? Math.round(status.installProgress * 100)
+      : null;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      className="!max-w-[400px] sm:!max-w-[400px]"
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {needsInstall ? '安装番茄下载器' : '启动番茄下载器'}
+          </DialogTitle>
+          <DialogDescription>
+            {needsInstall
+              ? '搜索和下载需要本机番茄下载器。安装完成后会自动启动。'
+              : '番茄下载器已安装，但当前未运行。启动后即可搜索下载。'}
+          </DialogDescription>
+        </DialogHeader>
+
+        {status?.message ? (
+          <Alert>
+            <AlertDescription className="text-xs">
+              {status.message}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {installing && progress != null ? (
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-[11px] text-muted-foreground">
+              <span>安装进度</span>
+              <span>{progress}%</span>
+            </div>
+            <Progress value={progress} />
+          </div>
+        ) : null}
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            disabled={busy && installing}
+            onClick={() => onOpenChange(false)}
+          >
+            取消
+          </Button>
+          <Button disabled={busy} onClick={onAction}>
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : needsInstall ? (
+              <Download className="h-3.5 w-3.5" />
+            ) : (
+              <Play className="h-3.5 w-3.5" />
+            )}
+            {needsInstall ? '安装并启动' : '启动'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function LocalBookList({
+  loading,
+  books,
+  selectedPath,
+  onSelect,
+}: {
+  loading: boolean;
+  books: LocalBook[];
+  selectedPath: string | null;
+  onSelect: (book: LocalBook) => void;
+}) {
+  if (loading) {
+    return (
+      <div className="space-y-2 p-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-2.5">
+            <Skeleton className="h-14 w-10 shrink-0 rounded-md" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-3 w-[75%]" />
+              <Skeleton className="h-2.5 w-[33%]" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (books.length === 0) {
+    return (
+      <div className="flex flex-col items-center px-4 py-12 text-center">
+        <BookOpen className="mb-2 h-8 w-8 text-muted-foreground/40" />
+        <p className="text-xs text-muted-foreground">本地还没有书</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-0.5 p-1.5">
+      {books.map((book) => {
+        const selected = selectedPath === book.path;
+        return (
+          <button
+            key={book.path}
+            type="button"
+            className={cn(
+              'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors',
+              selected
+                ? 'bg-[var(--surface-active)]'
+                : 'hover:bg-[var(--surface-control-hover)]'
+            )}
+            onClick={() => onSelect(book)}
+          >
+            <CoverThumb
+              dataUrl={book.coverDataUrl}
+              fallback={
+                book.ext === 'epub' || book.ext === 'book' ? (
+                  <BookOpen className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                )
+              }
+            />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-medium leading-snug">
+                {displayBookName(book.name)}
+              </div>
+              <div className="mt-0.5 text-[10px] text-muted-foreground">
+                {book.ext.toUpperCase()} · {formatSize(book.size)}
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SearchBookList({
+  searching,
+  items,
+  selectedId,
+  downloadingId,
+  isDownloaded,
+  onSelect,
+  onDownload,
+}: {
+  searching: boolean;
+  items: SearchItem[];
+  selectedId: string | null;
+  downloadingId: string | null;
+  isDownloaded: (title: string) => boolean;
+  onSelect: (item: SearchItem) => void;
+  onDownload: (item: SearchItem) => void;
+}) {
+  if (searching) {
+    return (
+      <div className="space-y-2 p-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-2.5">
+            <Skeleton className="h-14 w-10 shrink-0 rounded-md" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-3 w-[80%]" />
+              <Skeleton className="h-2.5 w-[25%]" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="px-4 py-10 text-center text-xs text-muted-foreground">
+        输入关键词搜索番茄书库
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-0.5 p-1.5">
+      {items.map((item) => {
+        const selected = selectedId === item.bookId;
+        const downloaded = isDownloaded(item.title);
+        const downloading = downloadingId === item.bookId;
+        return (
+          <div
+            key={item.bookId}
+            className={cn(
+              'rounded-md px-2.5 py-2 transition-colors',
+              selected
+                ? 'bg-[var(--surface-active)]'
+                : 'hover:bg-[var(--surface-control-hover)]'
+            )}
+          >
+            <button
+              type="button"
+              className="flex w-full items-start gap-2.5 text-left"
+              onClick={() => onSelect(item)}
+            >
+              <CoverThumb
+                dataUrl={item.coverDataUrl}
+                fallback={
+                  <BookOpen className="h-4 w-4 text-muted-foreground/50" />
+                }
+              />
+              <div className="min-w-0 flex-1 pt-0.5">
+                <div className="line-clamp-2 text-[13px] font-medium leading-snug">
+                  {item.title}
+                </div>
+                <div className="mt-1 text-[10px] text-muted-foreground">
+                  {item.author || '未知作者'}
+                </div>
+              </div>
+            </button>
+            <div className="mt-2 flex justify-end">
+              {downloaded ? (
+                <Badge variant="secondary" className="h-5 text-[10px]">
+                  已在本地
+                </Badge>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-7 px-2.5 text-[11px]"
+                  disabled={downloading}
+                  onClick={() => onDownload(item)}
+                >
+                  {downloading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  下载
+                </Button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CoverThumb({
+  dataUrl,
+  fallback,
+}: {
+  dataUrl: string | null;
+  fallback: ReactNode;
+}) {
+  return (
+    <div className="h-14 w-10 shrink-0 overflow-hidden rounded-md border border-border/50 bg-muted">
+      {dataUrl ? (
+        <img src={dataUrl} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center">
+          {fallback}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LocalReader({
+  book,
+  epubBook,
+  epubChapter,
+  epubLoading,
+  textPreview,
+  textPreviewLoading,
+  imitateStatus,
+  imitateStarting,
+  currentChapterIndex,
+  chapterCount,
+  readerScrollRef,
+  onChapter,
+  onImitate,
+  onDelete,
+}: {
+  book: LocalBook;
+  epubBook: EpubBook | null;
+  epubChapter: EpubChapter | null;
+  epubLoading: boolean;
+  textPreview: string | null;
+  textPreviewLoading: boolean;
+  imitateStatus: ImitateStatusView | null;
+  imitateStarting: boolean;
+  currentChapterIndex: number;
+  chapterCount: number;
+  readerScrollRef: RefObject<HTMLDivElement | null>;
+  onChapter: (index: number) => void;
+  onImitate: () => void;
+  onDelete: () => void;
+}) {
+  const isEpub = book.ext === 'epub' || book.ext === 'book';
+
+  return (
+    <div className="flex h-full overflow-hidden">
+      {isEpub && epubBook ? (
+        <div className="flex w-56 shrink-0 flex-col border-r">
+          <div className="shrink-0 border-b px-3 py-2">
+            <div className="truncate text-xs font-medium">目录</div>
+            <div className="mt-0.5 text-[10px] text-muted-foreground">
+              {chapterCount} 章
+              {epubBook.author ? ` · ${epubBook.author}` : ''}
+            </div>
+          </div>
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="p-1">
+              {epubBook.chapters.map((chapter) => (
+                <button
+                  key={chapter.index}
+                  type="button"
+                  className={cn(
+                    'mb-0.5 w-full rounded-md px-2 py-1.5 text-left text-[11px] leading-snug transition-colors',
+                    chapter.index === currentChapterIndex
+                      ? 'bg-[var(--surface-active)] font-medium'
+                      : 'text-muted-foreground hover:bg-[var(--surface-control-hover)] hover:text-foreground'
+                  )}
+                  onClick={() => onChapter(chapter.index)}
+                >
+                  {chapter.title}
+                </button>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
+      ) : null}
+
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="shrink-0 space-y-3 border-b px-4 py-3">
+          <div>
+            <h3 className="text-base font-semibold leading-snug">
+              {epubBook?.title || displayBookName(book.name)}
+            </h3>
+            <p className="mt-1 truncate text-[11px] text-muted-foreground">
+              {book.path}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {isEpub ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-7"
+                  disabled={epubLoading || currentChapterIndex <= 0 || !epubBook}
+                  onClick={() => onChapter(Math.max(0, currentChapterIndex - 1))}
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  上一章
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-7"
+                  disabled={
+                    epubLoading ||
+                    !epubBook ||
+                    currentChapterIndex >= chapterCount - 1
+                  }
+                  onClick={() =>
+                    onChapter(
+                      Math.min(chapterCount - 1, currentChapterIndex + 1)
+                    )
+                  }
+                >
+                  下一章
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            ) : null}
+            {book.ext === 'book' ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-7"
+                  disabled={
+                    imitateStarting ||
+                    imitateStatus?.phase === 'queued' ||
+                    imitateStatus?.phase === 'running'
+                  }
+                  onClick={onImitate}
+                  data-testid="library-imitate-analyze"
+                >
+                  {imitateStarting ||
+                  imitateStatus?.phase === 'queued' ||
+                  imitateStatus?.phase === 'running' ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  分析
+                </Button>
+                <Badge
+                  variant="outline"
+                  className="h-5 text-[10px] font-normal"
+                  data-testid="library-imitate-status"
+                >
+                  {imitateStatusLabel(imitateStatus)}
+                </Badge>
+              </>
+            ) : null}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7"
+              onClick={() =>
+                void invoke('library_open_local', { path: book.path })
+              }
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              打开
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7"
+              onClick={() =>
+                void invoke('library_reveal_local', { path: book.path })
+              }
+            >
+              <FolderOpen className="h-3.5 w-3.5" />
+              访达
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-destructive hover:text-destructive"
+              onClick={onDelete}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              删除
+            </Button>
+          </div>
         </div>
 
-        <div className="flex flex-1 flex-col overflow-hidden">
-          {!selectedLocal && !selectedRemote ? (
-            <div className="flex h-full flex-col items-center justify-center text-center">
-              <Library className="mb-3 h-12 w-12 text-muted-foreground/30" />
-              <p className="text-sm text-muted-foreground">
-                选择本地藏书，或搜索后下载到本地书库
-              </p>
-            </div>
-          ) : null}
-
-          {selectedLocal ? (
-            <div className="flex h-full overflow-hidden">
-              {(selectedLocal.ext === 'epub' || selectedLocal.ext === 'book') &&
-              epubBook ? (
-                <div className="flex w-56 shrink-0 flex-col border-r">
-                  <div className="shrink-0 border-b px-3 py-2">
-                    <div className="truncate text-xs font-medium">目录</div>
-                    <div className="mt-0.5 text-[10px] text-muted-foreground">
-                      {chapterCount} 章
-                      {epubBook.author ? ` · ${epubBook.author}` : ''}
-                    </div>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-1">
-                    {epubBook.chapters.map((chapter) => (
-                      <button
-                        key={chapter.index}
-                        type="button"
-                        className={cn(
-                          'mb-0.5 w-full rounded-md px-2 py-1.5 text-left text-[11px] leading-snug transition-colors',
-                          chapter.index === currentChapterIndex
-                            ? 'bg-muted font-medium'
-                            : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-                        )}
-                        onClick={() => {
-                          if (!selectedLocal) return;
-                          const requestId = ++localPreviewRequestRef.current;
-                          void loadEpubChapter(
-                            selectedLocal.path,
-                            chapter.index,
-                            requestId
-                          );
-                        }}
-                      >
-                        {chapter.title}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                <div className="shrink-0 border-b p-4">
-                  <h3 className="text-lg font-semibold">
-                    {epubBook?.title || displayBookName(selectedLocal.name)}
-                  </h3>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {selectedLocal.path}
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {selectedLocal.ext === 'epub' ||
-                    selectedLocal.ext === 'book' ? (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={
-                            epubLoading || currentChapterIndex <= 0 || !epubBook
-                          }
-                          onClick={() => {
-                            if (!selectedLocal || !epubBook) return;
-                            const prev = Math.max(0, currentChapterIndex - 1);
-                            const requestId = ++localPreviewRequestRef.current;
-                            void loadEpubChapter(
-                              selectedLocal.path,
-                              prev,
-                              requestId
-                            );
-                          }}
-                        >
-                          <ChevronLeft className="h-3.5 w-3.5" />
-                          上一章
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={
-                            epubLoading ||
-                            !epubBook ||
-                            currentChapterIndex >= chapterCount - 1
-                          }
-                          onClick={() => {
-                            if (!selectedLocal || !epubBook) return;
-                            const next = Math.min(
-                              chapterCount - 1,
-                              currentChapterIndex + 1
-                            );
-                            const requestId = ++localPreviewRequestRef.current;
-                            void loadEpubChapter(
-                              selectedLocal.path,
-                              next,
-                              requestId
-                            );
-                          }}
-                        >
-                          下一章
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        </Button>
-                      </>
-                    ) : null}
-                    {selectedLocal.ext === 'book' ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={
-                          imitateStarting ||
-                          imitateStatus?.phase === 'queued' ||
-                          imitateStatus?.phase === 'running'
-                        }
-                        onClick={() => void handleStartImitate()}
-                        data-testid="library-imitate-analyze"
-                      >
-                        {imitateStarting ||
-                        imitateStatus?.phase === 'queued' ||
-                        imitateStatus?.phase === 'running' ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Sparkles className="h-3.5 w-3.5" />
-                        )}
-                        分析
-                      </Button>
-                    ) : null}
-                    {selectedLocal.ext === 'book' ? (
-                      <span
-                        className="text-xs text-muted-foreground"
-                        data-testid="library-imitate-status"
-                      >
-                        {imitateStatusLabel(imitateStatus)}
-                      </span>
-                    ) : null}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        void invoke('library_open_local', {
-                          path: selectedLocal.path,
-                        })
-                      }
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      系统打开
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        void invoke('library_reveal_local', {
-                          path: selectedLocal.path,
-                        })
-                      }
-                    >
-                      <FolderOpen className="h-3.5 w-3.5" />
-                      在访达中显示
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => void handleDeleteLocal()}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      删除
-                    </Button>
-                  </div>
-                </div>
-                <div
-                  ref={readerScrollRef}
-                  className="flex-1 overflow-y-auto p-4"
-                >
-                  {selectedLocal.ext === 'epub' ||
-                  selectedLocal.ext === 'book' ? (
-                    epubLoading && !epubChapter ? (
-                      <div className="flex items-center text-xs text-muted-foreground">
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {selectedLocal.ext === 'epub'
-                          ? '正在解析并转换书库…'
-                          : '加载章节…'}
-                      </div>
-                    ) : epubChapter ? (
-                      <article className="mx-auto max-w-2xl">
-                        <h4 className="mb-4 text-base font-semibold">
-                          {epubChapter.title}
-                        </h4>
-                        <div className="space-y-4 text-[15px] leading-7 text-foreground/90">
-                          {chapterBodyParagraphs(
-                            epubChapter.title,
-                            epubChapter.text
-                          ).map((para, i) => (
-                            <p key={i}>{para}</p>
-                          ))}
-                        </div>
-                        {epubLoading ? (
-                          <div className="mt-4 flex items-center text-xs text-muted-foreground">
-                            <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                            加载中…
-                          </div>
-                        ) : null}
-                      </article>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        无法打开该 EPUB。
-                      </p>
-                    )
-                  ) : textPreviewLoading ? (
-                    <div className="flex items-center text-xs text-muted-foreground">
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      解析预览…
-                    </div>
-                  ) : textPreview ? (
-                    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground/80">
-                      {textPreview}
-                    </pre>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      该格式不支持内嵌预览。
-                    </p>
-                  )}
-                </div>
+        <div ref={readerScrollRef} className="min-h-0 flex-1 overflow-y-auto p-4">
+          {isEpub ? (
+            epubLoading && !epubChapter ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {book.ext === 'epub' ? '正在解析并转换书库…' : '加载章节…'}
               </div>
-            </div>
-          ) : null}
-
-          {selectedRemote ? (
-            <div className="flex h-full flex-col overflow-hidden">
-              <div className="shrink-0 border-b p-4">
-                <div className="flex items-start gap-4">
-                  {preview?.coverDataUrl ? (
-                    <img
-                      src={preview.coverDataUrl}
-                      alt={preview.bookName || selectedRemote.title}
-                      className="h-28 w-20 shrink-0 rounded object-cover shadow-sm"
-                    />
-                  ) : previewLoading ? (
-                    <div className="flex h-28 w-20 shrink-0 items-center justify-center rounded bg-muted">
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : (
-                    <div className="flex h-28 w-20 shrink-0 items-center justify-center rounded bg-muted text-[10px] text-muted-foreground">
-                      无封面
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-lg font-semibold">
-                      {preview?.bookName || selectedRemote.title}
-                    </h3>
-                    <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                      <span>
-                        作者: {preview?.author || selectedRemote.author}
-                      </span>
-                      {preview?.category ? (
-                        <span>分类: {preview.category}</span>
-                      ) : null}
-                      {preview?.chapterCount ? (
-                        <span>{preview.chapterCount} 章</span>
-                      ) : null}
-                      {preview?.wordCount ? (
-                        <span>
-                          {(preview.wordCount / 10000).toFixed(1)} 万字
-                        </span>
-                      ) : null}
-                      {preview?.finished ? (
-                        <span className="text-emerald-600">完结</span>
-                      ) : null}
-                    </div>
-                    <div className="mt-3 flex justify-end">
-                      {isDownloaded(selectedRemote.title) ? (
-                        <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-700 dark:text-emerald-300">
-                          已在本地
-                        </span>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={downloadingId === selectedRemote.bookId}
-                          onClick={() => void handleDownload(selectedRemote)}
-                        >
-                          {downloadingId === selectedRemote.bookId ? (
-                            <>
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              下载中…
-                            </>
-                          ) : (
-                            <>
-                              <Download className="h-3.5 w-3.5" />
-                              下载到本地
-                            </>
-                          )}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+            ) : epubChapter ? (
+              <article className="mx-auto max-w-2xl">
+                <h4 className="mb-4 text-base font-semibold">
+                  {epubChapter.title}
+                </h4>
+                <div className="space-y-4 text-[15px] leading-7 text-foreground/90">
+                  {chapterBodyParagraphs(
+                    epubChapter.title,
+                    epubChapter.text
+                  ).map((para, i) => (
+                    <p key={i}>{para}</p>
+                  ))}
                 </div>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4">
-                {previewLoading ? (
-                  <div className="flex items-center text-xs text-muted-foreground">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    加载预览…
-                  </div>
-                ) : (
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/80">
-                    {preview?.description || '暂无简介'}
-                  </p>
-                )}
-              </div>
+              </article>
+            ) : (
+              <p className="text-xs text-muted-foreground">无法打开该 EPUB。</p>
+            )
+          ) : textPreviewLoading ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              解析预览…
             </div>
-          ) : null}
+          ) : textPreview ? (
+            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground/80">
+              {textPreview}
+            </pre>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              该格式不支持内嵌预览。
+            </p>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function LibrarySettingsPanel({
-  settings,
-  onSaved,
-  onClose,
+function RemotePreview({
+  item,
+  preview,
+  previewLoading,
+  downloaded,
+  downloading,
+  onDownload,
 }: {
-  settings: LibrarySettings;
-  onSaved: () => void;
-  onClose: () => void;
+  item: SearchItem;
+  preview: PreviewResponse | null;
+  previewLoading: boolean;
+  downloaded: boolean;
+  downloading: boolean;
+  onDownload: () => void;
 }) {
-  const [apiBase, setApiBase] = useState(settings.apiBase);
-  const [apiPassword, setApiPassword] = useState(settings.apiPassword);
-  const [libraryPath, setLibraryPath] = useState(settings.libraryPath);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleBrowse = useCallback(async () => {
-    const selected = await pickHostDirectory({
-      title: '选择书库存储目录',
-      value: libraryPath,
-    });
-    if (selected) setLibraryPath(selected);
-  }, [libraryPath]);
-
-  const handleSave = useCallback(async () => {
-    setSaving(true);
-    setError(null);
-    try {
-      await invoke('library_set_settings', {
-        settings: {
-          apiBase,
-          apiPassword,
-          libraryPath,
-        },
-      });
-      onSaved();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSaving(false);
-    }
-  }, [apiBase, apiPassword, libraryPath, onSaved]);
-
   return (
-    <div className="border-b bg-slate-50 px-4 py-3 dark:bg-slate-800/40">
-      <div className="mb-2 text-xs font-medium">书库设置</div>
-      <div className="grid max-w-2xl gap-2">
-        <div className="flex items-center gap-2">
-          <Input
-            value={libraryPath}
-            onChange={(e) => setLibraryPath(e.target.value)}
-            placeholder={settings.defaultLibraryPath || '本地书库路径'}
-            className="h-7 text-xs"
-          />
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => void handleBrowse()}
-          >
-            选择目录
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setLibraryPath(settings.defaultLibraryPath)}
-          >
-            默认
-          </Button>
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="shrink-0 border-b px-4 py-3">
+        <div className="flex items-start gap-4">
+          {preview?.coverDataUrl ? (
+            <img
+              src={preview.coverDataUrl}
+              alt={preview.bookName || item.title}
+              className="h-28 w-20 shrink-0 rounded-md border border-border/50 object-cover"
+            />
+          ) : previewLoading ? (
+            <Skeleton className="h-28 w-20 shrink-0 rounded-md" />
+          ) : (
+            <div className="flex h-28 w-20 shrink-0 items-center justify-center rounded-md border border-border/50 bg-muted text-[10px] text-muted-foreground">
+              无封面
+            </div>
+          )}
+          <div className="min-w-0 flex-1 space-y-2">
+            <h3 className="text-base font-semibold leading-snug">
+              {preview?.bookName || item.title}
+            </h3>
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span>{preview?.author || item.author || '未知作者'}</span>
+              {preview?.category ? <span>· {preview.category}</span> : null}
+              {preview?.chapterCount ? (
+                <span>· {preview.chapterCount} 章</span>
+              ) : null}
+              {preview?.wordCount ? (
+                <span>· {(preview.wordCount / 10000).toFixed(1)} 万字</span>
+              ) : null}
+              {preview?.finished ? (
+                <Badge variant="secondary" className="h-5 text-[10px]">
+                  完结
+                </Badge>
+              ) : null}
+            </div>
+            <div className="flex justify-end">
+              {downloaded ? (
+                <Badge variant="secondary">已在本地</Badge>
+              ) : (
+                <Button
+                  size="sm"
+                  disabled={downloading}
+                  onClick={onDownload}
+                >
+                  {downloading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  下载到本地
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
-        <Input
-          value={apiBase}
-          onChange={(e) => setApiBase(e.target.value)}
-          placeholder="番茄 API 地址"
-          className="h-7 text-xs"
-        />
-        <Input
-          value={apiPassword}
-          onChange={(e) => setApiPassword(e.target.value)}
-          placeholder="API 密码（可留空，改用环境变量）"
-          type="password"
-          className="h-7 text-xs"
-        />
       </div>
-      {error ? <p className="mt-1 text-xs text-rose-500">{error}</p> : null}
-      <div className="mt-2 flex items-center gap-2">
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={saving}
-          onClick={() => void handleSave()}
-        >
-          {saving ? '保存中…' : '保存'}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onClose}>
-          取消
-        </Button>
-        {settings.passwordConfigured ? (
-          <span className="text-xs text-emerald-600">密码已配置</span>
-        ) : (
-          <span className="text-xs text-amber-600">未配置密码</span>
-        )}
-      </div>
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="p-4">
+          {previewLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-[83%]" />
+              <Skeleton className="h-3 w-[66%]" />
+            </div>
+          ) : (
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/80">
+              {preview?.description || '暂无简介'}
+            </p>
+          )}
+        </div>
+      </ScrollArea>
     </div>
   );
 }

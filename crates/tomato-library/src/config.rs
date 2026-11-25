@@ -1,18 +1,18 @@
-//! Tomato library settings: API endpoint + local storage path.
+//! Tomato library settings: local Tomato `--server` + storage path.
 
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-const DEFAULT_API_BASE: &str = "http://101.34.86.192:18423";
+pub const LOCAL_API_BASE: &str = "http://127.0.0.1:18423";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TomatoLibraryConfig {
-    /// Tomato download platform base URL.
+    /// Kept for config-file compatibility; always resolved to the local server.
     #[serde(default = "default_api_base")]
     pub api_base: String,
-    /// Password for `x-tomato-password`. Empty means fall back to env.
+    /// Kept for config-file compatibility; local server needs no password.
     #[serde(default)]
     pub api_password: String,
     /// Absolute path where downloaded books are stored.
@@ -21,7 +21,11 @@ pub struct TomatoLibraryConfig {
 }
 
 fn default_api_base() -> String {
-    DEFAULT_API_BASE.to_string()
+    LOCAL_API_BASE.to_string()
+}
+
+pub fn local_api_base() -> &'static str {
+    LOCAL_API_BASE
 }
 
 impl Default for TomatoLibraryConfig {
@@ -36,24 +40,12 @@ impl Default for TomatoLibraryConfig {
 
 impl TomatoLibraryConfig {
     pub fn resolve_api_base(&self) -> String {
-        let from_env = std::env::var("TOMATO_API_BASE").ok();
-        let value = if !self.api_base.trim().is_empty() {
-            self.api_base.trim().to_string()
-        } else if let Some(env) = from_env.filter(|v| !v.trim().is_empty()) {
-            env.trim().to_string()
-        } else {
-            DEFAULT_API_BASE.to_string()
-        };
-        value.trim_end_matches('/').to_string()
+        // Product path is always the locally managed Tomato `--server`.
+        LOCAL_API_BASE.trim_end_matches('/').to_string()
     }
 
     pub fn resolve_api_password(&self) -> Result<String> {
-        if !self.api_password.trim().is_empty() {
-            return Ok(self.api_password.trim().to_string());
-        }
-        std::env::var("TOMATO_API_PASSWORD")
-            .map(|v| v.trim().to_string())
-            .context("TOMATO_API_PASSWORD is not set and no password is saved in settings")
+        Ok(String::new())
     }
 
     pub fn resolve_library_path(&self) -> Result<PathBuf> {

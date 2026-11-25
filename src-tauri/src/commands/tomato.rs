@@ -5,10 +5,10 @@ use std::{path::PathBuf, sync::Arc};
 use futures::stream::{FuturesUnordered, StreamExt};
 use serde::{Deserialize, Serialize};
 use tomato_library::{
-    DownloadRequest, DownloadResult, EpubBook, EpubChapter, LocalBook, TomatoClient,
-    TomatoLibraryConfig, TomatoLibraryConfigManager, cover_url_from_raw, default_library_path,
-    delete_book, download_book_to_library, ensure_book_dir, list_local_books, open_book,
-    read_chapter, read_local_text,
+    DownloadRequest, DownloadResult, DownloaderStatus, EpubBook, EpubChapter, LocalBook,
+    TomatoClient, TomatoLibraryConfig, TomatoLibraryConfigManager, cover_url_from_raw,
+    default_library_path, delete_book, download_book_to_library, ensure_book_dir, list_local_books,
+    open_book, read_chapter, read_local_text, runtime,
 };
 
 use crate::error::AppError;
@@ -53,8 +53,12 @@ pub async fn library_get_settings() -> Result<LibrarySettingsView, String> {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LibrarySettingsInput {
-    pub api_base: String,
-    pub api_password: String,
+    /// Ignored — local Tomato `--server` is always used.
+    #[serde(default)]
+    pub api_base: Option<String>,
+    /// Ignored — local server needs no password.
+    #[serde(default)]
+    pub api_password: Option<String>,
     pub library_path: String,
 }
 
@@ -62,11 +66,10 @@ pub struct LibrarySettingsInput {
 pub async fn library_set_settings(
     settings: LibrarySettingsInput,
 ) -> Result<LibrarySettingsView, String> {
-    let cfg = TomatoLibraryConfig {
-        api_base: settings.api_base.trim().to_string(),
-        api_password: settings.api_password,
-        library_path: settings.library_path.trim().to_string(),
-    };
+    let mut cfg = load_cfg().unwrap_or_default();
+    cfg.api_base = tomato_library::LOCAL_API_BASE.to_string();
+    cfg.api_password = String::new();
+    cfg.library_path = settings.library_path.trim().to_string();
     cfg.ensure_library_dir().map_err(|e| e.to_string())?;
     TomatoLibraryConfigManager::save(&cfg).map_err(|e| e.to_string())?;
     to_settings_view(cfg)
@@ -384,4 +387,33 @@ pub async fn library_open_local(path: String) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
+}
+
+#[tauri::command]
+pub async fn library_downloader_status() -> Result<DownloaderStatus, String> {
+    Ok(runtime().status())
+}
+
+#[tauri::command]
+pub async fn library_install_downloader() -> Result<DownloaderStatus, String> {
+    runtime()
+        .install_latest()
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn library_start_downloader() -> Result<DownloaderStatus, String> {
+    runtime()
+        .start_server()
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn library_stop_downloader() -> Result<DownloaderStatus, String> {
+    runtime()
+        .stop_server()
+        .await
+        .map_err(|error| error.to_string())
 }

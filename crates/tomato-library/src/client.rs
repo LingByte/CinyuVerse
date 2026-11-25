@@ -153,11 +153,13 @@ impl TomatoClient {
 
     fn auth_headers(&self) -> Result<HeaderMap> {
         let mut headers = HeaderMap::new();
-        headers.insert(
-            "x-tomato-password",
-            HeaderValue::from_str(&self.password)
-                .context("Invalid tomato password for HTTP header")?,
-        );
+        if !self.password.is_empty() {
+            headers.insert(
+                "x-tomato-password",
+                HeaderValue::from_str(&self.password)
+                    .context("Invalid tomato password for HTTP header")?,
+            );
+        }
         Ok(headers)
     }
 
