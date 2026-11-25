@@ -91,39 +91,44 @@
 }
 
 .conv-user-edit-panel {
-  width: min(760px, 88%);
+  width: min(720px, 92%);
   box-sizing: border-box;
   overflow: hidden;
-  border: 1.5px solid hsl(var(--primary) / 0.92);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
+  background: var(--surface-card);
+  color: var(--text-strong);
   box-shadow:
-    0 8px 24px hsl(var(--foreground) / 0.08),
-    inset 0 1px 0 hsl(var(--primary-foreground) / 0.16);
+    0 1px 0 hsl(0 0% 100% / 0.7) inset,
+    0 8px 20px hsl(220 36% 8% / 0.06);
 }
 
 .conv-user-edit-panel textarea {
   display: block;
   width: 100%;
-  min-height: 88px;
-  max-height: 42vh;
+  min-height: 72px;
+  max-height: 36vh;
   resize: none;
   overflow-y: auto;
   border: 0;
   background: transparent;
-  color: hsl(var(--foreground));
-  padding: 13px 15px 4px;
+  color: var(--text-strong);
+  padding: 12px 14px 8px;
   font: inherit;
-  line-height: 1.55;
+  line-height: 1.5;
   outline: none;
+}
+
+.conv-user-edit-panel textarea::placeholder {
+  color: var(--text-muted);
 }
 
 .conv-user-edit-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 4px;
-  padding: 5px 8px 8px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 10px;
 }
 
 .conv-user-edit-actions button {
@@ -132,46 +137,48 @@
   align-items: center;
   justify-content: center;
   gap: 5px;
-  border-radius: var(--radius);
+  border-radius: calc(var(--radius) - 2px);
   border: 1px solid transparent;
-  padding: 0 10px;
-  color: hsl(var(--muted-foreground));
+  padding: 0 11px;
+  color: var(--text-muted);
   background: transparent;
   font-size: 12px;
   font-weight: 500;
+  letter-spacing: 0.01em;
   transition:
     background-color 150ms ease-out,
+    border-color 150ms ease-out,
     color 150ms ease-out,
     transform 100ms ease-out;
 }
 
 .conv-user-edit-actions button:hover:not(:disabled) {
-  color: hsl(var(--foreground));
-  background: hsl(var(--accent) / 0.72);
+  color: var(--text-strong);
+  background: var(--raised-control-hover);
 }
 
 .conv-user-edit-actions button:active:not(:disabled) {
-  transform: scale(0.97);
+  transform: scale(0.98);
 }
 
 .conv-user-edit-actions button.is-primary {
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  box-shadow: 0 1px 2px hsl(var(--primary) / 0.24);
+  border-color: transparent;
+  background: var(--text-strong);
+  color: #fff;
 }
 
 .conv-user-edit-actions button.is-primary:hover:not(:disabled) {
-  color: hsl(var(--primary-foreground));
-  background: hsl(var(--primary) / 0.9);
+  color: #fff;
+  background: color-mix(in srgb, var(--text-strong) 88%, #fff);
 }
 
 .conv-user-edit-actions button:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
 .conv-user-edit-actions button:focus-visible {
-  outline: 2px solid hsl(var(--ring));
+  outline: 2px solid color-mix(in srgb, var(--text-strong) 35%, transparent);
   outline-offset: 1px;
 }
 

@@ -337,7 +337,7 @@ function UserMessageEditor({
     const editor = editorRef.current;
     if (!editor) return;
     editor.style.height = '0px';
-    editor.style.height = `${Math.max(88, editor.scrollHeight)}px`;
+    editor.style.height = `${Math.max(72, Math.min(editor.scrollHeight, 320))}px`;
   }, []);
 
   useEffect(() => {
