@@ -7,9 +7,9 @@ use std::{
 
 /// Resolve a Host-family sidecar, skipping empty Tauri stubs.
 ///
-/// Order: `CINYUVERSE_MCP_BIN` / `CINYUVERSE_WORKFLOW_MCP_BIN` → current-exe directory
-/// and ancestors (including `debug`/`release`/`binaries`) → `CARGO_TARGET_DIR`
-/// → `PATH`. Empty files are never returned.
+/// Order: `CINYUVERSE_MCP_BIN` → current-exe directory and ancestors
+/// (including `debug`/`release`/`binaries`) → `CARGO_TARGET_DIR` → `PATH`.
+/// Empty files are never returned.
 pub fn locate_host_family_binary(base: &str) -> PathBuf {
     let file_name = binary_file_name(base);
     if let Some(path) = env_override(base).filter(|path| is_runnable(path)) {
@@ -38,7 +38,6 @@ pub fn locate_host_family_binary(base: &str) -> PathBuf {
 fn env_override(base: &str) -> Option<PathBuf> {
     let key = match base {
         "cinyuverse-mcp" => "CINYUVERSE_MCP_BIN",
-        "cinyuverse-workflow-mcp" => "CINYUVERSE_WORKFLOW_MCP_BIN",
         _ => return None,
     };
     std::env::var_os(key).map(PathBuf::from)

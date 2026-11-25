@@ -195,7 +195,6 @@ fn spec() -> TurnLaunchSpec {
         "agent": { "agentId": "codex", "executorProfileId": null },
         "modeId": null,
         "configValues": [],
-        "pluginActions": [],
         "skills": [],
         "workspace": {
             "projectId": Uuid::new_v4(),

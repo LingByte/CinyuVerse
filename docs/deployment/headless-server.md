@@ -1,21 +1,19 @@
 # Headless Server Deployment
 
 `cinyuverse-server` is a headless composition root over the same Application Core,
-SQLite data directory, Agent runtime, Delegation companion, Plugin/Artifact
-services, and Automation Engine used by desktop Cinyuverse. It does not load Tauri.
+SQLite data directory, Agent runtime, Delegation companion, and Automation Engine
+used by desktop Cinyuverse. It does not load Tauri.
 
 ## Distribution status
 
 P0 ships a Host family directory: `cinyuverse-server`, sibling `cinyuverse-mcp`,
-`cinyuverse-workflow-mcp`, production `web/`, and `plugins/bundled/`. Assemble it with:
+and production `web/`. Assemble it with:
 
 ```bash
 node scripts/package-host-family.js \
   --server target/release/cinyuverse-server \
   --mcp target/release/cinyuverse-mcp \
-  --workflow-mcp target/release/cinyuverse-workflow-mcp \
   --web frontend/dist \
-  --plugins assets/plugins \
   --output dist/host-family
 ```
 
