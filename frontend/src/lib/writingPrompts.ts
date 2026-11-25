@@ -56,6 +56,12 @@ export interface WritingPromptInput {
   fullGraph?: string;
   /** The selected beat's local context (predecessors, successors, characters, hooks) */
   beatContext?: string;
+  /**
+   * Structured storyline context pack (hooks pool rows, neighborhood graph,
+   * current-state / summaries excerpts, character cards). Prefer this over
+   * asking the agent to rediscover `.cinyuverse/` files unaided.
+   */
+  contextPack?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -366,7 +372,18 @@ const updateState: WritingPromptTemplate = {
     const padded = String(ch).padStart(2, '0');
     return [
       `第 ${ch} 章已完成，请更新项目状态。`,
+      input.beatId
+        ? `关联节拍：${input.beatId}${input.beatTitle ? `「${input.beatTitle}」` : ''}`
+        : '',
       '',
+      input.contextPack
+        ? [
+            '## 结构化上下文包',
+            '',
+            input.contextPack,
+            '',
+          ].join('\n')
+        : '',
       '## 任务',
       '',
       `1. 读取 \`chapters/chapter-${padded}.md\` 提取本章关键事实`,
@@ -377,12 +394,14 @@ const updateState: WritingPromptTemplate = {
       '   - 保持在 200 字以内',
       '3. 更新 `.cinyuverse/hooks.md`：',
       '   - 本章新埋的伏笔 → 新增行，状态 open',
-      '   - 本章推进的伏笔 → 更新状态为 progressing，更新 last_advanced',
+      '   - 本章推进的伏笔 → 更新状态为 progressing（备注可记推进章节）',
       '   - 本章回收的伏笔 → 更新状态为 resolved',
+      '   - 上下文包中「图有池无」的 hook_id 必须补行',
       '4. 更新 `.cinyuverse/current-state.md`：',
       '   - 本章发生的世界状态变化 → upsert 对应字段',
       '   - 标注章节号',
       '5. 更新 `.cinyuverse/project.json` 的 `updatedAt` 字段',
+      '6. **不要**改写章节正文；故事图 status 由编辑器本地推进',
       '',
       '## 要求',
       '',
@@ -842,27 +861,38 @@ const inferBeat: WritingPromptTemplate = {
       `- 标题：${input.beatTitle ?? '未命名'}`,
       input.beatDescription ? `- 描述：${input.beatDescription}` : '',
       '',
-      '## 完整故事节拍图',
-      '',
-      '以下是完整的故事节拍图（JSON 格式）。请先理解整张图的结构，',
-      '再推演当前节拍。注意分析当前节拍在图中的位置、哪些边连接到它、',
-      '哪些伏笔线和角色弧线经过它。',
-      '',
-      input.fullGraph
-        ? `\`\`\`json\n${input.fullGraph}\n\`\`\``
-        : '请读取 `.cinyuverse/story-graph.json` 获取完整故事节拍图。',
-      '',
+      input.contextPack
+        ? [
+            '## 结构化上下文包（优先使用）',
+            '',
+            '以下由编辑器从 `.cinyuverse/` 与故事图组装：伏笔池对账、前驱/后继、',
+            '角色卡摘录、当前状态与近章摘要、邻域图。请以此为主要依据，',
+            '仅在需要更全文风/世界观细节时再读磁盘文件。',
+            '',
+            input.contextPack,
+            '',
+          ].join('\n')
+        : '',
+      input.contextPack
+        ? ''
+        : [
+            '## 故事节拍图',
+            '',
+            '以下是故事节拍图（JSON）。请先理解结构，再推演当前节拍。',
+            '',
+            input.fullGraph
+              ? `\`\`\`json\n${input.fullGraph}\n\`\`\``
+              : '请读取 `.cinyuverse/story-graph.json` 获取完整故事节拍图。',
+            '',
+          ].join('\n'),
       '## 推演方法',
       '',
-      '1. **定位**：在图中找到当前节拍，分析它的 `beat_type` 决定了它在故事中的功能',
-      '2. **追溯前驱**：沿 `sequential`/`causal` 边回溯，理解哪些事件导致了当前节拍',
-      '3. **展望后继**：沿 `sequential`/`causal` 边前看，理解当前节拍需要为后续事件做什么铺垫',
-      '4. **伏笔分析**：检查当前节拍的 `hooks` 字段，沿 `foreshadow` 边找到对应的',
-      '   `hook_plant`/`hook_advance`/`hook_resolve` 节点，判断本节拍应该埋设、推进还是回收伏笔',
-      '5. **角色弧线**：检查当前节拍的 `characters` 字段，沿 `character_arc` 边找到',
-      '   同一角色的其他弧光节点，判断本节拍在角色成长轨迹中的位置',
-      '6. **读取设定**：读取 `.cinyuverse/` 下的世界观、大纲、角色卡、伏笔池、当前状态，',
-      '   将图结构映射到具体的故事内容',
+      '1. **定位**：用上下文包中的节拍要点与邻域图确认 `beat_type` 与弧位置',
+      '2. **追溯前驱 / 展望后继**：依据包中的前驱、后继列表',
+      '3. **伏笔分析**：依据「伏笔（节拍声明 × 伏笔池）」与 foreshadow 边；',
+      '   明确本节拍是埋设、推进还是回收；若出现「图有池无」必须指出并建议补行',
+      '4. **角色弧线**：结合角色摘录与 character_arc 边',
+      '5. **状态连贯**：结合当前世界状态与近章摘要，避免与已写事实冲突',
       '',
       '## 推演输出',
       '',
@@ -882,7 +912,7 @@ const inferBeat: WritingPromptTemplate = {
       '- 角色弧光在本节拍的体现',
       '',
       '### 伏笔处理',
-      '- 本节拍涉及的伏笔（ID、处理方式：埋设/推进/回收）',
+      '- 本节拍涉及的伏笔（ID、池中状态、处理方式：埋设/推进/回收）',
       '- 与伏笔线上其他节点的呼应关系',
       '',
       '### 衔接分析',
@@ -915,33 +945,40 @@ const writeBeat: WritingPromptTemplate = {
       input.chapterNumber ? `- 目标章节：第 ${input.chapterNumber} 章` : '',
       input.wordCount ? `- 目标字数：${input.wordCount} 字` : '',
       '',
-      '## 完整故事节拍图',
-      '',
-      '以下是完整的故事节拍图。撰写前请理解当前节拍在图中的位置和关系，',
-      '确保正文与图结构一致：伏笔在正确的节拍埋设/回收，角色弧光在正确的',
-      '节拍体现，与前驱节拍的内容衔接、为后继节拍做铺垫。',
-      '',
-      input.fullGraph
-        ? `\`\`\`json\n${input.fullGraph}\n\`\`\``
-        : '请读取 `.cinyuverse/story-graph.json` 获取完整故事节拍图。',
-      '',
+      input.contextPack
+        ? [
+            '## 结构化上下文包（优先使用）',
+            '',
+            '伏笔池状态、角色摘录、近章摘要与邻域图已组装如下。撰写时必须兑现包中的',
+            '完成条件与伏笔处理；不要忽略「图有池无」警告。',
+            '',
+            input.contextPack,
+            '',
+          ].join('\n')
+        : '',
+      input.contextPack
+        ? ''
+        : [
+            '## 故事节拍图',
+            '',
+            input.fullGraph
+              ? `\`\`\`json\n${input.fullGraph}\n\`\`\``
+              : '请读取 `.cinyuverse/story-graph.json` 获取完整故事节拍图。',
+            '',
+          ].join('\n'),
       '## 撰写要求',
       '',
-      '1. 读取 `.cinyuverse/` 下的所有设定文件（世界观、角色卡、写作规则、伏笔池、当前状态）',
+      '1. 优先使用上方上下文包；文风/禁词仍读取 `.cinyuverse/style-sample.md` 与 `writing-rules.md`',
       '2. 读取 `chapters/` 下已有的章节正文，保持人设、设定与情节连贯；句式节奏不要向已有章节看齐——那正是要避免的',
-      '3. **对照图结构撰写**：',
-      '   - 检查当前节拍的 `completion_criteria`，正文必须满足所有条件',
-      '   - 检查 `hooks` 字段，正文中要自然融入对应的伏笔操作（埋设/推进/回收）',
-      '   - 检查 `characters` 字段，所有标注角色都应在正文中出场',
-      '   - 沿 `foreshadow` 边检查伏笔线的其他节点，确保伏笔处理与图一致',
-      '   - 沿 `character_arc` 边检查角色弧线的其他节点，确保角色成长连贯',
+      '3. **对照上下文包与图结构撰写**：',
+      '   - 正文必须满足 `completion_criteria`',
+      '   - 声明的 hooks 必须在正文中自然完成对应操作（埋设/推进/回收）',
+      '   - 标注角色均应出场',
+      '   - foreshadow / character_arc 边的约束不可打破',
       '   - 若目标章节已有旧稿，只依据节拍图与设定从零撰写并覆盖，不参照、不修补旧稿',
       '4. 将正文写入 `chapters/chapter-NN.md`（NN 为章节号补零）',
-      '5. 撰写完成后更新项目状态：',
-      '   - 更新 `.cinyuverse/chapter-summaries.md`（追加本章摘要）',
-      '   - 更新 `.cinyuverse/current-state.md`（世界状态变化）',
-      '   - 更新 `.cinyuverse/hooks.md`（伏笔状态变化）',
-      '   - 更新 `.cinyuverse/story-graph.json` 中本节拍的 `status` 为 `completed`',
+      '5. **正文写完即停**。不要在本轮改 hooks.md / summaries / current-state / story-graph；',
+      '   作者会在同一会话点击「回写状态」执行状态同步',
       '',
       '## 文风要求',
       '',

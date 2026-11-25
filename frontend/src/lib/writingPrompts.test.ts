@@ -109,6 +109,39 @@ describe('style rhythm baseline', () => {
     }
   });
 
+  it('infer-beat and write-beat prefer the structured context pack', () => {
+    const pack = '### 伏笔（节拍声明 × 伏笔池）\n- H-001 · open';
+    const infer = buildWritingPrompt('infer-beat', {
+      beatTitle: '开端',
+      contextPack: pack,
+      fullGraph: '{"beats":[{"id":"should-not-duplicate"}]}',
+    });
+    const write = buildWritingPrompt('write-beat', {
+      beatTitle: '开端',
+      contextPack: pack,
+      fullGraph: '{"beats":[{"id":"should-not-duplicate"}]}',
+    });
+    expect(infer).toContain('结构化上下文包');
+    expect(infer).toContain('H-001');
+    expect(infer).not.toContain('should-not-duplicate');
+    expect(write).toContain('结构化上下文包');
+    expect(write).toContain('正文写完即停');
+    expect(write).not.toContain('should-not-duplicate');
+  });
+
+  it('update-state accepts beat-linked context pack guidance', () => {
+    const prompt = buildWritingPrompt('update-state', {
+      chapterNumber: 3,
+      beatId: 'beat-001',
+      beatTitle: '开端',
+      contextPack: '### 节拍要点\n- ID：beat-001',
+      guidance: '必须更新 H-001',
+    });
+    expect(prompt).toContain('beat-001');
+    expect(prompt).toContain('结构化上下文包');
+    expect(prompt).toContain('必须更新 H-001');
+  });
+
   it('audit-chapter embeds every counting item and the metrics table', () => {
     const prompt = buildWritingPrompt('audit-chapter', { chapterNumber: 1 });
     for (const rule of STYLE_RHYTHM_RULES) {
