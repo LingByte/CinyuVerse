@@ -10,6 +10,9 @@ use sqlx::{
 use utils::assets::asset_dir;
 
 pub mod models;
+pub mod write_gate;
+
+pub use write_gate::sqlite_writer_gate;
 
 async fn run_migrations(pool: &Pool<Sqlite>) -> Result<(), Error> {
     // Keep this call in the DB crate so every composition embeds the same migration set.
@@ -343,7 +346,9 @@ fn sqlite_connect_options(database_path: &Path) -> SqliteConnectOptions {
         .foreign_keys(true)
         .journal_mode(SqliteJournalMode::Wal)
         .synchronous(SqliteSynchronous::Normal)
-        .busy_timeout(Duration::from_secs(30))
+        // Short busy wait: writers should queue on `sqlite_writer_gate` first.
+        // A long busy_timeout only burns pool slots when a path bypasses the gate.
+        .busy_timeout(Duration::from_secs(5))
         .pragma("cache_size", "-65536")
         .pragma("wal_autocheckpoint", "1000")
         .pragma("mmap_size", "268435456")
@@ -367,9 +372,11 @@ impl DBService {
         std::fs::create_dir_all(data_dir.as_ref()).map_err(Error::Io)?;
         let options = sqlite_connect_options(&data_dir.as_ref().join("db.sqlite"));
         let pool = SqlitePoolOptions::new()
-            .max_connections(32)
+            // SQLite is one-writer; a fat pool just lets more tasks check out
+            // connections and wait on the write lock (ADR-0061 §8.3).
+            .max_connections(8)
             .min_connections(2)
-            .acquire_timeout(Duration::from_secs(30))
+            .acquire_timeout(Duration::from_secs(10))
             .connect_with(options)
             .await?;
         run_migrations(&pool).await?;
@@ -423,9 +430,9 @@ impl DBService {
     {
         let options = sqlite_connect_options(&data_dir.as_ref().join("db.sqlite"));
         let pool_options = SqlitePoolOptions::new()
-            .max_connections(32)
+            .max_connections(8)
             .min_connections(2)
-            .acquire_timeout(Duration::from_secs(30));
+            .acquire_timeout(Duration::from_secs(10));
 
         let pool = if let Some(hook) = after_connect {
             pool_options

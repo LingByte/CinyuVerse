@@ -75,6 +75,7 @@ impl ConversationEventRecord {
         // `append_conversation_event_on_connection`) plus the UNIQUE index; the
         // previous pool-level pre-check added a redundant SELECT on the hot
         // append path, whose common case is a brand-new event.
+        let _gate = crate::sqlite_writer_gate().lock().await;
         let mut conn = pool.acquire().await?;
         sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
 

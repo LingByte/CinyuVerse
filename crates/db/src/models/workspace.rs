@@ -424,6 +424,10 @@ impl Workspace {
     /// Update the workspace's updated_at timestamp to prevent cleanup.
     /// Call this when the workspace is accessed (e.g., opened in editor).
     pub async fn touch(pool: &SqlitePool, workspace_id: Uuid) -> Result<(), sqlx::Error> {
+        // Queue behind the process-wide writer gate so this trivial UPDATE does
+        // not check out a pool connection and spin on busy_timeout while a
+        // long conversation write holds SQLite's single writer.
+        let _gate = crate::sqlite_writer_gate().lock().await;
         sqlx::query!(
             "UPDATE workspaces SET updated_at = datetime('now', 'subsec') WHERE id = ?",
             workspace_id
