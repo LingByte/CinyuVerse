@@ -12,7 +12,7 @@ use utils::assets::asset_dir;
 pub mod models;
 pub mod write_gate;
 
-pub use write_gate::sqlite_writer_gate;
+pub use write_gate::{SqliteWriterPermit, sqlite_writer_gate};
 
 async fn run_migrations(pool: &Pool<Sqlite>) -> Result<(), Error> {
     // Keep this call in the DB crate so every composition embeds the same migration set.
@@ -348,7 +348,7 @@ fn sqlite_connect_options(database_path: &Path) -> SqliteConnectOptions {
         .synchronous(SqliteSynchronous::Normal)
         // Short busy wait: writers should queue on `sqlite_writer_gate` first.
         // A long busy_timeout only burns pool slots when a path bypasses the gate.
-        .busy_timeout(Duration::from_secs(5))
+        .busy_timeout(Duration::from_secs(1))
         .pragma("cache_size", "-65536")
         .pragma("wal_autocheckpoint", "1000")
         .pragma("mmap_size", "268435456")
@@ -372,9 +372,11 @@ impl DBService {
         std::fs::create_dir_all(data_dir.as_ref()).map_err(Error::Io)?;
         let options = sqlite_connect_options(&data_dir.as_ref().join("db.sqlite"));
         let pool = SqlitePoolOptions::new()
-            // SQLite is one-writer; a fat pool just lets more tasks check out
-            // connections and wait on the write lock (ADR-0061 §8.3).
-            .max_connections(8)
+            // Writers serialize on `sqlite_writer_gate` before checkout. A slightly
+            // fatter pool lets WAL readers (detail, row-ops, streams) proceed without
+            // starving the single writer that already holds the gate and is waiting
+            // to acquire (ADR-0061 §8.3). Keep this well below the old ungated 20.
+            .max_connections(24)
             .min_connections(2)
             .acquire_timeout(Duration::from_secs(10))
             .connect_with(options)
@@ -430,7 +432,7 @@ impl DBService {
     {
         let options = sqlite_connect_options(&data_dir.as_ref().join("db.sqlite"));
         let pool_options = SqlitePoolOptions::new()
-            .max_connections(8)
+            .max_connections(24)
             .min_connections(2)
             .acquire_timeout(Duration::from_secs(10));
 

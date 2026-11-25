@@ -66,6 +66,23 @@ const EVENT_COLUMNS: &str = r#"id,
     idempotency_key,
     created_at"#;
 
+/// Same as [`EVENT_COLUMNS`] but skips `raw_json` bytes — projection / row-ops
+/// only parse `normalized_json`, and ACP tool payloads in `raw_json` dominate I/O.
+const EVENT_COLUMNS_FOR_PROJECTION: &str = r#"id,
+    conversation_id,
+    turn_id,
+    binding_id,
+    connection_id,
+    prompt_id,
+    sequence,
+    source,
+    event_kind,
+    event_version,
+    normalized_json,
+    NULL AS raw_json,
+    idempotency_key,
+    created_at"#;
+
 impl ConversationEventRecord {
     pub async fn append(
         pool: &SqlitePool,
@@ -179,6 +196,31 @@ impl ConversationEventRecord {
     {
         sqlx::query_as::<_, Self>(&format!(
             r#"SELECT {EVENT_COLUMNS}
+               FROM conversation_events
+               WHERE conversation_id = ? AND sequence > ?
+               ORDER BY sequence ASC
+               LIMIT ?"#
+        ))
+        .bind(conversation_id)
+        .bind(after_sequence)
+        .bind(limit)
+        .fetch_all(executor)
+        .await
+    }
+
+    /// Tail read for fold / row-ops: identical cursor semantics to
+    /// [`Self::events_since`], without pulling `raw_json` blobs.
+    pub async fn events_since_for_projection<'e, E>(
+        executor: E,
+        conversation_id: Uuid,
+        after_sequence: i64,
+        limit: i64,
+    ) -> Result<Vec<Self>, sqlx::Error>
+    where
+        E: Executor<'e, Database = Sqlite>,
+    {
+        sqlx::query_as::<_, Self>(&format!(
+            r#"SELECT {EVENT_COLUMNS_FOR_PROJECTION}
                FROM conversation_events
                WHERE conversation_id = ? AND sequence > ?
                ORDER BY sequence ASC

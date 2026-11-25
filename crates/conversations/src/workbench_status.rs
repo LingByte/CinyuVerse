@@ -10,9 +10,12 @@
 //!   with nothing waiting. This is not a conversation terminal; a new turn can
 //!   start later.
 
-use db::models::{
-    conversation_turn::ConversationTurnRecord,
-    session::{Session, SessionStatus},
+use db::{
+    models::{
+        conversation_turn::ConversationTurnRecord,
+        session::{Session, SessionStatus},
+    },
+    sqlite_writer_gate,
 };
 use sqlx::{SqliteConnection, SqlitePool};
 use uuid::Uuid;
@@ -64,8 +67,42 @@ pub fn derive_workbench_status(
 }
 
 pub async fn reconcile(pool: &SqlitePool, conversation_id: Uuid) -> Result<(), sqlx::Error> {
+    // Cheap read-side check without the writer gate. Most reconcile calls during
+    // streaming already match the derived status; skipping the gate avoids
+    // stalling every other writer behind a no-op UPDATE path.
+    if !workbench_status_needs_update(pool, conversation_id).await? {
+        return Ok(());
+    }
+    let _gate = sqlite_writer_gate().lock().await;
     let mut conn = pool.acquire().await?;
     reconcile_on_connection(&mut conn, conversation_id).await
+}
+
+async fn workbench_status_needs_update(
+    pool: &SqlitePool,
+    conversation_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    let mut conn = pool.acquire().await?;
+    let Some(current) = session_workbench_row(&mut conn, conversation_id).await? else {
+        return Ok(false);
+    };
+    if current.status == SessionStatus::Archived {
+        return Ok(false);
+    }
+    let latest =
+        ConversationTurnRecord::latest_for_conversation_on_connection(&mut conn, conversation_id)
+            .await?;
+    let phase = latest
+        .as_ref()
+        .map(|turn| turn_phase(&turn.status))
+        .unwrap_or(TurnPhase::None);
+    let latest_turn_viewed = match latest.as_ref() {
+        Some(turn) => current.last_viewed_turn_id == Some(turn.id),
+        None => false,
+    };
+    let has_queued_input = has_queued_input_on_connection(&mut conn, conversation_id).await?;
+    let next = derive_workbench_status(phase, latest_turn_viewed, has_queued_input);
+    Ok(next != current.status)
 }
 
 pub async fn reconcile_on_connection(
@@ -103,6 +140,7 @@ pub async fn mark_latest_turn_viewed(
     pool: &SqlitePool,
     conversation_id: Uuid,
 ) -> Result<(), sqlx::Error> {
+    let _gate = sqlite_writer_gate().lock().await;
     let mut conn = pool.acquire().await?;
     mark_latest_turn_viewed_on_connection(&mut conn, conversation_id).await?;
     reconcile_on_connection(&mut conn, conversation_id).await
@@ -136,6 +174,7 @@ pub async fn apply_manual_status(
     conversation_id: Uuid,
     status: SessionStatus,
 ) -> Result<(), sqlx::Error> {
+    let _gate = sqlite_writer_gate().lock().await;
     let mut conn = pool.acquire().await?;
     match status {
         SessionStatus::Done => {

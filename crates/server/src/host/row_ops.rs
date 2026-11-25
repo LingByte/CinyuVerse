@@ -24,22 +24,53 @@ impl HostRowOpPublisher {
 impl ConversationEventPublisher for HostRowOpPublisher {
     async fn publish(&self, record: &ConversationEventRecord) {
         let conversation_id = record.conversation_id;
-        let publish_after = record.sequence.saturating_sub(1);
-        let mut map = self.projectors.lock().await;
-        if let std::collections::hash_map::Entry::Vacant(entry) = map.entry(conversation_id) {
+        let (publish_after, needs_cold_load) = {
+            let map = self.projectors.lock().await;
+            match map.get(&conversation_id) {
+                Some(entry) => (entry.projector.last_sequence(), false),
+                None => (record.sequence.saturating_sub(1), true),
+            }
+        };
+        let cold_projector = if needs_cold_load {
             match IncrementalRowProjector::load(&self.pool, conversation_id, publish_after).await {
-                Ok(projector) => {
-                    entry.insert(CachedRowProjector::new(projector));
-                }
+                Ok(projector) => Some(projector),
                 Err(error) => {
                     tracing::warn!(%conversation_id, %error, "row-op emit: projector load failed");
                     return;
                 }
             }
+        } else {
+            None
+        };
+
+        let mut map = self.projectors.lock().await;
+        if let Some(projector) = cold_projector {
+            map.entry(conversation_id)
+                .or_insert_with(|| CachedRowProjector::new(projector));
+        }
+        if !map.contains_key(&conversation_id) {
+            drop(map);
+            let projector =
+                match IncrementalRowProjector::load(&self.pool, conversation_id, publish_after)
+                    .await
+                {
+                    Ok(projector) => projector,
+                    Err(error) => {
+                        tracing::warn!(
+                            %conversation_id,
+                            %error,
+                            "row-op emit: projector load failed"
+                        );
+                        return;
+                    }
+                };
+            map = self.projectors.lock().await;
+            map.entry(conversation_id)
+                .or_insert_with(|| CachedRowProjector::new(projector));
         }
         let entry = map
             .get_mut(&conversation_id)
-            .expect("projector present after insert");
+            .expect("projector present after cold insert");
         entry.touch();
         if record.sequence <= entry.projector.last_sequence() {
             return;

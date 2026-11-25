@@ -3238,32 +3238,53 @@ impl WorkflowStore {
         self.finish(conn, result).await
     }
 
-    async fn begin_immediate(
-        &self,
-    ) -> Result<sqlx::pool::PoolConnection<sqlx::Sqlite>, WorkflowError> {
+    async fn begin_immediate(&self) -> Result<ImmediateTxn, WorkflowError> {
+        // Gate before acquire so dispatcher ticks (claim_ready, etc.) do not
+        // occupy pool slots while spinning on busy_timeout against stream writes.
+        let gate = db::SqliteWriterPermit::acquire().await;
         let mut conn = self.pool.acquire().await?;
         sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
-        Ok(conn)
+        Ok(ImmediateTxn { _gate: gate, conn })
     }
 
     async fn finish<T>(
         &self,
-        mut conn: sqlx::pool::PoolConnection<sqlx::Sqlite>,
+        mut txn: ImmediateTxn,
         result: Result<T, WorkflowError>,
     ) -> Result<T, WorkflowError> {
         match result {
             Ok(value) => {
-                if let Err(error) = sqlx::query("COMMIT").execute(&mut *conn).await {
-                    let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+                if let Err(error) = sqlx::query("COMMIT").execute(&mut *txn.conn).await {
+                    let _ = sqlx::query("ROLLBACK").execute(&mut *txn.conn).await;
                     return Err(error.into());
                 }
                 Ok(value)
             }
             Err(error) => {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+                let _ = sqlx::query("ROLLBACK").execute(&mut *txn.conn).await;
                 Err(error)
             }
         }
+    }
+}
+
+/// Holds the process-wide writer gate for the lifetime of a workflow IMMEDIATE txn.
+struct ImmediateTxn {
+    _gate: db::SqliteWriterPermit,
+    conn: sqlx::pool::PoolConnection<sqlx::Sqlite>,
+}
+
+impl std::ops::Deref for ImmediateTxn {
+    type Target = SqliteConnection;
+
+    fn deref(&self) -> &Self::Target {
+        &self.conn
+    }
+}
+
+impl std::ops::DerefMut for ImmediateTxn {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.conn
     }
 }
 

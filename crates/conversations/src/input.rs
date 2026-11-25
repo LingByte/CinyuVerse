@@ -168,61 +168,64 @@ impl ConversationInputControl {
         let input_id = Uuid::new_v4();
         let event_id = Uuid::new_v4();
         let idempotency_key = format!("conversation-input-operation:{}", input.operation_id);
-        let _write_gate = sqlite_writer_gate().lock().await;
-        let mut conn = self.pool.acquire().await?;
-        sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
-        let append = async {
-            let sort_key = ConversationInputRecord::next_sort_key_on_connection(
-                &mut conn,
-                input.conversation_id,
-            )
-            .await?;
-            let event = ConversationEvent::ConversationInput {
-                event: ConversationInputEvent::Submitted {
-                    input_id,
-                    operation_id: input.operation_id,
-                    revision: 1,
-                    sort_key,
-                    payload_digest: payload_digest.clone(),
-                    payload: input.payload,
-                    principal: input.principal,
-                },
-            };
-            let normalized_json = serde_json::to_string(&event)?;
-            ConversationEventAppender::append_and_apply(
-                &mut conn,
-                AppendConversationEvent {
-                    id: event_id,
-                    conversation_id: input.conversation_id,
-                    turn_id: None,
-                    binding_id: None,
-                    connection_id: None,
-                    prompt_id: None,
-                    source: "user",
-                    event_kind: "conversation_input",
-                    normalized_json: &normalized_json,
-                    raw_json: None,
-                    idempotency_key: Some(&idempotency_key),
-                },
-            )
-            .await
-            .map_err(ConversationInputControlError::from)
-        }
-        .await;
-        let record = match append {
-            Ok(record) => {
-                if let Err(error) = sqlx::query("COMMIT").execute(&mut *conn).await {
-                    let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-                    return Err(error.into());
-                }
-                record
+        // Gate only the write txn — publish fans out to row-ops / chat notify and
+        // must not pin the process-wide writer while awaiting network or DB reads.
+        let record = {
+            let _write_gate = sqlite_writer_gate().lock().await;
+            let mut conn = self.pool.acquire().await?;
+            sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
+            let append = async {
+                let sort_key = ConversationInputRecord::next_sort_key_on_connection(
+                    &mut conn,
+                    input.conversation_id,
+                )
+                .await?;
+                let event = ConversationEvent::ConversationInput {
+                    event: ConversationInputEvent::Submitted {
+                        input_id,
+                        operation_id: input.operation_id,
+                        revision: 1,
+                        sort_key,
+                        payload_digest: payload_digest.clone(),
+                        payload: input.payload,
+                        principal: input.principal,
+                    },
+                };
+                let normalized_json = serde_json::to_string(&event)?;
+                ConversationEventAppender::append_and_apply(
+                    &mut conn,
+                    AppendConversationEvent {
+                        id: event_id,
+                        conversation_id: input.conversation_id,
+                        turn_id: None,
+                        binding_id: None,
+                        connection_id: None,
+                        prompt_id: None,
+                        source: "user",
+                        event_kind: "conversation_input",
+                        normalized_json: &normalized_json,
+                        raw_json: None,
+                        idempotency_key: Some(&idempotency_key),
+                    },
+                )
+                .await
+                .map_err(ConversationInputControlError::from)
             }
-            Err(error) => {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-                return Err(error);
+            .await;
+            match append {
+                Ok(record) => {
+                    if let Err(error) = sqlx::query("COMMIT").execute(&mut *conn).await {
+                        let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+                        return Err(error.into());
+                    }
+                    record
+                }
+                Err(error) => {
+                    let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+                    return Err(error);
+                }
             }
         };
-        drop(conn);
         if record.id == event_id {
             self.publish(&record).await;
         }
@@ -383,62 +386,65 @@ impl ConversationInputControl {
                 input_id: Uuid::nil(),
             });
         }
-        let _write_gate = sqlite_writer_gate().lock().await;
-        let mut conn = self.pool.acquire().await?;
-        sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
-        let result = async {
-            let Some(input_id) =
-                ConversationInputRecord::first_queued_id_on_connection(&mut conn, conversation_id)
-                    .await?
-            else {
-                return Ok::<_, ConversationInputControlError>(None);
-            };
-            let claim_token = Uuid::new_v4();
-            let claim_deadline = Utc::now() + lease_duration;
-            let event = ConversationEvent::ConversationInput {
-                event: ConversationInputEvent::Claimed {
-                    input_id,
-                    claim_token,
-                    claim_deadline,
-                },
-            };
-            let normalized_json = serde_json::to_string(&event)?;
-            let idempotency_key = format!("conversation-input-claim:{claim_token}");
-            let record = ConversationEventAppender::append_and_apply(
-                &mut conn,
-                AppendConversationEvent {
-                    id: Uuid::new_v4(),
+        let claimed = {
+            let _write_gate = sqlite_writer_gate().lock().await;
+            let mut conn = self.pool.acquire().await?;
+            sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
+            let result = async {
+                let Some(input_id) = ConversationInputRecord::first_queued_id_on_connection(
+                    &mut conn,
                     conversation_id,
-                    turn_id: None,
-                    binding_id: None,
-                    connection_id: None,
-                    prompt_id: None,
-                    source: "system",
-                    event_kind: "conversation_input",
-                    normalized_json: &normalized_json,
-                    raw_json: None,
-                    idempotency_key: Some(&idempotency_key),
-                },
-            )
-            .await?;
-            Ok(Some((input_id, claim_token, claim_deadline, record)))
-        }
-        .await;
-
-        let claimed = match result {
-            Ok(claimed) => {
-                if let Err(error) = sqlx::query("COMMIT").execute(&mut *conn).await {
-                    let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-                    return Err(error.into());
-                }
-                claimed
+                )
+                .await?
+                else {
+                    return Ok::<_, ConversationInputControlError>(None);
+                };
+                let claim_token = Uuid::new_v4();
+                let claim_deadline = Utc::now() + lease_duration;
+                let event = ConversationEvent::ConversationInput {
+                    event: ConversationInputEvent::Claimed {
+                        input_id,
+                        claim_token,
+                        claim_deadline,
+                    },
+                };
+                let normalized_json = serde_json::to_string(&event)?;
+                let idempotency_key = format!("conversation-input-claim:{claim_token}");
+                let record = ConversationEventAppender::append_and_apply(
+                    &mut conn,
+                    AppendConversationEvent {
+                        id: Uuid::new_v4(),
+                        conversation_id,
+                        turn_id: None,
+                        binding_id: None,
+                        connection_id: None,
+                        prompt_id: None,
+                        source: "system",
+                        event_kind: "conversation_input",
+                        normalized_json: &normalized_json,
+                        raw_json: None,
+                        idempotency_key: Some(&idempotency_key),
+                    },
+                )
+                .await?;
+                Ok(Some((input_id, claim_token, claim_deadline, record)))
             }
-            Err(error) => {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-                return Err(error);
+            .await;
+
+            match result {
+                Ok(claimed) => {
+                    if let Err(error) = sqlx::query("COMMIT").execute(&mut *conn).await {
+                        let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+                        return Err(error.into());
+                    }
+                    claimed
+                }
+                Err(error) => {
+                    let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+                    return Err(error);
+                }
             }
         };
-        drop(conn);
 
         let Some((input_id, claim_token, claim_deadline, record)) = claimed else {
             return Ok(None);

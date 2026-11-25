@@ -271,40 +271,42 @@ pub async fn create_fork_conversation(
         initial_prompt: input.initial_prompt,
         status: Some(SessionStatus::InProgress),
     };
-    let mut conn = pool.acquire().await?;
-    sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
-    let transaction = async {
-        Session::create_on_connection(&mut conn, &session, input.id, parent.workspace_id)
-            .await
-            .map_err(|error| ConversationServiceError::Internal(error.to_string()))?;
-        ConversationEventAppender::append_and_apply(
-            &mut conn,
-            AppendConversationEvent {
-                id: Uuid::new_v4(),
-                conversation_id: input.parent_conversation_id,
-                turn_id: None,
-                binding_id: None,
-                connection_id: None,
-                prompt_id: None,
-                source: "system",
-                event_kind: "conversation_relation_created",
-                normalized_json: &normalized_json,
-                raw_json: None,
-                idempotency_key: Some(&relation_key),
-            },
-        )
-        .await?;
-        Ok::<_, ConversationServiceError>(())
-    }
-    .await;
-    match transaction {
-        Ok(()) => sqlx::query("COMMIT").execute(&mut *conn).await?,
-        Err(error) => {
-            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-            return Err(error);
+    {
+        let _gate = sqlite_writer_gate().lock().await;
+        let mut conn = pool.acquire().await?;
+        sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
+        let transaction = async {
+            Session::create_on_connection(&mut conn, &session, input.id, parent.workspace_id)
+                .await
+                .map_err(|error| ConversationServiceError::Internal(error.to_string()))?;
+            ConversationEventAppender::append_and_apply(
+                &mut conn,
+                AppendConversationEvent {
+                    id: Uuid::new_v4(),
+                    conversation_id: input.parent_conversation_id,
+                    turn_id: None,
+                    binding_id: None,
+                    connection_id: None,
+                    prompt_id: None,
+                    source: "system",
+                    event_kind: "conversation_relation_created",
+                    normalized_json: &normalized_json,
+                    raw_json: None,
+                    idempotency_key: Some(&relation_key),
+                },
+            )
+            .await?;
+            Ok::<_, ConversationServiceError>(())
         }
-    };
-    drop(conn);
+        .await;
+        match transaction {
+            Ok(()) => sqlx::query("COMMIT").execute(&mut *conn).await?,
+            Err(error) => {
+                let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+                return Err(error);
+            }
+        };
+    }
     copy_conversation_history(pool, input.parent_conversation_id, input.id).await?;
     Ok(input.id)
 }
@@ -321,6 +323,7 @@ async fn copy_conversation_history(
         i64::MAX,
     )
     .await?;
+    let _gate = sqlite_writer_gate().lock().await;
     let mut conn = pool.acquire().await?;
     sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
     let copied = async {
@@ -468,6 +471,7 @@ pub async fn create_workflow_conversation(
         initial_prompt: Some(input.prompt),
         status: Some(SessionStatus::InProgress),
     };
+    let _gate = sqlite_writer_gate().lock().await;
     let mut conn = pool.acquire().await?;
     sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
     let transaction = async {
@@ -553,6 +557,7 @@ pub async fn create_delegated_conversation(
         initial_prompt: Some(input.prompt.clone()),
         status: Some(SessionStatus::InProgress),
     };
+    let _gate = sqlite_writer_gate().lock().await;
     let mut conn = pool.acquire().await?;
     sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
     let transaction = async {

@@ -519,6 +519,7 @@ impl SqliteAutomationStore {
         now: DateTime<Utc>,
         run_trigger: &str,
     ) -> Result<Vec<ClaimedRun>, EngineError> {
+        let _gate = crate::sqlite_writer_gate().lock().await;
         let mut connection = self
             .pool
             .acquire()

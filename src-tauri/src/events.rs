@@ -46,29 +46,44 @@ pub async fn emit_conversation_row_ops_after(
     conversation_id: Uuid,
     after_sequence: i64,
 ) {
-    // Cursor read, tail read, projector load and fold all happen inside one critical
-    // section. Splitting them let two publishers disagree on the cursor: the one that
-    // won the map insert loaded its projector *at* the other's first unpublished
-    // sequence, silently folding that event into the baseline, and the other then
-    // skipped it as already applied. The ops for that sequence were never emitted —
-    // and at a turn boundary the lost op is the terminal one, so the composer kept
-    // showing a stop button until the user reloaded.
-    let mut map = projectors.lock().await;
-    let publish_after = map
-        .get(&conversation_id)
-        .map(|entry| entry.projector.last_sequence())
-        .unwrap_or(after_sequence);
-    let new_records =
-        match ConversationEventRecord::events_since(pool, conversation_id, publish_after, 2000)
-            .await
-        {
-            Ok(records) => records,
+    // Read the cursor under a short lock, then do DB I/O without holding the
+    // global projector map. Re-check the cursor after re-acquiring: if another
+    // publisher advanced past some sequences, skip them — never fold a peer's
+    // first unpublished event into a cold baseline (that race dropped terminal
+    // turn ops and left the composer stuck on Stop).
+    let (publish_after, needs_cold_load) = {
+        let map = projectors.lock().await;
+        match map.get(&conversation_id) {
+            Some(entry) => (entry.projector.last_sequence(), false),
+            None => (after_sequence, true),
+        }
+    };
+    let cold_projector = if needs_cold_load {
+        match IncrementalRowProjector::load(pool, conversation_id, publish_after).await {
+            Ok(projector) => Some(projector),
             Err(error) => {
-                tracing::warn!(%conversation_id, %error, "row-op emit: reading events failed");
+                tracing::warn!(%conversation_id, %error, "row-op emit: projector load failed");
                 return;
             }
-        };
-    if new_records.is_empty() {
+        }
+    } else {
+        None
+    };
+    let new_records = match ConversationEventRecord::events_since_for_projection(
+        pool,
+        conversation_id,
+        publish_after,
+        2000,
+    )
+    .await
+    {
+        Ok(records) => records,
+        Err(error) => {
+            tracing::warn!(%conversation_id, %error, "row-op emit: reading events failed");
+            return;
+        }
+    };
+    if new_records.is_empty() && cold_projector.is_none() {
         return;
     }
     let last_sequence = new_records
@@ -102,30 +117,40 @@ pub async fn emit_conversation_row_ops_after(
         .iter()
         .any(|record| record.event_kind == "conversation_input");
 
-    if let std::collections::hash_map::Entry::Vacant(entry) = map.entry(conversation_id) {
-        match IncrementalRowProjector::load(pool, conversation_id, publish_after).await {
-            Ok(projector) => {
-                entry.insert(CachedRowProjector::new(projector));
-            }
-            Err(error) => {
-                tracing::warn!(%conversation_id, %error, "row-op emit: projector load failed");
-                return;
-            }
-        }
+    let mut map = projectors.lock().await;
+    if let Some(projector) = cold_projector {
+        map.entry(conversation_id)
+            .or_insert_with(|| CachedRowProjector::new(projector));
     }
-    let mut ops = Vec::new();
-    {
-        let entry = map.get_mut(&conversation_id).expect("projector present");
-        entry.touch();
-        for record in &new_records {
-            if record.sequence <= entry.projector.last_sequence() {
-                continue;
-            }
-            match entry.projector.apply(record) {
-                Ok(record_ops) => ops.extend(record_ops),
+    if !map.contains_key(&conversation_id) {
+        // Evicted between the cursor check and re-lock — load outside the map
+        // lock, then re-enter. Dropping the batch here would lose terminal ops.
+        drop(map);
+        let projector =
+            match IncrementalRowProjector::load(pool, conversation_id, publish_after).await {
+                Ok(projector) => projector,
                 Err(error) => {
-                    tracing::warn!(sequence = record.sequence, %error, "row-op emit: fold failed")
+                    tracing::warn!(%conversation_id, %error, "row-op emit: projector load failed");
+                    return;
                 }
+            };
+        map = projectors.lock().await;
+        map.entry(conversation_id)
+            .or_insert_with(|| CachedRowProjector::new(projector));
+    }
+    let entry = map
+        .get_mut(&conversation_id)
+        .expect("projector present after cold insert");
+    entry.touch();
+    let mut ops = Vec::new();
+    for record in &new_records {
+        if record.sequence <= entry.projector.last_sequence() {
+            continue;
+        }
+        match entry.projector.apply(record) {
+            Ok(record_ops) => ops.extend(record_ops),
+            Err(error) => {
+                tracing::warn!(sequence = record.sequence, %error, "row-op emit: fold failed")
             }
         }
     }

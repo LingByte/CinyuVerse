@@ -650,7 +650,7 @@ impl ConversationProjector {
         conversation_id: Uuid,
     ) -> Result<ConversationTimeline, sqlx::Error> {
         let mut fold = Self::load_fold_from_snapshot(pool, conversation_id).await?;
-        let tail = ConversationEventRecord::events_since(
+        let tail = ConversationEventRecord::events_since_for_projection(
             pool,
             conversation_id,
             fold.last_sequence,
@@ -689,7 +689,7 @@ impl ConversationProjector {
         after_sequence: i64,
     ) -> Result<(Vec<TimelineRow>, i64), sqlx::Error> {
         let mut fold = Self::load_fold_from_snapshot(pool, conversation_id).await?;
-        let tail = ConversationEventRecord::events_since(
+        let tail = ConversationEventRecord::events_since_for_projection(
             pool,
             conversation_id,
             fold.last_sequence,
@@ -783,7 +783,7 @@ impl ConversationProjector {
             return Ok(());
         }
 
-        let tail = ConversationEventRecord::events_since(
+        let tail = ConversationEventRecord::events_since_for_projection(
             pool,
             conversation_id,
             fold.last_sequence,
@@ -794,6 +794,8 @@ impl ConversationProjector {
             fold.apply(event)?;
         }
         let folded_sequence = fold.last_sequence;
+        let fold_json =
+            serde_json::to_string(&fold.to_snapshot_state()).map_err(json_decode_error)?;
         let fts_body = if settled {
             let timeline = ProjectionFold::from_snapshot_state(fold.to_snapshot_state())
                 .into_timeline(conversation_id);
@@ -816,7 +818,14 @@ impl ConversationProjector {
                         return Ok(());
                     }
                 }
-                Self::persist_snapshot(&mut *conn, conversation_id, &fold).await
+                ConversationProjectionSnapshotRecord::upsert(
+                    &mut *conn,
+                    conversation_id,
+                    CONVERSATION_PROJECTION_VERSION as i64,
+                    folded_sequence,
+                    &fold_json,
+                )
+                .await
             }
             .await;
             match result {
@@ -902,7 +911,13 @@ impl ConversationProjector {
             .await?;
 
         let events =
-            ConversationEventRecord::events_since(&mut *conn, conversation_id, 0, i64::MAX).await?;
+            ConversationEventRecord::events_since_for_projection(
+                &mut *conn,
+                conversation_id,
+                0,
+                i64::MAX,
+            )
+            .await?;
         let mut fold = ProjectionFold::default();
         for record in &events {
             ConversationStateApplier::apply_record(&mut *conn, record).await?;
@@ -920,6 +935,7 @@ impl ConversationProjector {
         conversation_id: Uuid,
         ordinal: i64,
     ) -> Result<(), sqlx::Error> {
+        let _gate = sqlite_writer_gate().lock().await;
         let mut conn = pool.acquire().await?;
         sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
 
@@ -1050,8 +1066,13 @@ impl ConversationProjector {
             return Ok(ids);
         }
 
-        let events =
-            ConversationEventRecord::events_since(&mut *conn, conversation_id, 0, i64::MAX).await?;
+        let events = ConversationEventRecord::events_since_for_projection(
+            &mut *conn,
+            conversation_id,
+            0,
+            i64::MAX,
+        )
+        .await?;
         for record in events {
             if let ParsedEvent::Known(ConversationEvent::ConversationInput {
                 event:
@@ -1075,8 +1096,13 @@ impl ConversationProjector {
         if drop_input_ids.is_empty() {
             return Ok(());
         }
-        let events =
-            ConversationEventRecord::events_since(&mut *conn, conversation_id, 0, i64::MAX).await?;
+        let events = ConversationEventRecord::events_since_for_projection(
+            &mut *conn,
+            conversation_id,
+            0,
+            i64::MAX,
+        )
+        .await?;
         for record in events {
             if record.event_kind != "conversation_input" {
                 continue;
@@ -1141,7 +1167,7 @@ impl IncrementalRowProjector {
         if fold.last_sequence > up_to_sequence {
             fold = ProjectionFold::default();
         }
-        let tail = ConversationEventRecord::events_since(
+        let tail = ConversationEventRecord::events_since_for_projection(
             pool,
             conversation_id,
             fold.last_sequence,

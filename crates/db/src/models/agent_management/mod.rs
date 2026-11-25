@@ -91,35 +91,38 @@ impl InstallationOperationRepository {
         // This operation reads the current installation before writing the queue rows.
         // In WAL mode a deferred transaction can acquire a read snapshot, lose the writer
         // race to startup warmup, and then fail immediately with SQLITE_BUSY_SNAPSHOT when
-        // upgraded. Claim the writer slot up front so SQLite's busy timeout can serialize it.
-        let mut transaction = self.pool.begin_with("BEGIN IMMEDIATE").await?;
-        sqlx::query(
-            r#"INSERT INTO agent_install_operation
+        // upgraded. Claim the process-wide writer gate before checkout, then BEGIN
+        // IMMEDIATE so SQLite busy_timeout is not burned while holding a pool slot.
+        {
+            let _gate = crate::sqlite_writer_gate().lock().await;
+            let mut transaction = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+            sqlx::query(
+                r#"INSERT INTO agent_install_operation
                (id, agent_id, operation_kind, status, frozen_plan_json,
                 host_instance_id, staging_path, resource_claims_json)
                VALUES (?, ?, ?, 'queued', ?, ?, ?, ?)"#,
-        )
-        .bind(id.to_string())
-        .bind(operation.agent_id.as_str())
-        .bind(&operation.kind)
-        .bind(&operation.frozen_plan_json)
-        .bind(&operation.host_instance_id)
-        .bind(&operation.staging_path)
-        .bind(&claims_json)
-        .execute(&mut *transaction)
-        .await?;
-        for resource in &operation.resource_claims {
-            sqlx::query(
-                r#"INSERT INTO agent_install_resource_lease (resource_key, operation_id)
-                   VALUES (?, ?)"#,
             )
-            .bind(resource)
             .bind(id.to_string())
+            .bind(operation.agent_id.as_str())
+            .bind(&operation.kind)
+            .bind(&operation.frozen_plan_json)
+            .bind(&operation.host_instance_id)
+            .bind(&operation.staging_path)
+            .bind(&claims_json)
             .execute(&mut *transaction)
             .await?;
-        }
-        sqlx::query(
-            r#"INSERT INTO agent_installation
+            for resource in &operation.resource_claims {
+                sqlx::query(
+                    r#"INSERT INTO agent_install_resource_lease (resource_key, operation_id)
+                   VALUES (?, ?)"#,
+                )
+                .bind(resource)
+                .bind(id.to_string())
+                .execute(&mut *transaction)
+                .await?;
+            }
+            sqlx::query(
+                r#"INSERT INTO agent_installation
                (agent_id, ownership, lifecycle, current_lock_id, rollback_lock_id,
                 active_operation, active_operation_id, updated_at)
                VALUES (?, 'external', 'queued', NULL, NULL, ?, ?, CURRENT_TIMESTAMP)
@@ -128,13 +131,14 @@ impl InstallationOperationRepository {
                  active_operation = excluded.active_operation,
                  active_operation_id = excluded.active_operation_id,
                  updated_at = CURRENT_TIMESTAMP"#,
-        )
-        .bind(operation.agent_id.as_str())
-        .bind(&operation.kind)
-        .bind(id.to_string())
-        .execute(&mut *transaction)
-        .await?;
-        transaction.commit().await?;
+            )
+            .bind(operation.agent_id.as_str())
+            .bind(&operation.kind)
+            .bind(id.to_string())
+            .execute(&mut *transaction)
+            .await?;
+            transaction.commit().await?;
+        }
         self.find(id)
             .await?
             .ok_or_else(|| sqlx::Error::RowNotFound.into())
