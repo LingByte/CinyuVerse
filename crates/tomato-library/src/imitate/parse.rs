@@ -1,52 +1,180 @@
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
+/// Transfer pack from deep imitate analysis.
+///
+/// Transfer **engines**, not prose samples:
+/// - storyline skeleton (acts / beat patterns / escalation)
+/// - character cards (slots, voice rules, arcs — no real names)
+/// - craft engines (executable writing mechanics; quotes are evidence only)
+///
+/// Feeding LLMs a "style sample paragraph" to imitate is deliberately avoided:
+/// it produces AI sludge and still misses the author's structural craft.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImitateCards {
+    #[serde(default = "default_schema_version")]
+    pub schema_version: u32,
+    pub storyline: StorylineCard,
+    #[serde(default)]
+    pub characters: Vec<CharacterCard>,
+    pub craft: CraftCard,
+    #[serde(default)]
     pub setting: SettingCard,
-    pub style: StyleCard,
+    #[serde(default)]
+    pub anti_plagiarism: AntiPlagiarismCard,
+}
+
+fn default_schema_version() -> u32 {
+    3
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StorylineCard {
+    /// One-line transferable throughline (no proper nouns).
+    #[serde(default)]
+    pub throughline: String,
+    #[serde(default)]
+    pub acts: Vec<StoryAct>,
+    /// Abstract escalation ladder.
+    #[serde(default)]
+    pub escalation_ladder: Vec<String>,
+    /// How foreshadow/hooks are paced (pattern, not events).
+    #[serde(default)]
+    pub foreshadow_cadence: String,
+    /// Chapter-level engines that recur.
+    #[serde(default)]
+    pub chapter_engines: Vec<ChapterEngine>,
+    /// Dimensions a new book must reinvent.
+    #[serde(default)]
+    pub must_mutate: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct StoryAct {
+    #[serde(default)]
+    pub name: String,
+    /// Dramatic function of this act.
+    #[serde(default)]
+    pub function: String,
+    /// Beat patterns inside the act (e.g. "试探性交易失败").
+    #[serde(default)]
+    pub beat_patterns: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ChapterEngine {
+    #[serde(default)]
+    pub pattern: String,
+    #[serde(default)]
+    pub purpose: String,
+    #[serde(default)]
+    pub placement: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterCard {
+    /// Slot id: 角色A / 对手B / 引路人C — never the source name.
+    #[serde(default)]
+    pub slot: String,
+    /// Narrative job in the machine.
+    #[serde(default)]
+    pub role_function: String,
+    #[serde(default)]
+    pub desire: String,
+    #[serde(default)]
+    pub cost_or_fear: String,
+    /// Voice as executable rules, not sample paragraphs.
+    #[serde(default)]
+    pub voice_rules: Vec<String>,
+    #[serde(default)]
+    pub arc_stages: Vec<String>,
+    #[serde(default)]
+    pub relationships: Vec<CharacterRelation>,
+    /// Soft tags: 狠厉 / 克制 / 话少等 — still not prose samples.
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterRelation {
+    #[serde(default)]
+    pub to_slot: String,
+    #[serde(default)]
+    pub tension: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CraftCard {
+    /// Prose/scene mechanics with forensic evidence (evidence ≠ imitation target).
+    #[serde(default)]
+    pub prose_engines: Vec<CraftRule>,
+    #[serde(default)]
+    pub dialogue_engines: Vec<CraftRule>,
+    #[serde(default)]
+    pub info_control: Vec<String>,
+    #[serde(default)]
+    pub chapter_ending_hooks: Vec<String>,
+    #[serde(default)]
+    pub forbidden_habits: Vec<String>,
+    #[serde(default)]
+    pub narration_stance: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CraftRule {
+    /// Executable constraint the new book should obey.
+    pub rule: String,
+    /// Why it matters structurally.
+    #[serde(default)]
+    pub why: String,
+    pub evidence: CraftEvidence,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CraftEvidence {
+    #[serde(alias = "chapter_index")]
+    pub chapter_index: u32,
+    /// Short quote proving the pattern exists — NOT a style sample to copy.
+    pub quote: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct SettingCard {
-    #[serde(default, alias = "conflict_axes")]
+    #[serde(default)]
     pub conflict_axes: Vec<String>,
-    #[serde(default, alias = "worldframe_type")]
+    #[serde(default)]
     pub worldframe_type: String,
-    #[serde(default, alias = "relationship_tensions")]
-    pub relationship_tensions: Vec<String>,
-    #[serde(default, alias = "taboo_transfers")]
+    #[serde(default)]
+    pub power_system_type: String,
+    #[serde(default)]
+    pub stakes_currency: Vec<String>,
+    #[serde(default)]
     pub taboo_transfers: Vec<String>,
     #[serde(default)]
     pub notes: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct StyleCard {
+pub struct AntiPlagiarismCard {
     #[serde(default)]
-    pub rules: Vec<StyleRule>,
+    pub banned_names: Vec<String>,
     #[serde(default)]
-    pub forbidden: Vec<String>,
-    #[serde(default, alias = "dialogue_vs_narration")]
-    pub dialogue_vs_narration: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StyleRule {
-    pub rule: String,
-    pub evidence: StyleEvidence,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct StyleEvidence {
-    #[serde(alias = "chapter_index")]
-    pub chapter_index: u32,
-    pub quote: String,
+    pub banned_setpieces: Vec<String>,
+    #[serde(default)]
+    pub rewrite_mandates: Vec<String>,
+    #[serde(default)]
+    pub review_checklist: Vec<String>,
 }
 
 pub fn parse_imitate_cards_json(raw: &str) -> Result<ImitateCards> {
@@ -73,25 +201,89 @@ pub fn parse_imitate_cards_json(raw: &str) -> Result<ImitateCards> {
 
 fn try_parse_candidate(candidate: &str) -> Result<ImitateCards, String> {
     let cleaned = sanitize_llm_json(candidate);
+    // Reject legacy v1/v2 shapes early with a clear message if they parse as other roots.
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&cleaned) {
+        if v.get("storyline").is_none() || v.get("characters").is_none() || v.get("craft").is_none()
+        {
+            return Err(
+                "需要 schema v3：必须包含 storyline / characters / craft（旧版 setting+style 已废弃）"
+                    .into(),
+            );
+        }
+    }
     serde_json::from_str::<ImitateCards>(&cleaned).map_err(|e| e.to_string())
 }
 
-fn validate_cards(cards: ImitateCards) -> Result<ImitateCards> {
-    if cards.style.rules.is_empty() {
-        bail!("style.rules 不能为空");
+fn validate_cards(mut cards: ImitateCards) -> Result<ImitateCards> {
+    if cards.schema_version < 3 {
+        cards.schema_version = 3;
     }
-    for rule in &cards.style.rules {
+    if cards.storyline.throughline.trim().is_empty()
+        && cards.storyline.acts.is_empty()
+        && cards.storyline.escalation_ladder.is_empty()
+    {
+        bail!("storyline 不能为空：需要 throughline / acts / escalationLadder 至少一项");
+    }
+    if cards.characters.len() < 2 {
+        bail!("characters 至少需要 2 张人物卡（用角色A/B 占位，禁止原名）");
+    }
+    for ch in &cards.characters {
+        if ch.slot.trim().is_empty() {
+            bail!("人物卡缺少 slot");
+        }
+        if looks_like_proper_name(&ch.slot) {
+            bail!("人物 slot 必须是占位（角色A/对手B），不能是原作姓名: {}", ch.slot);
+        }
+        if ch.voice_rules.is_empty() && ch.arc_stages.is_empty() {
+            bail!("人物卡 {} 需要 voiceRules 或 arcStages", ch.slot);
+        }
+    }
+    let craft_rules = cards.craft.prose_engines.len() + cards.craft.dialogue_engines.len();
+    if craft_rules == 0 {
+        bail!("craft 需要至少一条 proseEngines 或 dialogueEngines");
+    }
+    for rule in cards
+        .craft
+        .prose_engines
+        .iter()
+        .chain(cards.craft.dialogue_engines.iter())
+    {
         if rule.rule.trim().is_empty() {
-            bail!("存在空的 style rule");
+            bail!("存在空的 craft rule");
         }
         if rule.evidence.quote.chars().count() > 80 {
-            bail!("evidence.quote 过长");
+            bail!("evidence.quote 过长（仅作取证，禁止当仿写范文）");
         }
         if is_fluff_rule(&rule.rule) {
-            bail!("手法规则不能是空话: {}", rule.rule);
+            bail!("写法引擎不能是空话: {}", rule.rule);
         }
     }
+    if cards.anti_plagiarism.rewrite_mandates.is_empty()
+        && cards.anti_plagiarism.review_checklist.is_empty()
+    {
+        bail!("antiPlagiarism 需要 rewriteMandates 或 reviewChecklist");
+    }
     Ok(cards)
+}
+
+fn looks_like_proper_name(slot: &str) -> bool {
+    let s = slot.trim();
+    if s.starts_with("角色")
+        || s.starts_with("对手")
+        || s.starts_with("配角")
+        || s.starts_with("引路")
+        || s.starts_with("反派")
+        || s.starts_with("男主")
+        || s.starts_with("女主")
+        || s.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+            && s.len() <= 2
+    {
+        return false;
+    }
+    // Chinese proper-name heuristic: 2–3 chars without role keywords.
+    let chars: Vec<char> = s.chars().collect();
+    (2..=4).contains(&chars.len())
+        && chars.iter().all(|c| *c >= '\u{4e00}' && *c <= '\u{9fff}')
 }
 
 fn json_candidates(text: &str) -> Vec<String> {
@@ -104,7 +296,6 @@ fn json_candidates(text: &str) -> Vec<String> {
             out.push(balanced);
         }
     }
-    // Fallback: first `{` .. last `}`
     if let (Some(start), Some(end)) = (text.find('{'), text.rfind('}')) {
         if end > start {
             let span = text[start..=end].to_string();
@@ -128,7 +319,6 @@ fn extract_fenced_json(text: &str) -> Option<String> {
     Some(after[..end].trim().to_string())
 }
 
-/// Brace-balanced object extraction so trailing prose after JSON is ignored.
 fn extract_balanced_object(text: &str) -> Option<String> {
     let bytes = text.as_bytes();
     let start = text.find('{')?;
@@ -162,12 +352,10 @@ fn extract_balanced_object(text: &str) -> Option<String> {
     None
 }
 
-/// Common LLM JSON cleanup: BOM, trailing commas, smart quotes.
 fn sanitize_llm_json(input: &str) -> String {
     let mut s = input.trim().trim_start_matches('\u{feff}').to_string();
     s = s.replace(['\u{201c}', '\u{201d}'], "\"");
     s = s.replace(['\u{2018}', '\u{2019}'], "'");
-    // Remove trailing commas before } or ]
     let mut out = String::with_capacity(s.len());
     let chars: Vec<char> = s.chars().collect();
     let mut i = 0;
@@ -217,6 +405,8 @@ fn is_fluff_rule(rule: &str) -> bool {
         "引人入胜",
         "生动形象",
         "感人至深",
+        "文风独特",
+        "语言优美",
     ];
     let trimmed = rule.trim();
     FLUFF
@@ -228,52 +418,109 @@ fn is_fluff_rule(rule: &str) -> bool {
 mod tests {
     use super::*;
 
-    #[test]
-    fn parses_fenced_json() {
-        let raw = r#"```json
-{"setting":{"conflictAxes":["权斗"],"worldframeType":"都市异能","relationshipTensions":[],"tabooTransfers":[],"notes":[]},"style":{"rules":[{"rule":"冲突段短句≤12字","evidence":{"chapterIndex":1,"quote":"「你到底想怎样？」"}}],"forbidden":[],"dialogueVsNarration":"对峙以对话推进"}}
-```"#;
-        let cards = parse_imitate_cards_json(raw).unwrap();
-        assert_eq!(cards.style.rules.len(), 1);
+    fn v3_json() -> &'static str {
+        r#"{
+  "schemaVersion": 3,
+  "storyline": {
+    "throughline": "弱势者用不可逆代价换阶段性掌控权，最终反噬规则本身",
+    "acts": [
+      { "name": "第一幕", "function": "建立不对等交易", "beatPatterns": ["试探性出价", "第一次反噬"] },
+      { "name": "第二幕", "function": "规则内卷", "beatPatterns": ["加码代价", "同盟裂隙"] }
+    ],
+    "escalationLadder": ["试探", "兑现代价", "规则反噬", "改写条款"],
+    "foreshadowCadence": "每2–3章推进一次长线钩子，不一次说破",
+    "chapterEngines": [
+      { "pattern": "信息差对峙", "purpose": "逼出隐藏筹码", "placement": "mid" }
+    ],
+    "mustMutate": ["交易标的", "代价形式", "反转触发条件"]
+  },
+  "characters": [
+    {
+      "slot": "角色A",
+      "roleFunction": "推动交易发生的弱势方",
+      "desire": "夺回议价权",
+      "costOrFear": "失去最后一块自主",
+      "voiceRules": ["少形容词", "威胁句短于8字", "几乎不解释动机"],
+      "arcStages": ["隐忍", "试刀", "撕破脸"],
+      "relationships": [{ "toSlot": "对手B", "tension": "利用与依赖" }],
+      "tags": ["克制", "狠"]
+    },
+    {
+      "slot": "对手B",
+      "roleFunction": "掌握规则解释权的上位者",
+      "desire": "维持规则不透明",
+      "costOrFear": "被看穿底牌",
+      "voiceRules": ["爱用反问", "把命令说成建议"],
+      "arcStages": ["施压", "失措", "反扑"],
+      "relationships": [{ "toSlot": "角色A", "tension": "猎手与猎物互换" }],
+      "tags": ["从容"]
+    }
+  ],
+  "craft": {
+    "proseEngines": [
+      {
+        "rule": "冲突段叙述句≤12字，动作先于评价",
+        "why": "保持压迫感，避免AI式总结",
+        "evidence": { "chapterIndex": 1, "quote": "他往前一步。杯子晃了。" }
+      }
+    ],
+    "dialogueEngines": [
+      {
+        "rule": "对峙用短问答打断，禁止一方独白超3句",
+        "why": "信息在来回中泄露",
+        "evidence": { "chapterIndex": 1, "quote": "「你到底想怎样？」" }
+      }
+    ],
+    "infoControl": ["关键身份信息延后半章", "先给结果再补原因"],
+    "chapterEndingHooks": ["未完成动作", "新筹码只露一角"],
+    "forbiddenHabits": ["段末金句总结", "大段心理旁白解释局势"],
+    "narrationStance": "紧贴角色A感知，不上帝视角全知"
+  },
+  "setting": {
+    "conflictAxes": ["身份不对等交易"],
+    "worldframeType": "都市异能",
+    "powerSystemType": "契约换外力",
+    "stakesCurrency": ["人情债"],
+    "tabooTransfers": [],
+    "notes": []
+  },
+  "antiPlagiarism": {
+    "bannedNames": [],
+    "bannedSetpieces": ["原作招牌对峙的场地+道具组合"],
+    "rewriteMandates": ["新世界观壳", "新欲望对象", "新交易规则"],
+    "reviewChecklist": ["能否一眼认出是某书换皮？", "人物对白是否在复读原作口吻专名？"]
+  }
+}"#
     }
 
     #[test]
-    fn rejects_fluff_rules() {
-        let raw = r#"{"setting":{"conflictAxes":[],"worldframeType":"","relationshipTensions":[],"tabooTransfers":[],"notes":[]},"style":{"rules":[{"rule":"文笔细腻","evidence":{"chapterIndex":0,"quote":"abc"}}],"forbidden":[],"dialogueVsNarration":""}}"#;
+    fn parses_v3() {
+        let cards = parse_imitate_cards_json(v3_json()).unwrap();
+        assert_eq!(cards.characters.len(), 2);
+        assert!(!cards.storyline.acts.is_empty());
+        assert!(!cards.craft.prose_engines.is_empty());
+    }
+
+    #[test]
+    fn rejects_legacy_setting_style_only() {
+        let raw = r#"{"setting":{"conflictAxes":["a"],"worldframeType":"x","relationshipTensions":[],"tabooTransfers":[],"notes":[]},"style":{"rules":[{"rule":"短对话","evidence":{"chapterIndex":0,"quote":"够了"}}],"forbidden":[],"dialogueVsNarration":""}}"#;
         assert!(parse_imitate_cards_json(raw).is_err());
     }
 
     #[test]
-    fn tolerates_trailing_comma_and_prose() {
-        let raw = r#"好的，这是结果：
-{
-  "setting": {
-    "conflictAxes": ["身份对立"],
-    "worldframeType": "都市异能",
-    "relationshipTensions": ["师徒"],
-    "tabooTransfers": [],
-    "notes": [],
-  },
-  "style": {
-    "rules": [
-      {
-        "rule": "对峙用短对话打断叙述",
-        "evidence": { "chapterIndex": 2, "quote": "「你到底想怎样？」" },
-      },
-    ],
-    "forbidden": ["大段心理旁白"],
-    "dialogueVsNarration": "冲突以对话推进",
-  }
-}
-以上仅供参考。"#;
-        let cards = parse_imitate_cards_json(raw).unwrap();
-        assert_eq!(cards.style.rules.len(), 1);
-        assert_eq!(cards.setting.worldframe_type, "都市异能");
+    fn rejects_real_name_slots() {
+        let mut bad = v3_json().to_string();
+        bad = bad.replace("\"slot\": \"角色A\"", "\"slot\": \"林深\"");
+        assert!(parse_imitate_cards_json(&bad).is_err());
     }
 
     #[test]
-    fn tolerates_smart_quotes_in_wrapper() {
-        let raw = "{\n  \"setting\": {\n    \"conflictAxes\": [\"a\"],\n    \"worldframeType\": \"x\",\n    \"relationshipTensions\": [],\n    \"tabooTransfers\": [],\n    \"notes\": []\n  },\n  \"style\": {\n    \"rules\": [{\n      \"rule\": \"章末用未完成动作收束\",\n      \"evidence\": {\"chapterIndex\": 0, \"quote\": \"门没有关严\"}\n    }],\n    \"forbidden\": [],\n    \"dialogueVsNarration\": \"叙述略多于对话\"\n  }\n}";
-        assert!(parse_imitate_cards_json(raw).is_ok());
+    fn rejects_fluff_craft() {
+        let mut bad = v3_json().to_string();
+        bad = bad.replace(
+            "冲突段叙述句≤12字，动作先于评价",
+            "文笔细腻",
+        );
+        assert!(parse_imitate_cards_json(&bad).is_err());
     }
 }

@@ -1,14 +1,18 @@
-//! Offline imitate-analysis assets for a book directory.
+//! Offline deep-analysis assets for a book directory.
 //!
 //! Layout under `<book>/imitate/v1/`:
-//!   status.json / fingerprint.json / scenes.json /
-//!   setting.json / style.json / meta.json
+//!   status.json / fingerprint.json / scenes.json / meta.json /
+//!   pack.json / storyline.json / characters.json / craft.json /
+//!   setting.json / anti-plagiarism.json
+//!
+//! Transfer engines (storyline + character cards + craft), not prose samples.
 
 mod fingerprint;
 mod parse;
 mod prompt;
 mod sample;
 mod scenes;
+mod seed;
 mod status;
 
 use std::{
@@ -22,15 +26,22 @@ use serde::{Deserialize, Serialize};
 use crate::book_dir::{is_book_dir, load_manifest, read_chapter};
 
 pub use fingerprint::{BookFingerprint, compute_fingerprint};
-pub use parse::{ImitateCards, parse_imitate_cards_json};
+pub use parse::{
+    AntiPlagiarismCard, CharacterCard, CraftCard, ImitateCards, SettingCard, StorylineCard,
+    parse_imitate_cards_json,
+};
 pub use prompt::build_analysis_prompt;
 pub use sample::{ChapterSample, SamplePlan, select_sample_plan};
 pub use scenes::{SceneSample, extract_scenes};
-pub use status::{ImitatePhase, ImitateStatus, read_status, write_status};
+pub use seed::{apply_seed_to_project, read_cards, write_cards_bundle};
+pub use status::{
+    ImitatePhase, ImitateStatus, STEP_AGENT_RUNNING, STEP_HOST_EXTRACT, STEP_PARSE_SAVE,
+    STEP_QUEUED, STEP_START_AGENT, STEP_TOTAL, read_status, write_status,
+};
 
 pub const IMITATE_DIR: &str = "imitate";
 pub const IMITATE_VERSION: &str = "v1";
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 3;
 
 const MAX_CHAPTER_CHARS: usize = 6_000;
 const MAX_PROMPT_CHAPTERS: usize = 10;
@@ -126,13 +137,12 @@ pub fn prepare_analysis_pack(book_dir: &Path) -> Result<AnalysisPack> {
 
     write_status(
         &book_dir,
-        &ImitateStatus {
-            phase: ImitatePhase::Running,
-            progress: Some("已完成指纹与场景抽取".into()),
-            error: None,
-            updated_at: status::now_rfc3339(),
-            conversation_id: None,
-        },
+        &ImitateStatus::with_step(
+            ImitatePhase::Running,
+            status::STEP_HOST_EXTRACT,
+            "已完成指纹与场景抽取",
+            None,
+        ),
     )?;
 
     Ok(AnalysisPack {
@@ -151,30 +161,7 @@ pub fn write_cards(
     agent_id: &str,
     conversation_id: Option<&str>,
 ) -> Result<()> {
-    let book_dir = resolve_book_dir_for_imitate(book_dir)?;
-    let root = ensure_imitate_dir(&book_dir)?;
-    write_json(&root.join("setting.json"), &cards.setting)?;
-    write_json(&root.join("style.json"), &cards.style)?;
-
-    let meta_path = root.join("meta.json");
-    let mut meta: ImitateMeta = if meta_path.is_file() {
-        serde_json::from_str(&fs::read_to_string(&meta_path)?)?
-    } else {
-        let manifest = load_manifest(&book_dir)?;
-        ImitateMeta {
-            schema_version: SCHEMA_VERSION,
-            title: manifest.title,
-            author: manifest.author,
-            sample_chapter_indexes: Vec::new(),
-            holdout_chapter_index: None,
-            agent_id: None,
-            conversation_id: None,
-        }
-    };
-    meta.agent_id = Some(agent_id.to_string());
-    meta.conversation_id = conversation_id.map(str::to_string);
-    write_json(&meta_path, &meta)?;
-    Ok(())
+    write_cards_bundle(book_dir, cards, agent_id, conversation_id)
 }
 
 pub fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
@@ -248,5 +235,35 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let err = resolve_book_dir_for_imitate(tmp.path()).unwrap_err();
         assert!(err.to_string().contains("书库目录"));
+    }
+
+    #[test]
+    fn write_cards_emits_storyline_characters_craft() {
+        let tmp = tempfile::tempdir().unwrap();
+        let book = write_test_book(tmp.path());
+        let cards = parse_imitate_cards_json(
+            r#"{
+  "schemaVersion": 3,
+  "storyline": {"throughline":"弱势换力","acts":[{"name":"一","function":"建交易","beatPatterns":["试探"]}],"escalationLadder":["试探","反噬"],"foreshadowCadence":"隔章","chapterEngines":[],"mustMutate":["代价"]},
+  "characters": [
+    {"slot":"角色A","roleFunction":"推手","desire":"议价权","costOrFear":"失控","voiceRules":["短句"],"arcStages":["隐忍"],"relationships":[],"tags":[]},
+    {"slot":"对手B","roleFunction":"压手","desire":"不透明","costOrFear":"穿帮","voiceRules":["反问"],"arcStages":["施压"],"relationships":[],"tags":[]}
+  ],
+  "craft": {"proseEngines":[{"rule":"动作先于评价","why":"压迫","evidence":{"chapterIndex":0,"quote":"杯子晃了"}}],"dialogueEngines":[],"infoControl":[],"chapterEndingHooks":[],"forbiddenHabits":["段末金句"],"narrationStance":"贴近A"},
+  "setting": {"conflictAxes":["交易"],"worldframeType":"都市","powerSystemType":"契约","stakesCurrency":[],"tabooTransfers":[],"notes":[]},
+  "antiPlagiarism": {"bannedNames":[],"bannedSetpieces":[],"rewriteMandates":["新壳"],"reviewChecklist":["换皮？"]}
+}"#,
+        )
+        .unwrap();
+        write_cards(&book, &cards, "claude", Some("conv-1")).unwrap();
+        let root = imitate_root(&book);
+        assert!(root.join("pack.json").is_file());
+        assert!(root.join("storyline.json").is_file());
+        assert!(root.join("characters.json").is_file());
+        assert!(root.join("craft.json").is_file());
+        assert!(!root.join("style.json").is_file());
+        let loaded = read_cards(&book).unwrap();
+        assert_eq!(loaded.characters.len(), 2);
+        assert!(loaded.storyline.throughline.contains("弱势"));
     }
 }
