@@ -847,7 +847,12 @@ const AgentTimelineConversation = forwardRef<
     (behavior: ScrollBehavior) => {
       const container = containerRef.current;
       if (!container) return;
-      if (timelineItems.length > 0) {
+      // Streaming stick-to-bottom must not call scrollToIndex on every
+      // totalSize change — that remeasures the virtualizer and fights
+      // growing markdown rows (visible jitter in the right session panel).
+      if (behavior === 'auto') {
+        container.scrollTop = container.scrollHeight - container.clientHeight;
+      } else if (timelineItems.length > 0) {
         rowVirtualizer.scrollToIndex(timelineItems.length - 1, {
           align: 'end',
           behavior,
@@ -1288,7 +1293,7 @@ const AgentTimelineConversation = forwardRef<
       <div
         ref={containerRef}
         className={cn(
-          'min-h-0 flex-1 overflow-y-auto px-2 py-3',
+          'min-h-0 flex-1 overflow-y-auto px-2 py-3 [scrollbar-gutter:stable]',
           !usesComposerStatusDock && 'pb-14'
         )}
         data-panel="conversation-logs"

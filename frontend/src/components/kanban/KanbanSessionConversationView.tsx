@@ -419,11 +419,14 @@ function KanbanSessionConversationContent({
 
 function useMarkSessionViewed(
   sessionId: string | undefined,
-  isRunning: boolean,
+  _isRunning: boolean,
   enabled: boolean
 ) {
   const queryClient = useQueryClient();
 
+  // Mark once per focused session — do not re-run when `isRunning` flips
+  // (streaming start/stop). That was invalidating every workspaceSessions
+  // query and jittering the right-panel composer/topbar during turns.
   useEffect(() => {
     if (!sessionId || !enabled) return;
 
@@ -441,7 +444,7 @@ function useMarkSessionViewed(
     return () => {
       cancelled = true;
     };
-  }, [enabled, isRunning, queryClient, sessionId]);
+  }, [enabled, queryClient, sessionId]);
 }
 
 function KanbanSessionConversationSurface({
