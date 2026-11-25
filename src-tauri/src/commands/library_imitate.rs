@@ -1,10 +1,11 @@
 //! Manual background imitate-analysis for local book directories.
 
 use std::{
-    collections::HashSet,
+    collections::HashMap,
     fs,
     path::{Path, PathBuf},
     process::Command,
+    sync::Arc,
     time::Duration,
 };
 
@@ -20,16 +21,21 @@ use db::models::{
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tomato_library::{
-    ImitatePhase, ImitateStatus, build_analysis_prompt, parse_imitate_cards_json,
-    prepare_analysis_pack, read_status, resolve_book_dir_for_imitate, write_cards, write_status,
+    ImitateCards, ImitatePhase, ImitateStatus, STEP_AGENT_RUNNING, STEP_HOST_EXTRACT,
+    STEP_PARSE_SAVE, STEP_QUEUED, STEP_START_AGENT, STEP_TOTAL, apply_seed_to_project,
+    build_analysis_prompt, parse_imitate_cards_json, prepare_analysis_pack, read_cards,
+    read_status, resolve_book_dir_for_imitate, write_cards, write_status,
 };
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
     conversation_service::{ConversationSessionService, ConversationStartTurnInput},
     state::AppState,
 };
+
+const CANCELLED_MSG: &str = "已中断";
 
 const LIBRARY_IMITATE_ORIGIN: &str = "library_imitate";
 const PROJECT_NAME: &str = "Library Imitate";
@@ -40,6 +46,8 @@ const MAX_WAIT: Duration = Duration::from_secs(60 * 20);
 #[serde(rename_all = "camelCase")]
 pub struct LibraryImitateStatusView {
     pub phase: String,
+    pub step: Option<u32>,
+    pub step_total: Option<u32>,
     pub progress: Option<String>,
     pub error: Option<String>,
     pub updated_at: String,
@@ -57,6 +65,8 @@ impl From<ImitateStatus> for LibraryImitateStatusView {
                 ImitatePhase::Failed => "failed",
             }
             .into(),
+            step: status.step,
+            step_total: status.step_total,
             progress: status.progress,
             error: status.error,
             updated_at: status.updated_at,
@@ -65,19 +75,50 @@ impl From<ImitateStatus> for LibraryImitateStatusView {
     }
 }
 
+fn format_elapsed(elapsed: Duration) -> String {
+    let secs = elapsed.as_secs();
+    let mins = secs / 60;
+    let rem = secs % 60;
+    if mins == 0 {
+        format!("{rem}秒")
+    } else {
+        format!("{mins}分{rem:02}秒")
+    }
+}
+
+struct ImitateJobHandle {
+    cancel: CancellationToken,
+    conversation_id: Mutex<Option<Uuid>>,
+}
+
 #[derive(Default)]
 pub struct ImitateJobRegistry {
-    running: Mutex<HashSet<String>>,
+    jobs: Mutex<HashMap<String, Arc<ImitateJobHandle>>>,
 }
 
 impl ImitateJobRegistry {
-    pub async fn try_begin(&self, path: &str) -> bool {
-        let mut guard = self.running.lock().await;
-        guard.insert(path.to_string())
+    async fn try_begin(&self, path: &str) -> Option<Arc<ImitateJobHandle>> {
+        let mut guard = self.jobs.lock().await;
+        if guard.contains_key(path) {
+            return None;
+        }
+        let handle = Arc::new(ImitateJobHandle {
+            cancel: CancellationToken::new(),
+            conversation_id: Mutex::new(None),
+        });
+        guard.insert(path.to_string(), handle.clone());
+        Some(handle)
     }
 
-    pub async fn finish(&self, path: &str) {
-        self.running.lock().await.remove(path);
+    async fn finish(&self, path: &str) {
+        self.jobs.lock().await.remove(path);
+    }
+
+    async fn request_cancel(&self, path: &str) -> Option<Arc<ImitateJobHandle>> {
+        let guard = self.jobs.lock().await;
+        let handle = guard.get(path)?.clone();
+        handle.cancel.cancel();
+        Some(handle)
     }
 }
 
@@ -89,6 +130,128 @@ pub async fn library_imitate_status(path: String) -> Result<LibraryImitateStatus
 }
 
 #[tauri::command]
+pub async fn library_imitate_pack(path: String) -> Result<ImitateCards, String> {
+    let book_dir = resolve_book_dir_for_imitate(Path::new(&path)).map_err(|e| e.to_string())?;
+    tokio::task::spawn_blocking(move || read_cards(&book_dir))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryImitateSeedResult {
+    pub project_path: String,
+    pub project_id: String,
+    pub title: String,
+}
+
+/// Create a new novel project folder seeded from the deep-analysis pack
+/// (storyline + character cards + craft engines — not style samples).
+#[tauri::command]
+pub async fn library_imitate_seed_project(
+    state: State<'_, AppState>,
+    path: String,
+    parent_dir: String,
+    new_title: String,
+) -> Result<LibraryImitateSeedResult, String> {
+    let title = new_title.trim().to_string();
+    if title.is_empty() {
+        return Err("请填写新书标题".into());
+    }
+    let parent = PathBuf::from(parent_dir.trim());
+    if !parent.is_dir() {
+        return Err(format!("父目录不存在: {}", parent.display()));
+    }
+
+    let book_dir = resolve_book_dir_for_imitate(Path::new(&path)).map_err(|e| e.to_string())?;
+    let folder_name = sanitize_folder_name(&title);
+    let project_path = parent.join(&folder_name);
+    if project_path.exists() {
+        return Err(format!("目标已存在: {}", project_path.display()));
+    }
+
+    let project_path_for_job = project_path.clone();
+    let book_dir_for_job = book_dir.clone();
+    let title_for_job = title.clone();
+    tokio::task::spawn_blocking(move || {
+        fs::create_dir_all(&project_path_for_job)
+            .map_err(|e| format!("创建目录失败: {e}"))?;
+        ensure_git_repo(&project_path_for_job)?;
+        apply_seed_to_project(&book_dir_for_job, &project_path_for_job, &title_for_job)
+            .map_err(|e| e.to_string())?;
+        write_seed_project_stubs(&project_path_for_job, &title_for_job)?;
+        Ok::<(), String>(())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    let create = CreateProject {
+        name: title.clone(),
+        repositories: vec![db::models::project_repo::CreateProjectRepo {
+            display_name: title.clone(),
+            git_repo_path: project_path.to_string_lossy().into_owned(),
+        }],
+    };
+    let project = state
+        .deployment
+        .project()
+        .create_project(
+            &state.deployment.db().pool,
+            state.deployment.repo(),
+            create,
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(LibraryImitateSeedResult {
+        project_path: project_path.to_string_lossy().into_owned(),
+        project_id: project.id.to_string(),
+        title,
+    })
+}
+
+fn sanitize_folder_name(title: &str) -> String {
+    let cleaned: String = title
+        .chars()
+        .map(|c| match c {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            c => c,
+        })
+        .collect();
+    let trimmed = cleaned.trim().trim_matches('.');
+    if trimmed.is_empty() {
+        "untitled-novel".into()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn write_seed_project_stubs(project_repo: &Path, title: &str) -> Result<(), String> {
+    let meta = project_repo.join(".cinyuverse");
+    let project_json = serde_json::json!({
+        "name": title,
+        "kind": "novel",
+        "seededFrom": "library_imitate_v3"
+    });
+    fs::write(
+        meta.join("project.json"),
+        serde_json::to_string_pretty(&project_json).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    let claude = format!(
+        "# {title}\n\n本项目由书库深度分析包生成。\n\n\
+         - 故事线：`.cinyuverse/outline.md`\n\
+         - 人物卡：`.cinyuverse/characters/`\n\
+         - 写法引擎：`.cinyuverse/writing-rules.md`\n\
+         - 反抄袭：`.cinyuverse/anti-plagiarism.md`\n\n\
+         **禁止**把原书正文当仿写范文。\n"
+    );
+    fs::write(meta.join("CLAUDE.md"), claude).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn library_start_imitate_analysis(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -97,42 +260,114 @@ pub async fn library_start_imitate_analysis(
     let book_dir = resolve_book_dir_for_imitate(Path::new(&path)).map_err(|e| e.to_string())?;
     let path_key = book_dir.to_string_lossy().into_owned();
 
-    if !state.imitate_jobs.try_begin(&path_key).await {
+    let Some(job) = state.imitate_jobs.try_begin(&path_key).await else {
         return Err("该书正在分析中".into());
-    }
-
-    let queued = ImitateStatus {
-        phase: ImitatePhase::Queued,
-        progress: Some("已排队".into()),
-        error: None,
-        updated_at: tomato_now(),
-        conversation_id: None,
     };
-    write_status(&book_dir, &queued).map_err(|e| e.to_string())?;
+
+    let queued = ImitateStatus::with_step(ImitatePhase::Queued, STEP_QUEUED, "已排队", None);
+    if let Err(error) = write_status(&book_dir, &queued) {
+        state.imitate_jobs.finish(&path_key).await;
+        return Err(error.to_string());
+    }
 
     let app_handle = app.clone();
     let path_for_job = path_key.clone();
+    let job_for_run = job.clone();
     tokio::spawn(async move {
-        let result = run_imitate_job(app_handle.clone(), PathBuf::from(&path_for_job)).await;
+        let result =
+            run_imitate_job(app_handle.clone(), PathBuf::from(&path_for_job), job_for_run).await;
         if let Some(state) = app_handle.try_state::<AppState>() {
             state.imitate_jobs.finish(&path_for_job).await;
         }
-        if let Err(error) = result {
-            tracing::warn!(%error, path = %path_for_job, "library imitate analysis failed");
-            let _ = write_status(
-                Path::new(&path_for_job),
-                &ImitateStatus {
-                    phase: ImitatePhase::Failed,
-                    progress: None,
-                    error: Some(error),
-                    updated_at: tomato_now(),
-                    conversation_id: None,
-                },
-            );
+        match result {
+            Ok(()) => {}
+            Err(error) if error == CANCELLED_MSG => {
+                let _ = write_status(
+                    Path::new(&path_for_job),
+                    &ImitateStatus {
+                        phase: ImitatePhase::Idle,
+                        step: None,
+                        step_total: Some(STEP_TOTAL),
+                        progress: Some(CANCELLED_MSG.into()),
+                        error: None,
+                        updated_at: tomato_now(),
+                        conversation_id: None,
+                    },
+                );
+            }
+            Err(error) => {
+                tracing::warn!(%error, path = %path_for_job, "library imitate analysis failed");
+                let _ = write_status(
+                    Path::new(&path_for_job),
+                    &ImitateStatus {
+                        phase: ImitatePhase::Failed,
+                        step: None,
+                        step_total: Some(STEP_TOTAL),
+                        progress: None,
+                        error: Some(error),
+                        updated_at: tomato_now(),
+                        conversation_id: None,
+                    },
+                );
+            }
         }
     });
 
     Ok(queued.into())
+}
+
+#[tauri::command]
+pub async fn library_cancel_imitate_analysis(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<LibraryImitateStatusView, String> {
+    let book_dir = resolve_book_dir_for_imitate(Path::new(&path)).map_err(|e| e.to_string())?;
+    let path_key = book_dir.to_string_lossy().into_owned();
+
+    let handle = state.imitate_jobs.request_cancel(&path_key).await;
+    let status = read_status(&book_dir).map_err(|e| e.to_string())?;
+    let conversation_id = match &handle {
+        Some(job) => *job.conversation_id.lock().await,
+        None => status
+            .conversation_id
+            .as_deref()
+            .and_then(|id| Uuid::parse_str(id).ok()),
+    };
+
+    if let Some(conversation_id) = conversation_id {
+        let service = ConversationSessionService::new(state.conversation_context());
+        if let Err(error) = service
+            .cancel_turn(conversation_id, Some(CANCELLED_MSG.to_string()))
+            .await
+        {
+            tracing::warn!(
+                %error,
+                %conversation_id,
+                "failed to cancel imitate analysis turn"
+            );
+        }
+    }
+
+    if handle.is_none()
+        && !matches!(
+            status.phase,
+            ImitatePhase::Queued | ImitatePhase::Running
+        )
+    {
+        return Err("当前没有进行中的分析".into());
+    }
+
+    let cancelled = ImitateStatus {
+        phase: ImitatePhase::Idle,
+        step: None,
+        step_total: Some(STEP_TOTAL),
+        progress: Some(CANCELLED_MSG.into()),
+        error: None,
+        updated_at: tomato_now(),
+        conversation_id: None,
+    };
+    write_status(&book_dir, &cancelled).map_err(|e| e.to_string())?;
+    Ok(cancelled.into())
 }
 
 fn tomato_now() -> String {
@@ -142,20 +377,32 @@ fn tomato_now() -> String {
         .unwrap_or_else(|_| "0".into())
 }
 
-async fn run_imitate_job(app: AppHandle, book_dir: PathBuf) -> Result<(), String> {
+fn ensure_not_cancelled(job: &ImitateJobHandle) -> Result<(), String> {
+    if job.cancel.is_cancelled() {
+        Err(CANCELLED_MSG.into())
+    } else {
+        Ok(())
+    }
+}
+
+async fn run_imitate_job(
+    app: AppHandle,
+    book_dir: PathBuf,
+    job: Arc<ImitateJobHandle>,
+) -> Result<(), String> {
     let state = app
         .try_state::<AppState>()
         .ok_or_else(|| "AppState unavailable".to_string())?;
 
+    ensure_not_cancelled(&job)?;
     write_status(
         &book_dir,
-        &ImitateStatus {
-            phase: ImitatePhase::Running,
-            progress: Some("抽取指纹与场景…".into()),
-            error: None,
-            updated_at: tomato_now(),
-            conversation_id: None,
-        },
+        &ImitateStatus::with_step(
+            ImitatePhase::Running,
+            STEP_HOST_EXTRACT,
+            "抽取指纹与场景…",
+            None,
+        ),
     )
     .map_err(|e| e.to_string())?;
 
@@ -166,6 +413,7 @@ async fn run_imitate_job(app: AppHandle, book_dir: PathBuf) -> Result<(), String
     .await
     .map_err(|e| e.to_string())?
     .map_err(|e| e.to_string())?;
+    ensure_not_cancelled(&job)?;
 
     let agent_id = {
         let config = state.deployment.config().read().await;
@@ -174,20 +422,25 @@ async fn run_imitate_job(app: AppHandle, book_dir: PathBuf) -> Result<(), String
 
     write_status(
         &book_dir,
-        &ImitateStatus {
-            phase: ImitatePhase::Running,
-            progress: Some(format!("调用 Agent（{}）分析…", agent_id.as_str())),
-            error: None,
-            updated_at: tomato_now(),
-            conversation_id: None,
-        },
+        &ImitateStatus::with_step(
+            ImitatePhase::Running,
+            STEP_START_AGENT,
+            format!("启动 Agent（{}）…", agent_id.as_str()),
+            None,
+        ),
     )
     .map_err(|e| e.to_string())?;
+    ensure_not_cancelled(&job)?;
 
     let (_project_id, workspace_id, _cwd) = ensure_library_imitate_workspace(&state).await?;
+    ensure_not_cancelled(&job)?;
 
     let conversation_id = Uuid::new_v4();
-    let title = format!("仿写分析 · {}", pack.title);
+    {
+        let mut guard = job.conversation_id.lock().await;
+        *guard = Some(conversation_id);
+    }
+    let title = format!("深度分析 · {}", pack.title);
     Session::create(
         &state.deployment.db().pool,
         &CreateSession {
@@ -195,7 +448,7 @@ async fn run_imitate_job(app: AppHandle, book_dir: PathBuf) -> Result<(), String
             agent_id: Some(agent_id.clone()),
             task_id: None,
             name: Some(title),
-            initial_prompt: Some("仿写分析".into()),
+            initial_prompt: Some("深度分析".into()),
             status: None,
         },
         conversation_id,
@@ -206,15 +459,15 @@ async fn run_imitate_job(app: AppHandle, book_dir: PathBuf) -> Result<(), String
 
     write_status(
         &book_dir,
-        &ImitateStatus {
-            phase: ImitatePhase::Running,
-            progress: Some("Agent 分析中…".into()),
-            error: None,
-            updated_at: tomato_now(),
-            conversation_id: Some(conversation_id.to_string()),
-        },
+        &ImitateStatus::with_step(
+            ImitatePhase::Running,
+            STEP_AGENT_RUNNING,
+            "Agent 分析中…",
+            Some(conversation_id.to_string()),
+        ),
     )
     .map_err(|e| e.to_string())?;
+    ensure_not_cancelled(&job)?;
 
     let prompt = build_analysis_prompt(&pack);
     let service = ConversationSessionService::new(state.conversation_context());
@@ -226,7 +479,7 @@ async fn run_imitate_job(app: AppHandle, book_dir: PathBuf) -> Result<(), String
                 conversation_id,
                 executor_profile_id: None,
                 text: prompt,
-                display_text: Some(format!("仿写分析 · {}", pack.title)),
+                display_text: Some(format!("深度分析 · {}", pack.title)),
                 images: Vec::new(),
                 mode_override: None,
                 config_overrides: Vec::new(),
@@ -241,10 +494,26 @@ async fn run_imitate_job(app: AppHandle, book_dir: PathBuf) -> Result<(), String
         .map_err(|e| e.to_string())?;
 
     let turn_id = turn.turn_id;
-    let terminal_status = wait_for_turn(&service, turn_id).await?;
+    let terminal_status =
+        wait_for_turn(&service, turn_id, &job, &book_dir, conversation_id).await?;
+    if terminal_status == "cancelled" || terminal_status == "interrupted" {
+        return Err(CANCELLED_MSG.into());
+    }
     if terminal_status != "completed" {
         return Err(format!("分析回合结束状态: {terminal_status}"));
     }
+    ensure_not_cancelled(&job)?;
+
+    write_status(
+        &book_dir,
+        &ImitateStatus::with_step(
+            ImitatePhase::Running,
+            STEP_PARSE_SAVE,
+            "解析并落盘分析包…",
+            Some(conversation_id.to_string()),
+        ),
+    )
+    .map_err(|e| e.to_string())?;
 
     let assistant = extract_assistant_text(&state.deployment.db().pool, conversation_id, turn_id)
         .await
@@ -264,13 +533,12 @@ async fn run_imitate_job(app: AppHandle, book_dir: PathBuf) -> Result<(), String
 
     write_status(
         &book_dir,
-        &ImitateStatus {
-            phase: ImitatePhase::Completed,
-            progress: Some("分析完成".into()),
-            error: None,
-            updated_at: tomato_now(),
-            conversation_id: Some(conversation_id.to_string()),
-        },
+        &ImitateStatus::with_step(
+            ImitatePhase::Completed,
+            STEP_PARSE_SAVE,
+            "已拆出故事线 / 人物卡 / 写法引擎",
+            Some(conversation_id.to_string()),
+        ),
     )
     .map_err(|e| e.to_string())?;
 
@@ -280,28 +548,45 @@ async fn run_imitate_job(app: AppHandle, book_dir: PathBuf) -> Result<(), String
 async fn wait_for_turn(
     service: &ConversationSessionService,
     turn_id: Uuid,
+    job: &ImitateJobHandle,
+    book_dir: &Path,
+    conversation_id: Uuid,
 ) -> Result<String, String> {
     let started = tokio::time::Instant::now();
     loop {
-        if started.elapsed() > MAX_WAIT {
+        ensure_not_cancelled(job)?;
+        let elapsed = started.elapsed();
+        if elapsed > MAX_WAIT {
             return Err("分析超时".into());
         }
+        let _ = write_status(
+            book_dir,
+            &ImitateStatus::with_step(
+                ImitatePhase::Running,
+                STEP_AGENT_RUNNING,
+                format!("Agent 分析中… 已耗时 {}", format_elapsed(elapsed)),
+                Some(conversation_id.to_string()),
+            ),
+        );
         let snapshot = service
             .turn_snapshot(turn_id)
             .await
             .map_err(|e| e.to_string())?
             .ok_or_else(|| "回合不存在".to_string())?;
         let status = snapshot.status;
+        if status == "blocked" {
+            return Err("分析被权限/提问阻塞，请在会话中处理后重试".into());
+        }
         if !matches!(
             status.as_str(),
             "pending" | "queued" | "running" | "blocked"
         ) {
             return Ok(status);
         }
-        if status == "blocked" {
-            return Err("分析被权限/提问阻塞，请在会话中处理后重试".into());
+        tokio::select! {
+            _ = job.cancel.cancelled() => return Err(CANCELLED_MSG.into()),
+            _ = tokio::time::sleep(POLL_INTERVAL) => {}
         }
-        tokio::time::sleep(POLL_INTERVAL).await;
     }
 }
 
