@@ -3,7 +3,7 @@ mod file_search;
 
 use std::{
     collections::HashSet,
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 use agents::{AgentId, AgentSessionId, AgentTerminalId, terminal::agent_terminal_registry};
@@ -1771,15 +1771,12 @@ pub(crate) fn sanitize_absolute(path: &str) -> Result<PathBuf, ApplicationError>
             "only absolute paths are accepted",
         ));
     }
-    if path
-        .components()
-        .any(|component| matches!(component, Component::ParentDir))
-    {
-        return Err(ApplicationError::bad_request(
-            "path traversal is not allowed",
-        ));
-    }
-    Ok(path)
+    // Lexically collapse redundant `..` (e.g. debug `asset_dir` used to emit
+    // `…/crates/utils/../../dev_assets/...`). Only reject when `..` would
+    // escape the filesystem root — that is real traversal.
+    utils::path::normalize_absolute_path(&path).ok_or_else(|| {
+        ApplicationError::bad_request("path traversal is not allowed")
+    })
 }
 
 fn session_display_name(
@@ -2190,6 +2187,24 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn sanitize_absolute_accepts_legacy_asset_dir_parent_segments() {
+        let path = sanitize_absolute(
+            "/Users/me/proj/crates/utils/../../dev_assets/worktrees/6687/尸灾/README.md",
+        )
+        .expect("legacy asset_dir path");
+        assert_eq!(
+            path,
+            PathBuf::from("/Users/me/proj/dev_assets/worktrees/6687/尸灾/README.md")
+        );
+    }
+
+    #[test]
+    fn sanitize_absolute_rejects_root_escape() {
+        let error = sanitize_absolute("/../etc/passwd").expect_err("escape");
+        assert!(error.envelope().message.contains("path traversal"));
+    }
 
     #[test]
     fn create_project_session_payload_accepts_host_camel_case() {

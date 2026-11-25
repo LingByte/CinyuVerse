@@ -1,6 +1,6 @@
 use std::{
     io,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     time::Duration,
 };
 
@@ -121,6 +121,34 @@ pub fn normalize_macos_private_alias<P: AsRef<Path>>(p: P) -> PathBuf {
     p.to_path_buf()
 }
 
+/// Collapse `.` / `..` in an absolute path without touching the filesystem.
+///
+/// Returns `None` when the path is relative or a `..` would escape past the
+/// filesystem root (true traversal). Absolute paths that merely contain
+/// redundant `..` segments — e.g. `…/crates/utils/../../dev_assets` — resolve
+/// to their clean form so Host ops accept historically stored worktree paths.
+pub fn normalize_absolute_path(path: &Path) -> Option<PathBuf> {
+    if !path.is_absolute() {
+        return None;
+    }
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::Prefix(prefix) => out.push(prefix.as_os_str()),
+            Component::RootDir => out.push(component.as_os_str()),
+            Component::CurDir => {}
+            Component::Normal(part) => out.push(part),
+            Component::ParentDir => {
+                if !matches!(out.components().next_back(), Some(Component::Normal(_))) {
+                    return None;
+                }
+                out.pop();
+            }
+        }
+    }
+    Some(out)
+}
+
 /// Strip Windows verbatim path prefixes (for example `\\?\C:\...`) so paths
 /// remain readable in the UI and spawnable by `cmd.exe` / Node while keeping
 /// the same filesystem target. Applied on every host so stored Windows paths
@@ -232,6 +260,21 @@ pub fn expand_tilde(path_str: &str) -> std::path::PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn normalize_absolute_path_collapses_redundant_parent_dirs() {
+        let raw = PathBuf::from("/Users/me/proj/crates/utils/../../dev_assets/worktrees/x");
+        assert_eq!(
+            normalize_absolute_path(&raw).as_deref(),
+            Some(Path::new("/Users/me/proj/dev_assets/worktrees/x"))
+        );
+    }
+
+    #[test]
+    fn normalize_absolute_path_rejects_escape_past_root() {
+        assert!(normalize_absolute_path(Path::new("/../etc/passwd")).is_none());
+        assert!(normalize_absolute_path(Path::new("relative/../x")).is_none());
+    }
 
     #[test]
     fn test_make_path_relative() {

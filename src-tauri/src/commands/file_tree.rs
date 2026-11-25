@@ -41,21 +41,19 @@ fn sanitize_file_path(path: &str) -> Result<PathBuf, AppError> {
     let normalized_path = normalize_windows_verbatim_input(path);
     let p = PathBuf::from(&normalized_path);
 
-    // Reject any path containing parent-dir (`..`) components
-    for comp in p.components() {
-        if matches!(comp, Component::ParentDir) {
-            return Err(AppError::BadRequest(
-                "Path traversal not allowed: '..' components rejected".to_string(),
-            ));
-        }
-    }
-
     // Must be an absolute path to prevent relative-path tricks
     if !p.is_absolute() {
         return Err(AppError::BadRequest(
             "Only absolute paths are accepted".to_string(),
         ));
     }
+
+    // Collapse redundant `..` (debug asset_dir legacy paths). Reject only when
+    // `..` would escape the filesystem root.
+    let p = utils::path::normalize_absolute_path(&p).ok_or_else(|| {
+        AppError::BadRequest("Path traversal not allowed: '..' components rejected".to_string())
+    })?;
+    let normalized_path = p.to_string_lossy().into_owned();
 
     // Canonicalize to resolve symlinks and normalize the path
     let canonical = if p.exists() {
@@ -97,19 +95,16 @@ fn sanitize_directory_creation_path(path: &str) -> Result<PathBuf, AppError> {
     let normalized_path = normalize_windows_verbatim_input(path);
     let p = PathBuf::from(&normalized_path);
 
-    for comp in p.components() {
-        if matches!(comp, Component::ParentDir) {
-            return Err(AppError::BadRequest(
-                "Path traversal not allowed: '..' components rejected".to_string(),
-            ));
-        }
-    }
-
     if !p.is_absolute() {
         return Err(AppError::BadRequest(
             "Only absolute paths are accepted".to_string(),
         ));
     }
+
+    let p = utils::path::normalize_absolute_path(&p).ok_or_else(|| {
+        AppError::BadRequest("Path traversal not allowed: '..' components rejected".to_string())
+    })?;
+    let normalized_path = p.to_string_lossy().into_owned();
 
     if p.exists() {
         return p

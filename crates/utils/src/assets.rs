@@ -27,7 +27,12 @@ pub fn asset_dir() -> PathBuf {
         std::fs::create_dir_all(&path).expect("Failed to create asset directory");
     }
 
-    path
+    // Collapse `…/crates/utils/../../dev_assets` so worktree / container_ref
+    // paths never carry `..` into Host path checks (`sanitize_absolute`).
+    std::fs::canonicalize(&path)
+        .ok()
+        .or_else(|| crate::path::normalize_absolute_path(&path))
+        .unwrap_or(path)
 }
 
 /// Canonical Host data directory for Desktop and `cinyuverse-server`.
