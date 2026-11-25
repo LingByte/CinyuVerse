@@ -1,15 +1,11 @@
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
-/// Transfer pack from deep imitate analysis.
+/// Deep-analysis transfer pack.
 ///
-/// Transfer **engines**, not prose samples:
-/// - storyline skeleton (acts / beat patterns / escalation)
-/// - character cards (slots, voice rules, arcs — no real names)
-/// - craft engines (executable writing mechanics; quotes are evidence only)
-///
-/// Feeding LLMs a "style sample paragraph" to imitate is deliberately avoided:
-/// it produces AI sludge and still misses the author's structural craft.
+/// Goal: extract **imitable** plot devices, character voice, and craft —
+/// not empty universal templates, and not fingerprint-metric quotas.
+/// Banned: source proper nouns and trademark setpieces. Allowed: structure & craft imitation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImitateCards {
@@ -26,27 +22,25 @@ pub struct ImitateCards {
 }
 
 fn default_schema_version() -> u32 {
-    3
+    5
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct StorylineCard {
-    /// One-line transferable throughline (no proper nouns).
     #[serde(default)]
     pub throughline: String,
+    /// Book-specific inventions (setting devices / unique plot machines).
+    #[serde(default)]
+    pub signature_devices: Vec<String>,
     #[serde(default)]
     pub acts: Vec<StoryAct>,
-    /// Abstract escalation ladder.
     #[serde(default)]
     pub escalation_ladder: Vec<String>,
-    /// How foreshadow/hooks are paced (pattern, not events).
     #[serde(default)]
     pub foreshadow_cadence: String,
-    /// Chapter-level engines that recur.
     #[serde(default)]
     pub chapter_engines: Vec<ChapterEngine>,
-    /// Dimensions a new book must reinvent.
     #[serde(default)]
     pub must_mutate: Vec<String>,
 }
@@ -56,10 +50,8 @@ pub struct StorylineCard {
 pub struct StoryAct {
     #[serde(default)]
     pub name: String,
-    /// Dramatic function of this act.
     #[serde(default)]
     pub function: String,
-    /// Beat patterns inside the act (e.g. "试探性交易失败").
     #[serde(default)]
     pub beat_patterns: Vec<String>,
 }
@@ -78,24 +70,28 @@ pub struct ChapterEngine {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterCard {
-    /// Slot id: 角色A / 对手B / 引路人C — never the source name.
-    #[serde(default)]
-    pub slot: String,
-    /// Narrative job in the machine.
+    /// Real name from the book (e.g. 米汤). Legacy JSON used `slot`.
+    #[serde(default, alias = "slot")]
+    pub name: String,
     #[serde(default)]
     pub role_function: String,
     #[serde(default)]
     pub desire: String,
     #[serde(default)]
     pub cost_or_fear: String,
-    /// Voice as executable rules, not sample paragraphs.
+    #[serde(default)]
+    pub voice_traits: Vec<String>,
+    #[serde(default)]
+    pub voice_samples: Vec<String>,
     #[serde(default)]
     pub voice_rules: Vec<String>,
+    /// Concrete experiences from the source book.
+    #[serde(default)]
+    pub key_events: Vec<String>,
     #[serde(default)]
     pub arc_stages: Vec<String>,
     #[serde(default)]
     pub relationships: Vec<CharacterRelation>,
-    /// Soft tags: 狠厉 / 克制 / 话少等 — still not prose samples.
     #[serde(default)]
     pub tags: Vec<String>,
 }
@@ -103,8 +99,8 @@ pub struct CharacterCard {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterRelation {
-    #[serde(default)]
-    pub to_slot: String,
+    #[serde(default, alias = "toSlot")]
+    pub to_name: String,
     #[serde(default)]
     pub tension: String,
 }
@@ -112,7 +108,11 @@ pub struct CharacterRelation {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct CraftCard {
-    /// Prose/scene mechanics with forensic evidence (evidence ≠ imitation target).
+    #[serde(default)]
+    pub narration_stance: String,
+    /// Practical "how to imitate this book" notes.
+    #[serde(default)]
+    pub how_to_imitate: Vec<String>,
     #[serde(default)]
     pub prose_engines: Vec<CraftRule>,
     #[serde(default)]
@@ -123,16 +123,12 @@ pub struct CraftCard {
     pub chapter_ending_hooks: Vec<String>,
     #[serde(default)]
     pub forbidden_habits: Vec<String>,
-    #[serde(default)]
-    pub narration_stance: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CraftRule {
-    /// Executable constraint the new book should obey.
     pub rule: String,
-    /// Why it matters structurally.
     #[serde(default)]
     pub why: String,
     pub evidence: CraftEvidence,
@@ -143,7 +139,6 @@ pub struct CraftRule {
 pub struct CraftEvidence {
     #[serde(alias = "chapter_index")]
     pub chapter_index: u32,
-    /// Short quote proving the pattern exists — NOT a style sample to copy.
     pub quote: String,
 }
 
@@ -201,13 +196,11 @@ pub fn parse_imitate_cards_json(raw: &str) -> Result<ImitateCards> {
 
 fn try_parse_candidate(candidate: &str) -> Result<ImitateCards, String> {
     let cleaned = sanitize_llm_json(candidate);
-    // Reject legacy v1/v2 shapes early with a clear message if they parse as other roots.
     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&cleaned) {
         if v.get("storyline").is_none() || v.get("characters").is_none() || v.get("craft").is_none()
         {
             return Err(
-                "需要 schema v3：必须包含 storyline / characters / craft（旧版 setting+style 已废弃）"
-                    .into(),
+                "需要 storyline / characters / craft（旧版 setting+style 已废弃）".into(),
             );
         }
     }
@@ -215,32 +208,80 @@ fn try_parse_candidate(candidate: &str) -> Result<ImitateCards, String> {
 }
 
 fn validate_cards(mut cards: ImitateCards) -> Result<ImitateCards> {
-    if cards.schema_version < 3 {
-        cards.schema_version = 3;
+    if cards.schema_version < 5 {
+        cards.schema_version = 5;
     }
-    if cards.storyline.throughline.trim().is_empty()
-        && cards.storyline.acts.is_empty()
-        && cards.storyline.escalation_ladder.is_empty()
-    {
-        bail!("storyline 不能为空：需要 throughline / acts / escalationLadder 至少一项");
+    if cards.storyline.throughline.trim().is_empty() {
+        bail!("storyline.throughline 不能为空");
+    }
+    if is_generic_throughline(&cards.storyline.throughline) {
+        bail!(
+            "throughline 过于空泛，请写本书真实主线（可含人名/设定）: {}",
+            cards.storyline.throughline.chars().take(40).collect::<String>()
+        );
+    }
+    if cards.storyline.signature_devices.len() < 3 {
+        bail!("storyline.signatureDevices 至少 3 条本书独特装置");
+    }
+    if cards.storyline.acts.len() < 3 {
+        bail!("storyline.acts 至少 3 幕");
+    }
+    for act in &cards.storyline.acts {
+        if act.beat_patterns.is_empty() {
+            bail!("幕「{}」缺少 beatPatterns", act.name);
+        }
+        for beat in &act.beat_patterns {
+            if is_generic_beat(beat) {
+                bail!("节拍过于万能，请写书中真实情节: {}", beat);
+            }
+        }
     }
     if cards.characters.len() < 2 {
-        bail!("characters 至少需要 2 张人物卡（用角色A/B 占位，禁止原名）");
+        bail!("characters 至少需要 2 张人物卡");
+    }
+    if cards.characters.len() > 12 {
+        bail!("人物卡过多（{}），请收敛到主要人物", cards.characters.len());
     }
     for ch in &cards.characters {
-        if ch.slot.trim().is_empty() {
-            bail!("人物卡缺少 slot");
+        if ch.name.trim().is_empty() {
+            bail!("人物卡缺少 name（请用书中真名）");
         }
-        if looks_like_proper_name(&ch.slot) {
-            bail!("人物 slot 必须是占位（角色A/对手B），不能是原作姓名: {}", ch.slot);
+        if is_placeholder_name(&ch.name) {
+            bail!(
+                "禁止占位名「{}」，请用书中真实姓名（如米汤）",
+                ch.name
+            );
         }
-        if ch.voice_rules.is_empty() && ch.arc_stages.is_empty() {
-            bail!("人物卡 {} 需要 voiceRules 或 arcStages", ch.slot);
+        let has_substance = !ch.voice_traits.is_empty()
+            || !ch.voice_samples.is_empty()
+            || !ch.key_events.is_empty()
+            || !ch.arc_stages.is_empty()
+            || !ch.voice_rules.is_empty();
+        if !has_substance {
+            bail!(
+                "人物卡 {} 需要 voiceTraits / voiceSamples / keyEvents / arcStages 之一",
+                ch.name
+            );
+        }
+        for rule in &ch.voice_rules {
+            if is_metric_or_compliance_rule(rule) {
+                bail!("人物声音禁止计量/合规清单: {}", rule);
+            }
+        }
+        for sample in &ch.voice_samples {
+            if sample.chars().count() > 40 {
+                bail!("voiceSamples 过长（≤40 字）: {}", ch.name);
+            }
+        }
+        for rel in &ch.relationships {
+            if is_placeholder_name(&rel.to_name) {
+                bail!("关系对象禁止占位名: {}", rel.to_name);
+            }
         }
     }
     let craft_rules = cards.craft.prose_engines.len() + cards.craft.dialogue_engines.len();
-    if craft_rules == 0 {
-        bail!("craft 需要至少一条 proseEngines 或 dialogueEngines");
+    if craft_rules == 0 && cards.craft.how_to_imitate.is_empty() {
+        bail!("craft 需要 proseEngines/dialogueEngines 或 howToImitate");
     }
     for rule in cards
         .craft
@@ -252,38 +293,97 @@ fn validate_cards(mut cards: ImitateCards) -> Result<ImitateCards> {
             bail!("存在空的 craft rule");
         }
         if rule.evidence.quote.chars().count() > 80 {
-            bail!("evidence.quote 过长（仅作取证，禁止当仿写范文）");
+            bail!("evidence.quote 过长（≤80 字取证）");
         }
         if is_fluff_rule(&rule.rule) {
-            bail!("写法引擎不能是空话: {}", rule.rule);
+            bail!("写法不能是空话: {}", rule.rule);
+        }
+        if is_metric_or_compliance_rule(&rule.rule) {
+            bail!("写法禁止计量指纹条款: {}", rule.rule);
         }
     }
-    if cards.anti_plagiarism.rewrite_mandates.is_empty()
-        && cards.anti_plagiarism.review_checklist.is_empty()
-    {
-        bail!("antiPlagiarism 需要 rewriteMandates 或 reviewChecklist");
-    }
+    // antiPlagiarism is optional — user treats it as low priority.
     Ok(cards)
 }
 
-fn looks_like_proper_name(slot: &str) -> bool {
-    let s = slot.trim();
-    if s.starts_with("角色")
+fn is_placeholder_name(name: &str) -> bool {
+    let s = name.trim();
+    s.starts_with("角色")
         || s.starts_with("对手")
         || s.starts_with("配角")
         || s.starts_with("引路")
         || s.starts_with("反派")
         || s.starts_with("男主")
         || s.starts_with("女主")
-        || s.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
-            && s.len() <= 2
-    {
-        return false;
+        || s.eq_ignore_ascii_case("character")
+        || s.eq_ignore_ascii_case("slot")
+}
+
+fn is_metric_or_compliance_rule(text: &str) -> bool {
+    let t = text.trim();
+    const NEEDLES: &[&str] = &[
+        "每100",
+        "每1000",
+        "每500",
+        "每150",
+        "每250",
+        "每300",
+        "每800",
+        "每千字",
+        "问号",
+        "省略号",
+        "shortSentence",
+        "dialogueRatio",
+        "连续三次",
+        "最多两次",
+        "每轮发言不超过",
+    ];
+    if NEEDLES.iter().any(|n| t.contains(n)) {
+        return true;
     }
-    // Chinese proper-name heuristic: 2–3 chars without role keywords.
-    let chars: Vec<char> = s.chars().collect();
-    (2..=4).contains(&chars.len())
-        && chars.iter().all(|c| *c >= '\u{4e00}' && *c <= '\u{9fff}')
+    // 「每N句/每N字」密度条款
+    let chars: Vec<char> = t.chars().collect();
+    for i in 0..chars.len() {
+        if chars[i] == '每' {
+            let mut j = i + 1;
+            let mut saw_digit = false;
+            while j < chars.len() && chars[j].is_ascii_digit() {
+                saw_digit = true;
+                j += 1;
+            }
+            if saw_digit && j < chars.len() && (chars[j] == '字' || chars[j] == '句') {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn is_generic_throughline(text: &str) -> bool {
+    const GENERIC: &[&str] = &[
+        "扩大视野",
+        "不可逆的选择",
+        "个人安全、群体责任",
+        "资源枯竭",
+        "最终必须在",
+        "普通人在灾难中成长",
+    ];
+    let t = text.trim();
+    if t.chars().count() > 80 && GENERIC.iter().any(|g| t.contains(g)) {
+        return true;
+    }
+    GENERIC.iter().filter(|g| t.contains(*g)).count() >= 2
+}
+
+fn is_generic_beat(beat: &str) -> bool {
+    const GENERIC: &[&str] = &[
+        "日常资源盘点被突发威胁打断",
+        "暂时脱险却暴露更大的空间漏洞",
+        "队伍必须在两个坏选项中制造第三个选项",
+        "外部世界仍在呼唤",
+        "聚落建立稳定日常",
+    ];
+    GENERIC.iter().any(|g| beat.contains(g))
 }
 
 fn json_candidates(text: &str) -> Vec<String> {
@@ -418,87 +518,104 @@ fn is_fluff_rule(rule: &str) -> bool {
 mod tests {
     use super::*;
 
-    fn v3_json() -> &'static str {
+    fn v5_json() -> &'static str {
         r#"{
-  "schemaVersion": 3,
+  "schemaVersion": 5,
   "storyline": {
-    "throughline": "弱势者用不可逆代价换阶段性掌控权，最终反噬规则本身",
+    "throughline": "米汤带着甘露婷等人在阳京尸潮里求生，发现肾化异变可被组织收编利用",
+    "signatureDevices": ["肾化异变可被收编", "日常物件改战具", "半真审讯逼供"],
     "acts": [
-      { "name": "第一幕", "function": "建立不对等交易", "beatPatterns": ["试探性出价", "第一次反噬"] },
-      { "name": "第二幕", "function": "规则内卷", "beatPatterns": ["加码代价", "同盟裂隙"] }
+      { "name": "一", "function": "立足", "beatPatterns": ["米汤用火腿肠比划撤离路线", "新幸存者换空间主权"] },
+      { "name": "二", "function": "人祸", "beatPatterns": ["敌方用通道人质诱饵", "牺牲边缘成员清场"] },
+      { "name": "三", "function": "异变", "beatPatterns": ["追踪矛盾痕迹", "低成本实验验证肾化规则"] }
     ],
-    "escalationLadder": ["试探", "兑现代价", "规则反噬", "改写条款"],
-    "foreshadowCadence": "每2–3章推进一次长线钩子，不一次说破",
+    "escalationLadder": ["缺水缺武器", "庇护所失守", "组织收编异变体"],
+    "foreshadowCadence": "异常表型先当怪谈，隔章用实验打脸",
     "chapterEngines": [
-      { "pattern": "信息差对峙", "purpose": "逼出隐藏筹码", "placement": "mid" }
+      { "pattern": "搜刮中途改计划", "purpose": "关系或风险跳变", "placement": "mid" }
     ],
-    "mustMutate": ["交易标的", "代价形式", "反转触发条件"]
+    "mustMutate": []
   },
   "characters": [
     {
-      "slot": "角色A",
-      "roleFunction": "推动交易发生的弱势方",
-      "desire": "夺回议价权",
-      "costOrFear": "失去最后一块自主",
-      "voiceRules": ["少形容词", "威胁句短于8字", "几乎不解释动机"],
-      "arcStages": ["隐忍", "试刀", "撕破脸"],
-      "relationships": [{ "toSlot": "对手B", "tension": "利用与依赖" }],
-      "tags": ["克制", "狠"]
+      "name": "米汤",
+      "roleFunction": "一线决策",
+      "desire": "保住身边人活下去",
+      "costOrFear": "亲人被当成材料",
+      "voiceTraits": ["先报动作再补理由", "粗口夹在行动里"],
+      "voiceSamples": ["那怎么办？走楼梯？"],
+      "voiceRules": [],
+      "keyEvents": ["高层住宅突围", "拒绝北上广播"],
+      "arcStages": ["躲灾", "算计", "拒当新支配者"],
+      "relationships": [{ "toName": "甘露婷", "tension": "伴侣与并肩作战" }],
+      "tags": ["口语"]
     },
     {
-      "slot": "对手B",
-      "roleFunction": "掌握规则解释权的上位者",
-      "desire": "维持规则不透明",
-      "costOrFear": "被看穿底牌",
-      "voiceRules": ["爱用反问", "把命令说成建议"],
-      "arcStages": ["施压", "失措", "反扑"],
-      "relationships": [{ "toSlot": "角色A", "tension": "猎手与猎物互换" }],
-      "tags": ["从容"]
+      "name": "甘露婷",
+      "roleFunction": "近身伙伴",
+      "desire": "不被当附属",
+      "costOrFear": "失去退出权",
+      "voiceTraits": ["先说失败条件"],
+      "voiceSamples": [],
+      "voiceRules": [],
+      "keyEvents": ["与米汤共同验证方案"],
+      "arcStages": ["保持距离", "主动分担风险"],
+      "relationships": [],
+      "tags": []
     }
   ],
   "craft": {
+    "narrationStance": "第一人称近身，口语怀疑",
+    "howToImitate": ["战斗微节拍：感官→身体→选择→反馈"],
     "proseEngines": [
       {
-        "rule": "冲突段叙述句≤12字，动作先于评价",
-        "why": "保持压迫感，避免AI式总结",
-        "evidence": { "chapterIndex": 1, "quote": "他往前一步。杯子晃了。" }
+        "rule": "冲突段动作先于评价，物件至少改一次路线",
+        "why": "现场可读",
+        "evidence": { "chapterIndex": 1, "quote": "我拿起一根火腿肠，在地上比划着。" }
       }
     ],
     "dialogueEngines": [
       {
-        "rule": "对峙用短问答打断，禁止一方独白超3句",
-        "why": "信息在来回中泄露",
-        "evidence": { "chapterIndex": 1, "quote": "「你到底想怎样？」" }
+        "rule": "战术对白按提案→追问→反例→修正",
+        "why": "计划当场变形",
+        "evidence": { "chapterIndex": 1, "quote": "那怎么办？走楼梯？" }
       }
     ],
-    "infoControl": ["关键身份信息延后半章", "先给结果再补原因"],
-    "chapterEndingHooks": ["未完成动作", "新筹码只露一角"],
-    "forbiddenHabits": ["段末金句总结", "大段心理旁白解释局势"],
-    "narrationStance": "紧贴角色A感知，不上帝视角全知"
+    "infoControl": ["异常先给可见特征"],
+    "chapterEndingHooks": ["目标改道或代价确认"],
+    "forbiddenHabits": ["段末金句"]
   },
   "setting": {
-    "conflictAxes": ["身份不对等交易"],
-    "worldframeType": "都市异能",
-    "powerSystemType": "契约换外力",
-    "stakesCurrency": ["人情债"],
+    "conflictAxes": ["异变体当资源"],
+    "worldframeType": "灾后求生",
+    "powerSystemType": "肾化感染",
+    "stakesCurrency": ["撤离路线"],
     "tabooTransfers": [],
     "notes": []
   },
   "antiPlagiarism": {
     "bannedNames": [],
-    "bannedSetpieces": ["原作招牌对峙的场地+道具组合"],
-    "rewriteMandates": ["新世界观壳", "新欲望对象", "新交易规则"],
-    "reviewChecklist": ["能否一眼认出是某书换皮？", "人物对白是否在复读原作口吻专名？"]
+    "bannedSetpieces": [],
+    "rewriteMandates": [],
+    "reviewChecklist": []
   }
 }"#
     }
 
     #[test]
-    fn parses_v3() {
-        let cards = parse_imitate_cards_json(v3_json()).unwrap();
-        assert_eq!(cards.characters.len(), 2);
-        assert!(!cards.storyline.acts.is_empty());
-        assert!(!cards.craft.prose_engines.is_empty());
+    fn parses_v5_real_names() {
+        let cards = parse_imitate_cards_json(v5_json()).unwrap();
+        assert_eq!(cards.schema_version, 5);
+        assert_eq!(cards.characters[0].name, "米汤");
+        assert!(!cards.characters[0].key_events.is_empty());
+    }
+
+    #[test]
+    fn accepts_legacy_slot_as_name() {
+        let mut raw = v5_json().to_string();
+        raw = raw.replace("\"name\": \"米汤\"", "\"slot\": \"米汤\"");
+        let cards = parse_imitate_cards_json(&raw).unwrap();
+        assert_eq!(cards.characters[0].name, "米汤");
     }
 
     #[test]
@@ -508,18 +625,38 @@ mod tests {
     }
 
     #[test]
-    fn rejects_real_name_slots() {
-        let mut bad = v3_json().to_string();
-        bad = bad.replace("\"slot\": \"角色A\"", "\"slot\": \"林深\"");
+    fn rejects_placeholder_names() {
+        let mut bad = v5_json().to_string();
+        bad = bad.replace("\"name\": \"米汤\"", "\"name\": \"配角F\"");
         assert!(parse_imitate_cards_json(&bad).is_err());
     }
 
     #[test]
     fn rejects_fluff_craft() {
-        let mut bad = v3_json().to_string();
+        let mut bad = v5_json().to_string();
         bad = bad.replace(
-            "冲突段叙述句≤12字，动作先于评价",
+            "冲突段动作先于评价，物件至少改一次路线",
             "文笔细腻",
+        );
+        assert!(parse_imitate_cards_json(&bad).is_err());
+    }
+
+    #[test]
+    fn rejects_metric_craft() {
+        let mut bad = v5_json().to_string();
+        bad = bad.replace(
+            "冲突段动作先于评价，物件至少改一次路线",
+            "每1000字使用4至6个问号",
+        );
+        assert!(parse_imitate_cards_json(&bad).is_err());
+    }
+
+    #[test]
+    fn rejects_generic_throughline() {
+        let mut bad = v5_json().to_string();
+        bad = bad.replace(
+            "米汤带着甘露婷等人在阳京尸潮里求生，发现肾化异变可被组织收编利用",
+            "一个只想保住身边小群体的普通生存者，在资源枯竭中不断被迫扩大视野，最终必须在个人安全、群体责任与亲人自主权之间做出不可逆的选择。",
         );
         assert!(parse_imitate_cards_json(&bad).is_err());
     }

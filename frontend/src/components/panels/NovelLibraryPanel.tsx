@@ -198,13 +198,18 @@ type ImitateCraftRule = {
 };
 
 type ImitateCharacterCard = {
-  slot: string;
+  name?: string;
+  /** @deprecated legacy placeholder id */
+  slot?: string;
   roleFunction: string;
   desire: string;
   costOrFear: string;
+  voiceTraits?: string[];
+  voiceSamples?: string[];
   voiceRules: string[];
+  keyEvents?: string[];
   arcStages: string[];
-  relationships: Array<{ toSlot: string; tension: string }>;
+  relationships: Array<{ toName?: string; toSlot?: string; tension: string }>;
   tags: string[];
 };
 
@@ -212,6 +217,7 @@ type ImitatePackView = {
   schemaVersion: number;
   storyline: {
     throughline: string;
+    signatureDevices?: string[];
     acts: Array<{
       name: string;
       function: string;
@@ -228,6 +234,7 @@ type ImitatePackView = {
   };
   characters: ImitateCharacterCard[];
   craft: {
+    howToImitate?: string[];
     proseEngines: ImitateCraftRule[];
     dialogueEngines: ImitateCraftRule[];
     infoControl: string[];
@@ -2064,6 +2071,8 @@ function LocalReader({
 }
 
 function ImitatePackPanel({ pack }: { pack: ImitatePackView }) {
+  const devices = pack.storyline.signatureDevices ?? [];
+  const howTo = pack.craft.howToImitate ?? [];
   return (
     <div className="mx-auto max-w-2xl space-y-5 rounded-lg border border-border/60 bg-[var(--surface-raised)]/40 p-4">
       <section className="space-y-2">
@@ -2071,6 +2080,11 @@ function ImitatePackPanel({ pack }: { pack: ImitatePackView }) {
         <p className="text-[13px] leading-relaxed text-foreground/90">
           {pack.storyline.throughline || '（无主线）'}
         </p>
+        {devices.length > 0 ? (
+          <p className="text-[12px] text-foreground/80">
+            独特装置：{devices.join('；')}
+          </p>
+        ) : null}
         {pack.storyline.acts.length > 0 ? (
           <ul className="space-y-1.5 text-[12px] text-muted-foreground">
             {pack.storyline.acts.map((act, i) => (
@@ -2098,44 +2112,72 @@ function ImitatePackPanel({ pack }: { pack: ImitatePackView }) {
           人物卡（{pack.characters.length}）
         </h4>
         <div className="space-y-3">
-          {pack.characters.map((ch) => (
-            <div
-              key={ch.slot}
-              className="rounded-md border border-border/50 px-3 py-2"
-            >
-              <div className="text-[13px] font-medium">
-                {ch.slot}
-                {ch.roleFunction ? (
-                  <span className="ml-2 text-[11px] font-normal text-muted-foreground">
-                    {ch.roleFunction}
-                  </span>
+          {pack.characters.map((ch, idx) => {
+            const displayName = ch.name || ch.slot || `人物${idx + 1}`;
+            const traits = ch.voiceTraits ?? [];
+            const samples = ch.voiceSamples ?? [];
+            const events = ch.keyEvents ?? [];
+            return (
+              <div
+                key={displayName}
+                className="rounded-md border border-border/50 px-3 py-2"
+              >
+                <div className="text-[13px] font-medium">
+                  {displayName}
+                  {ch.roleFunction ? (
+                    <span className="ml-2 text-[11px] font-normal text-muted-foreground">
+                      {ch.roleFunction}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-[12px] text-muted-foreground">
+                  欲望：{ch.desire || '—'}
+                  {ch.costOrFear ? ` · 代价：${ch.costOrFear}` : ''}
+                </p>
+                {traits.length > 0 ? (
+                  <p className="mt-1 text-[12px] text-foreground/80">
+                    声口：{traits.join('；')}
+                  </p>
+                ) : null}
+                {samples.length > 0 ? (
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    样本：{samples.map((s) => `「${s}」`).join(' ')}
+                  </p>
+                ) : null}
+                {events.length > 0 ? (
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    经历：{events.join('；')}
+                  </p>
+                ) : null}
+                {traits.length === 0 && ch.voiceRules.length > 0 ? (
+                  <p className="mt-1 text-[12px] text-foreground/80">
+                    声音：{ch.voiceRules.join('；')}
+                  </p>
+                ) : null}
+                {ch.arcStages.length > 0 ? (
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    弧光：{ch.arcStages.join(' → ')}
+                  </p>
                 ) : null}
               </div>
-              <p className="mt-1 text-[12px] text-muted-foreground">
-                欲望：{ch.desire || '—'}
-                {ch.costOrFear ? ` · 代价：${ch.costOrFear}` : ''}
-              </p>
-              {ch.voiceRules.length > 0 ? (
-                <p className="mt-1 text-[12px] text-foreground/80">
-                  声音：{ch.voiceRules.join('；')}
-                </p>
-              ) : null}
-              {ch.arcStages.length > 0 ? (
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  弧光：{ch.arcStages.join(' → ')}
-                </p>
-              ) : null}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
       <section className="space-y-2">
-        <h4 className="text-sm font-semibold">写法引擎</h4>
+        <h4 className="text-sm font-semibold">写法</h4>
         {pack.craft.narrationStance ? (
           <p className="text-[12px] text-muted-foreground">
             立场：{pack.craft.narrationStance}
           </p>
+        ) : null}
+        {howTo.length > 0 ? (
+          <ul className="space-y-1 text-[12px] text-foreground/90">
+            {howTo.map((tip, i) => (
+              <li key={`how-${i}`}>· {tip}</li>
+            ))}
+          </ul>
         ) : null}
         <ul className="space-y-1.5 text-[12px]">
           {[...pack.craft.proseEngines, ...pack.craft.dialogueEngines].map(

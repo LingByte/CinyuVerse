@@ -41,7 +41,7 @@ pub use status::{
 
 pub const IMITATE_DIR: &str = "imitate";
 pub const IMITATE_VERSION: &str = "v1";
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 5;
 
 const MAX_CHAPTER_CHARS: usize = 6_000;
 const MAX_PROMPT_CHAPTERS: usize = 10;
@@ -243,15 +243,15 @@ mod tests {
         let book = write_test_book(tmp.path());
         let cards = parse_imitate_cards_json(
             r#"{
-  "schemaVersion": 3,
-  "storyline": {"throughline":"弱势换力","acts":[{"name":"一","function":"建交易","beatPatterns":["试探"]}],"escalationLadder":["试探","反噬"],"foreshadowCadence":"隔章","chapterEngines":[],"mustMutate":["代价"]},
+  "schemaVersion": 5,
+  "storyline": {"throughline":"米汤发现肾化异变可被组织收编","signatureDevices":["肾化收编","物件改战具","半真审讯"],"acts":[{"name":"一","function":"立足","beatPatterns":["米汤火腿肠比划路线"]},{"name":"二","function":"人祸","beatPatterns":["人质诱饵"]},{"name":"三","function":"异变","beatPatterns":["实验验规则"]}],"escalationLadder":["缺水"],"foreshadowCadence":"隔章","chapterEngines":[],"mustMutate":[]},
   "characters": [
-    {"slot":"角色A","roleFunction":"推手","desire":"议价权","costOrFear":"失控","voiceRules":["短句"],"arcStages":["隐忍"],"relationships":[],"tags":[]},
-    {"slot":"对手B","roleFunction":"压手","desire":"不透明","costOrFear":"穿帮","voiceRules":["反问"],"arcStages":["施压"],"relationships":[],"tags":[]}
+    {"name":"米汤","roleFunction":"决策","desire":"保住身边人","costOrFear":"被材料化","voiceTraits":["先动作"],"voiceSamples":["走楼梯？"],"keyEvents":["高层突围"],"voiceRules":[],"arcStages":["躲"],"relationships":[{"toName":"甘露婷","tension":"伴侣"}],"tags":[]},
+    {"name":"甘露婷","roleFunction":"伙伴","desire":"不被附属","costOrFear":"失退出权","voiceTraits":["先说失败条件"],"voiceSamples":[],"keyEvents":["共同验证方案"],"voiceRules":[],"arcStages":["并肩"],"relationships":[],"tags":[]}
   ],
-  "craft": {"proseEngines":[{"rule":"动作先于评价","why":"压迫","evidence":{"chapterIndex":0,"quote":"杯子晃了"}}],"dialogueEngines":[],"infoControl":[],"chapterEndingHooks":[],"forbiddenHabits":["段末金句"],"narrationStance":"贴近A"},
-  "setting": {"conflictAxes":["交易"],"worldframeType":"都市","powerSystemType":"契约","stakesCurrency":[],"tabooTransfers":[],"notes":[]},
-  "antiPlagiarism": {"bannedNames":[],"bannedSetpieces":[],"rewriteMandates":["新壳"],"reviewChecklist":["换皮？"]}
+  "craft": {"narrationStance":"近身口语","howToImitate":["理念后落到伤口"],"proseEngines":[{"rule":"动作先于评价","why":"压迫","evidence":{"chapterIndex":0,"quote":"杯子晃了"}}],"dialogueEngines":[],"infoControl":[],"chapterEndingHooks":[],"forbiddenHabits":["段末金句"]},
+  "setting": {"conflictAxes":["异变资源"],"worldframeType":"灾后","powerSystemType":"肾化","stakesCurrency":[],"tabooTransfers":[],"notes":[]},
+  "antiPlagiarism": {"bannedNames":[],"bannedSetpieces":[],"rewriteMandates":[],"reviewChecklist":[]}
 }"#,
         )
         .unwrap();
@@ -264,6 +264,8 @@ mod tests {
         assert!(!root.join("style.json").is_file());
         let loaded = read_cards(&book).unwrap();
         assert_eq!(loaded.characters.len(), 2);
-        assert!(loaded.storyline.throughline.contains("弱势"));
+        assert_eq!(loaded.characters[0].name, "米汤");
+        assert!(loaded.storyline.throughline.contains("肾化"));
+        assert!(loaded.storyline.signature_devices.len() >= 3);
     }
 }
