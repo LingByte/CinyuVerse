@@ -195,9 +195,9 @@ struct WorkspaceSessionsChangedPayload {
 }
 
 /// Persist coalesced streaming deltas on this interval. Overlay text still
-/// reaches the UI on the same flush; 80 ms is ~12 Hz and keeps SQLite's single
-/// writer from being the global clock (ADR-0061).
-const CONVERSATION_STREAM_FLUSH_INTERVAL: Duration = Duration::from_millis(80);
+/// reaches the UI on the same flush; 100 ms (~10 Hz) matches ADR-0061 §8.3's
+/// 50–100 ms durable-write window and batches more deltas per IMMEDIATE txn.
+const CONVERSATION_STREAM_FLUSH_INTERVAL: Duration = Duration::from_millis(100);
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]

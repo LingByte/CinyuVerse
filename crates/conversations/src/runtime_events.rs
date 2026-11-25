@@ -19,7 +19,7 @@ use agents::{
 };
 use db::models::{
     conversation::{BindingStatus, ConversationAgentBindingRecord, DbConversationSummary},
-    conversation_event::AppendConversationEvent,
+    conversation_event::{AppendConversationEvent, ConversationEventRecord},
     conversation_turn::ConversationTurnRecord,
     session::Session,
 };
@@ -30,9 +30,10 @@ use uuid::Uuid;
 
 use crate::{
     ConversationContext, ConversationEventAppender, ConversationEventPublisher,
-    ConversationServiceError, ConversationSessionService,
+    ConversationProjector, ConversationServiceError, ConversationSessionService,
     commit_reminder::{is_complete_ai_reply, start_commit_reminder_if_needed},
     finalize_checkpoint_file_changes,
+    projection::conversation_writer_gate,
 };
 
 /// Transport-neutral recorder used by all application hosts.
@@ -214,56 +215,151 @@ impl ConversationAgentEventRecorder {
         records: Vec<MappedConversationEventRecord>,
     ) -> Result<RecordedConversationBatch, RuntimeEventRecordError> {
         let mut batch = RecordedConversationBatch::default();
-        for mapped in records {
-            let normalized_json = serde_json::to_string(&mapped.event)?;
-            let record = match ConversationEventAppender::append(
-                &self.pool,
-                AppendConversationEvent {
-                    id: Uuid::new_v4(),
-                    conversation_id: mapped.conversation_id,
-                    turn_id: mapped.turn_id,
-                    binding_id: None,
-                    connection_id: Some(&mapped.connection_id),
-                    prompt_id: None,
-                    source: mapped.source,
-                    event_kind: &mapped.event_kind,
-                    normalized_json: &normalized_json,
-                    raw_json: Some(&mapped.raw_json),
-                    idempotency_key: Some(&mapped.idempotency_key),
-                },
-            )
-            .await
-            {
-                Ok(record) => record,
-                Err(error) if mapped.turn_id.is_some() && is_foreign_key_constraint(&error) => {
-                    ConversationEventAppender::append(
-                        &self.pool,
-                        AppendConversationEvent {
-                            id: Uuid::new_v4(),
-                            conversation_id: mapped.conversation_id,
-                            turn_id: None,
-                            binding_id: None,
-                            connection_id: Some(&mapped.connection_id),
-                            prompt_id: None,
-                            source: mapped.source,
-                            event_kind: &mapped.event_kind,
-                            normalized_json: &normalized_json,
-                            raw_json: Some(&mapped.raw_json),
-                            idempotency_key: Some(&mapped.idempotency_key),
-                        },
-                    )
-                    .await?
+        if records.is_empty() {
+            return Ok(batch);
+        }
+
+        // Own normalized JSON for the whole batch so one IMMEDIATE txn can
+        // append every ready record without re-acquiring the writer lock.
+        let prepared: Vec<(MappedConversationEventRecord, String)> = records
+            .into_iter()
+            .map(|mapped| {
+                let normalized_json = serde_json::to_string(&mapped.event)?;
+                Ok((mapped, normalized_json))
+            })
+            .collect::<Result<_, serde_json::Error>>()?;
+
+        // Gate before acquire so waiting writers do not occupy pool slots while
+        // blocked on SQLite's busy_timeout.
+        let persisted = {
+            let _gate = conversation_writer_gate().lock().await;
+            let mut conn = self.pool.acquire().await?;
+            sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
+
+            let mut persisted: Vec<(MappedConversationEventRecord, ConversationEventRecord)> =
+                Vec::with_capacity(prepared.len());
+
+            for (mapped, normalized_json) in &prepared {
+                // Savepoint keeps skippable failures from rolling back siblings
+                // already applied in this batch (same semantics as per-event txns).
+                if let Err(error) = sqlx::query("SAVEPOINT event_append")
+                    .execute(&mut *conn)
+                    .await
+                {
+                    let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+                    return Err(error.into());
                 }
-                Err(error) => {
-                    tracing::warn!(
-                        conversation_id = %mapped.conversation_id,
-                        turn_id = ?mapped.turn_id,
-                        %error,
-                        "skipped conversation event that could not be persisted"
-                    );
-                    continue;
-                }
-            };
+
+                let first = ConversationEventAppender::append_and_apply(
+                    &mut conn,
+                    AppendConversationEvent {
+                        id: Uuid::new_v4(),
+                        conversation_id: mapped.conversation_id,
+                        turn_id: mapped.turn_id,
+                        binding_id: None,
+                        connection_id: Some(&mapped.connection_id),
+                        prompt_id: None,
+                        source: mapped.source,
+                        event_kind: &mapped.event_kind,
+                        normalized_json,
+                        raw_json: Some(&mapped.raw_json),
+                        idempotency_key: Some(&mapped.idempotency_key),
+                    },
+                )
+                .await;
+
+                let record = match first {
+                    Ok(record) => {
+                        sqlx::query("RELEASE SAVEPOINT event_append")
+                            .execute(&mut *conn)
+                            .await?;
+                        record
+                    }
+                    Err(error)
+                        if mapped.turn_id.is_some() && is_foreign_key_constraint(&error) =>
+                    {
+                        sqlx::query("ROLLBACK TO SAVEPOINT event_append")
+                            .execute(&mut *conn)
+                            .await?;
+                        sqlx::query("SAVEPOINT event_append")
+                            .execute(&mut *conn)
+                            .await?;
+                        match ConversationEventAppender::append_and_apply(
+                            &mut conn,
+                            AppendConversationEvent {
+                                id: Uuid::new_v4(),
+                                conversation_id: mapped.conversation_id,
+                                turn_id: None,
+                                binding_id: None,
+                                connection_id: Some(&mapped.connection_id),
+                                prompt_id: None,
+                                source: mapped.source,
+                                event_kind: &mapped.event_kind,
+                                normalized_json,
+                                raw_json: Some(&mapped.raw_json),
+                                idempotency_key: Some(&mapped.idempotency_key),
+                            },
+                        )
+                        .await
+                        {
+                            Ok(record) => {
+                                sqlx::query("RELEASE SAVEPOINT event_append")
+                                    .execute(&mut *conn)
+                                    .await?;
+                                record
+                            }
+                            Err(error) => {
+                                sqlx::query("ROLLBACK TO SAVEPOINT event_append")
+                                    .execute(&mut *conn)
+                                    .await?;
+                                sqlx::query("RELEASE SAVEPOINT event_append")
+                                    .execute(&mut *conn)
+                                    .await?;
+                                tracing::warn!(
+                                    conversation_id = %mapped.conversation_id,
+                                    turn_id = ?mapped.turn_id,
+                                    event_kind = %mapped.event_kind,
+                                    %error,
+                                    "skipped conversation event that could not be persisted"
+                                );
+                                continue;
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        sqlx::query("ROLLBACK TO SAVEPOINT event_append")
+                            .execute(&mut *conn)
+                            .await?;
+                        sqlx::query("RELEASE SAVEPOINT event_append")
+                            .execute(&mut *conn)
+                            .await?;
+                        tracing::warn!(
+                            conversation_id = %mapped.conversation_id,
+                            turn_id = ?mapped.turn_id,
+                            event_kind = %mapped.event_kind,
+                            %error,
+                            "skipped conversation event that could not be persisted"
+                        );
+                        continue;
+                    }
+                };
+                persisted.push((mapped.clone(), record));
+            }
+
+            if let Err(error) = sqlx::query("COMMIT").execute(&mut *conn).await {
+                let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+                return Err(error.into());
+            }
+            persisted
+        };
+
+        let durable_records: Vec<ConversationEventRecord> =
+            persisted.iter().map(|(_, record)| record.clone()).collect();
+        ConversationProjector::refresh_snapshots_after_append(&self.pool, &durable_records).await;
+
+        // Side-effects after the writer lock is released so detail/git readers
+        // are not queued behind checkpoint / publish / queue-dispatch work.
+        for (mapped, record) in persisted {
             let durable = ConversationEventEnvelope {
                 id: record.id,
                 conversation_id: record.conversation_id,

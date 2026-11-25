@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 
 use agents::conversation::{
@@ -38,42 +38,80 @@ use uuid::Uuid;
 // v17 attributes streaming deltas to the recorder's turn_id, which is now read from
 // the authoritative active-turn pointer instead of a cache that could go stale.
 pub const CONVERSATION_PROJECTION_VERSION: u32 = 17;
-const SNAPSHOT_REFRESH_EVENT_GAP: i64 = 40;
+/// Mid-turn snapshot cadence. Larger gap = fewer full-tail folds on the
+/// post-commit refresh path while an agent is streaming (ADR-0061 §8.2).
+const SNAPSHOT_REFRESH_EVENT_GAP: i64 = 80;
 
 const AGENT_BINDING_LOAD_FAILURE_NOTICE_ROW_ID: &str = "notice:agent-binding-load-failed";
 const AGENT_BINDING_REBIND_NOTICE_ROW_ID: &str = "notice:agent-session-rebound";
 const AGENT_CONNECTION_RECOVERING_NOTICE_ROW_ID: &str = "notice:agent-connection-recovering";
 const ANNOUNCEMENT_ROW_PREFIX: &str = "notice:announcement:";
 
+/// Serialize conversation writers **before** they check out a pool connection.
+///
+/// Without this, many tasks each `acquire()` a slot then block inside
+/// `BEGIN IMMEDIATE` on SQLite's busy_timeout — every waiting writer holds a
+/// pool connection and starves detail / git / session reads (ADR-0061 §8.3).
+pub(crate) fn conversation_writer_gate() -> &'static Mutex<()> {
+    static GATE: OnceLock<Mutex<()>> = OnceLock::new();
+    GATE.get_or_init(|| Mutex::new(()))
+}
+
 pub struct ConversationEventAppender;
 
 impl ConversationEventAppender {
-    /// Append an event and apply its projection side-effects **atomically**.
+    /// Append an event and apply its derived-table projection **atomically**.
     ///
-    /// Root-cause fix for 架构报告 A-3: the event insert, the derived-table projection
-    /// (`apply_record`), and the snapshot refresh now run inside a single
-    /// `BEGIN IMMEDIATE` transaction. If anything fails the whole thing rolls back, so
-    /// the event log and its projection can never drift out of sync.
+    /// Root-cause fix for 架构报告 A-3: the event insert and `apply_record` run
+    /// inside one `BEGIN IMMEDIATE` so the log and derived tables cannot drift.
+    /// The fold snapshot is a rebuildable cache — refreshed **after** commit so
+    /// long folds / FTS never pin the writer lock (or a pool slot) on the hot
+    /// streaming path.
     pub async fn append(
         pool: &SqlitePool,
         input: AppendConversationEvent<'_>,
     ) -> Result<ConversationEventRecord, sqlx::Error> {
-        let mut conn = pool.acquire().await?;
-        sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
+        let mut records = Self::append_many(pool, vec![input]).await?;
+        records
+            .pop()
+            .ok_or_else(|| sqlx::Error::Protocol("append_many returned no record".into()))
+    }
 
-        match Self::append_and_apply(&mut conn, input).await {
-            Ok(record) => {
-                if let Err(error) = sqlx::query("COMMIT").execute(&mut *conn).await {
-                    let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-                    return Err(error);
-                }
-                Ok(record)
-            }
-            Err(error) => {
-                let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-                Err(error)
-            }
+    /// Append many events in **one** `BEGIN IMMEDIATE` transaction, then refresh
+    /// the projection snapshot once per conversation outside that txn.
+    pub async fn append_many(
+        pool: &SqlitePool,
+        inputs: Vec<AppendConversationEvent<'_>>,
+    ) -> Result<Vec<ConversationEventRecord>, sqlx::Error> {
+        if inputs.is_empty() {
+            return Ok(Vec::new());
         }
+
+        let records = {
+            let _gate = conversation_writer_gate().lock().await;
+            let mut conn = pool.acquire().await?;
+            sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
+
+            let mut records = Vec::with_capacity(inputs.len());
+            for input in inputs {
+                match Self::append_and_apply(&mut conn, input).await {
+                    Ok(record) => records.push(record),
+                    Err(error) => {
+                        let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+                        return Err(error);
+                    }
+                }
+            }
+
+            if let Err(error) = sqlx::query("COMMIT").execute(&mut *conn).await {
+                let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+                return Err(error);
+            }
+            records
+        };
+
+        ConversationProjector::refresh_snapshots_after_append(pool, &records).await;
+        Ok(records)
     }
 
     pub(crate) async fn append_and_apply(
@@ -95,7 +133,6 @@ impl ConversationEventAppender {
 
         let record = insert_conversation_event(conn, input).await?;
         ConversationStateApplier::apply_record(conn, &record).await?;
-        ConversationProjector::refresh_snapshot_on_settle(conn, &record).await?;
         Ok(record)
     }
 
@@ -687,11 +724,37 @@ impl ConversationProjector {
         }
     }
 
-    /// Refresh the materialized snapshot on turn settle, and also every
-    /// `SNAPSHOT_REFRESH_EVENT_GAP` events during a long in-flight turn so
-    /// detail/gap reloads do not replay the whole turn.
-    pub(super) async fn refresh_snapshot_on_settle(
-        conn: &mut SqliteConnection,
+    /// Refresh snapshots for the latest record of each conversation in `records`.
+    ///
+    /// Best-effort: a snapshot miss only means the next `project()` folds more
+    /// events from the log. Never fails the durable append.
+    pub(crate) async fn refresh_snapshots_after_append(
+        pool: &SqlitePool,
+        records: &[ConversationEventRecord],
+    ) {
+        let mut latest_by_conversation: HashMap<Uuid, &ConversationEventRecord> = HashMap::new();
+        for record in records {
+            latest_by_conversation.insert(record.conversation_id, record);
+        }
+        for record in latest_by_conversation.into_values() {
+            if let Err(error) = Self::refresh_snapshot_after_append(pool, record).await {
+                tracing::warn!(
+                    conversation_id = %record.conversation_id,
+                    sequence = record.sequence,
+                    %error,
+                    "conversation snapshot refresh after append failed"
+                );
+            }
+        }
+    }
+
+    /// Refresh the materialized snapshot after the append txn has committed.
+    ///
+    /// Runs every `SNAPSHOT_REFRESH_EVENT_GAP` events mid-turn and on settle so
+    /// detail/gap reloads do not replay the whole turn. FTS reindex is a second
+    /// short write so a large body never extends the fold's writer hold.
+    pub(crate) async fn refresh_snapshot_after_append(
+        pool: &SqlitePool,
         record: &ConversationEventRecord,
     ) -> Result<(), sqlx::Error> {
         let settled = matches!(
@@ -699,35 +762,69 @@ impl ConversationProjector {
             "turn_completed" | "turn_failed" | "turn_cancelled" | "turn_interrupted"
         );
 
-        let conversation_id = record.conversation_id;
-        let mut fold = Self::load_fold_from_snapshot(&mut *conn, conversation_id).await?;
-        if !settled && record.sequence - fold.last_sequence < SNAPSHOT_REFRESH_EVENT_GAP {
-            return Ok(());
-        }
-        let tail = ConversationEventRecord::events_since(
-            &mut *conn,
-            conversation_id,
-            fold.last_sequence,
-            i64::MAX,
-        )
-        .await?;
-        for record in &tail {
-            fold.apply(record)?;
-        }
-        Self::persist_snapshot(&mut *conn, conversation_id, &fold).await?;
-
-        if !settled {
+        // Cheap read outside the writer gate — skip when the gap is still small.
+        let preview = Self::load_fold_from_snapshot(pool, record.conversation_id).await?;
+        if !settled && record.sequence - preview.last_sequence < SNAPSHOT_REFRESH_EVENT_GAP {
             return Ok(());
         }
 
-        // Best-effort full-text reindex from the freshly-settled projection.
-        // A search-index failure must never block a turn from settling (P1-2).
-        let timeline = fold.into_timeline(conversation_id);
-        let body = crate::search::extract_searchable_text(&timeline);
-        if let Err(error) =
-            crate::search::reindex_conversation(&mut *conn, conversation_id, &body).await
-        {
-            tracing::warn!("conversation FTS reindex on settle failed: {error}");
+        let fts_body = {
+            let _gate = conversation_writer_gate().lock().await;
+            let mut conn = pool.acquire().await?;
+            sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
+
+            let result = async {
+                let conversation_id = record.conversation_id;
+                let mut fold = Self::load_fold_from_snapshot(&mut *conn, conversation_id).await?;
+                if !settled && record.sequence - fold.last_sequence < SNAPSHOT_REFRESH_EVENT_GAP {
+                    return Ok::<_, sqlx::Error>(None);
+                }
+                let tail = ConversationEventRecord::events_since(
+                    &mut *conn,
+                    conversation_id,
+                    fold.last_sequence,
+                    i64::MAX,
+                )
+                .await?;
+                for event in &tail {
+                    fold.apply(event)?;
+                }
+                Self::persist_snapshot(&mut *conn, conversation_id, &fold).await?;
+                if !settled {
+                    return Ok(None);
+                }
+                let timeline = fold.into_timeline(conversation_id);
+                Ok(Some(crate::search::extract_searchable_text(&timeline)))
+            }
+            .await;
+
+            match result {
+                Ok(body) => {
+                    if let Err(error) = sqlx::query("COMMIT").execute(&mut *conn).await {
+                        let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+                        return Err(error);
+                    }
+                    body
+                }
+                Err(error) => {
+                    let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+                    return Err(error);
+                }
+            }
+        };
+
+        if let Some(body) = fts_body {
+            let _gate = conversation_writer_gate().lock().await;
+            let mut conn = pool.acquire().await?;
+            if let Err(error) =
+                crate::search::reindex_conversation(&mut conn, record.conversation_id, &body).await
+            {
+                tracing::warn!(
+                    conversation_id = %record.conversation_id,
+                    %error,
+                    "conversation FTS reindex on settle failed"
+                );
+            }
         }
         Ok(())
     }
@@ -2648,6 +2745,49 @@ mod tests {
         )
         .await
         .expect("append event")
+    }
+
+    #[tokio::test]
+    async fn append_many_writes_contiguous_sequences_in_one_transaction() {
+        let pool = setup_pool().await;
+        let (conversation_id, turn_id) = seed_turn(&pool).await;
+
+        let prepared: Vec<(String, String, String)> = (0..3)
+            .map(|i| {
+                let event = ConversationEvent::AssistantTextDelta {
+                    text: format!("chunk-{i}"),
+                    message_id: Some("m1".into()),
+                };
+                let value = serde_json::to_value(&event).expect("event value");
+                let event_kind = value["kind"].as_str().expect("event kind").to_string();
+                let normalized_json = serde_json::to_string(&event).expect("event json");
+                (event_kind, normalized_json, format!("batch-delta-{i}"))
+            })
+            .collect();
+
+        let inputs: Vec<AppendConversationEvent<'_>> = prepared
+            .iter()
+            .map(|(event_kind, normalized_json, idempotency_key)| AppendConversationEvent {
+                id: Uuid::new_v4(),
+                conversation_id,
+                turn_id: Some(turn_id),
+                binding_id: None,
+                connection_id: Some("connection-1"),
+                prompt_id: Some("prompt-1"),
+                source: "acp",
+                event_kind,
+                normalized_json,
+                raw_json: None,
+                idempotency_key: Some(idempotency_key.as_str()),
+            })
+            .collect();
+
+        let records = ConversationEventAppender::append_many(&pool, inputs)
+            .await
+            .expect("append_many");
+        assert_eq!(records.len(), 3);
+        assert_eq!(records[1].sequence, records[0].sequence + 1);
+        assert_eq!(records[2].sequence, records[0].sequence + 2);
     }
 
     #[tokio::test]
