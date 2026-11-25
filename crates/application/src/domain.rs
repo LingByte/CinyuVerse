@@ -76,6 +76,7 @@ domain_commands! {
     ProjectGet => "get_project" / "application.call",
     ProjectCreate => "create_project" / "application.call",
     ProjectUpdate => "update_project" / "application.call",
+    ProjectRenameWork => "rename_project_work" / "application.call",
     ProjectDelete => "delete_project" / "application.call",
     ProjectSearchFiles => "search_project_files" / "application.call",
     ProjectRepositories => "get_project_repositories" / "application.call",

@@ -9,6 +9,11 @@ import {
   CINYUVERSE_ENV_EXAMPLE,
   CINYUVERSE_WRITING_RULES_MD,
   ProjectFormDialog,
+  UNTITLED_FOLDER_PREFIX,
+  UNTITLED_PROJECT_NAME,
+  createUntitledFolderName,
+  resolveNewProjectIdentity,
+  toFolderName,
   type ProjectFormDialogProps,
 } from './ProjectFormDialog';
 import { STYLE_RHYTHM_RULES } from '@/lib/writingPrompts';
@@ -38,7 +43,7 @@ describe('ProjectFormDialog', () => {
     renderDialog();
 
     const descriptionInput = await screen.findByRole('textbox', {
-      name: '项目简介（可选，用于 README）',
+      name: '作品简介（可选，用于 README）',
     });
 
     expect(descriptionInput.tagName).toBe('TEXTAREA');
@@ -52,7 +57,7 @@ describe('ProjectFormDialog', () => {
     const { container } = renderDialog();
 
     const nameInput = await screen.findByRole('textbox', {
-      name: '项目名称',
+      name: '作品名称（可选）',
     });
     const locationPreview = screen.getByRole('textbox', {
       name: '创建位置',
@@ -81,13 +86,36 @@ describe('ProjectFormDialog', () => {
     );
   });
 
+  it('resolves untitled create identity to a placeholder folder', () => {
+    expect(createUntitledFolderName('abc123')).toBe(
+      `${UNTITLED_FOLDER_PREFIX}abc123`
+    );
+    expect(resolveNewProjectIdentity('', '新作品-abc123')).toEqual({
+      projectName: UNTITLED_PROJECT_NAME,
+      folderName: '新作品-abc123',
+    });
+    expect(resolveNewProjectIdentity('  夜航  ', '新作品-abc123')).toEqual({
+      projectName: '夜航',
+      folderName: toFolderName('夜航'),
+    });
+  });
+
+  it('allows create submit with only a location selected', async () => {
+    renderDialog();
+
+    const createButton = await screen.findByRole('button', {
+      name: '创建作品',
+    });
+    expect(createButton).toBeDisabled();
+  });
+
   it('uses the same compact folder picker row for existing projects', async () => {
     const { container } = renderDialog({ autoOpenFolderPicker: true });
 
     await screen.findByRole('heading', { name: '选择文件夹' });
 
     const folderPreview = screen.getByRole('textbox', {
-      name: '项目文件夹',
+      name: '作品文件夹',
     });
     const folderButton = screen.getByRole('button', { name: '选择文件夹' });
     const folderField = folderPreview.closest('.astryx-text-input');

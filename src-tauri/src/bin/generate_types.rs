@@ -100,6 +100,7 @@ use db::models::{
     chat_channel_message_log::ChatChannelMessageLog,
     conversation::DbConversationSummary,
     execution_process::ExecutionProcessRunReason,
+    project::RenameProjectWork,
     scratch::{CreateScratch, DraftFollowUpData, Scratch, ScratchUpdateOutcome, UpdateScratch},
     session::{CreateSession, Session, SessionStatus},
     story_graph::{
@@ -512,6 +513,7 @@ fn replacement_declarations() -> BTreeMap<String, String> {
     insert_declaration::<CreateScratch>(&mut decls);
     insert_declaration::<UpdateScratch>(&mut decls);
     insert_declaration::<ScratchUpdateOutcome>(&mut decls);
+    insert_declaration::<RenameProjectWork>(&mut decls);
     insert_declaration::<ExecutorProfileId>(&mut decls);
     insert_declaration::<ExecutorAction>(&mut decls);
     insert_declaration::<ExecutorActionType>(&mut decls);

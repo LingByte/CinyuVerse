@@ -21,6 +21,8 @@ export type UpdateProject = {
   default_main_branch: string | null;
 };
 
+export type RenameProjectWork = { new_name: string, };
+
 export type SearchResult = {
   path: string;
   is_file: boolean;
@@ -1962,7 +1964,7 @@ export type PlanUsageWindow = {
  * Stable window identifier the frontend maps to a localized label.
  * Codex: `primary` / `secondary`. Claude: `five_hour` / `seven_day` /
  * `seven_day_opus` / `seven_day_sonnet` / `extra_usage`. Grok: `weekly` /
- * `monthly` / `plan_period`. Cursor: `cursor_models` / `other_models`.
+ * `monthly` / `plan_period`.
  */
 id: string, usedPercent: number | null, windowMinutes: number | null, resetsAtMs: number | null, };
 

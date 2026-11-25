@@ -6,6 +6,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useProjects } from '@/hooks/useProjects';
 import { useProjectRepos } from '@/hooks';
 import { ProjectFormDialog } from '@/components/dialogs/projects/ProjectFormDialog';
+import { RenameProjectWorkDialog } from '@/components/dialogs/projects/RenameProjectWorkDialog';
 import { ConfirmDialog } from '@/components/dialogs/shared/ConfirmDialog';
 import { APP_NAME } from '@/lib/branding';
 import { Logo } from '@/components/Logo';
@@ -314,6 +315,36 @@ export function WelcomePage() {
     handleProjectClick(target.id);
   }, [contextMenu, handleMissingProject, handleProjectClick]);
 
+  const handleRenameFromContextMenu = useCallback(async () => {
+    if (!contextMenu) {
+      return;
+    }
+
+    const target = {
+      id: contextMenu.projectId,
+      name: contextMenu.projectName,
+    };
+    setContextMenu(null);
+
+    try {
+      const repos = await projectsApi.getRepositories(target.id);
+      if (repos.length !== 1) {
+        toast.error(t('welcomePage.renameRequiresSingleRepo'));
+        return;
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t('welcomePage.renameFailed')
+      );
+      return;
+    }
+
+    await RenameProjectWorkDialog.show({
+      projectId: target.id,
+      currentName: target.name,
+    });
+  }, [contextMenu, t]);
+
   const handleDeleteFromContextMenu = useCallback(async () => {
     if (!contextMenu || isDeletingProject) {
       return;
@@ -424,6 +455,13 @@ export function WelcomePage() {
             onClick={handleOpenFromContextMenu}
           >
             {t('welcomePage.open')}
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/70"
+            onClick={() => void handleRenameFromContextMenu()}
+          >
+            {t('welcomePage.rename')}
           </button>
           <button
             type="button"

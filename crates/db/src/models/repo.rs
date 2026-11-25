@@ -167,6 +167,33 @@ impl Repo {
         Ok(())
     }
 
+    pub async fn update_path(
+        pool: &SqlitePool,
+        id: Uuid,
+        path: &Path,
+        name: &str,
+        display_name: &str,
+    ) -> Result<(), sqlx::Error> {
+        let path_str = normalize_windows_extended_path_prefix(path)
+            .to_string_lossy()
+            .to_string();
+        sqlx::query(
+            r#"UPDATE repos
+               SET path = ?,
+                   name = ?,
+                   display_name = ?,
+                   updated_at = datetime('now', 'subsec')
+               WHERE id = ?"#,
+        )
+        .bind(path_str)
+        .bind(name)
+        .bind(display_name)
+        .bind(id)
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
     pub async fn find_by_id(pool: &SqlitePool, id: Uuid) -> Result<Option<Self>, sqlx::Error> {
         let repo = sqlx::query_as!(
             Repo,

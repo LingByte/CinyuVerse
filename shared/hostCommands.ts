@@ -359,6 +359,7 @@ export const HOST_COMMANDS = [
   'refresh_prompt_enhancement_catalogs',
   'register_repo',
   'remove_repo_remote',
+  'rename_project_work',
   'rename_session',
   'rename_workspace_branch',
   'reset_session_process',

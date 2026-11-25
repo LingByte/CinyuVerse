@@ -114,7 +114,7 @@
   },
   "welcomePage": {
     "processing": "Processing...",
-    "recentProjectTooltip": "Left-click to open the novel, right-click for open and delete actions",
+    "recentProjectTooltip": "Left-click to open the novel, right-click for open, rename, and delete actions",
     "createProjectFailed": "Failed to create novel: {{error}}",
     "deleteProjectConfirmTitle": "Delete novel \"{{name}}\"?",
     "deleteProjectConfirmMessage": "Deleting the novel will remove all writing sessions and volume data under it. This action cannot be undone.",
@@ -128,6 +128,9 @@
     "loadingProjects": "Loading novels...",
     "noProjects": "No novels yet. Create one to get started.",
     "open": "Open",
+    "rename": "Rename",
+    "renameRequiresSingleRepo": "Rename is only available for novels with a single repository",
+    "renameFailed": "Failed to rename novel",
     "openProjectFolder": "Reveal novel folder in file manager",
     "missingProjectTitle": "Novel folder missing",
     "missingProjectMessage": "The local path for \"{{name}}\" is gone. Remove this record from recent novels?",

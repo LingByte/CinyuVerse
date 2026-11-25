@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useProjectMutations } from '@/hooks/useProjectMutations';
-import { fileTreeApi, repoApi } from '@/lib/api';
+import { desktopApi, fileTreeApi, repoApi } from '@/lib/api';
 import { defineModal } from '@/lib/modals';
 import { STYLE_RHYTHM_RULES } from '@/lib/writingPrompts';
 import { normalizeDisplayPath } from '@/utils/displayPath';
@@ -81,7 +81,10 @@ function getPathName(path: string): string {
   return parts[parts.length - 1] ?? normalized;
 }
 
-function toFolderName(projectName: string): string {
+export const UNTITLED_PROJECT_NAME = '未命名作品';
+export const UNTITLED_FOLDER_PREFIX = '新作品-';
+
+export function toFolderName(projectName: string): string {
   const invalidCharacters = new Set([
     '<',
     '>',
@@ -104,6 +107,39 @@ function toFolderName(projectName: string): string {
     .trim()
     .replace(/\s+/g, ' ')
     .replace(/[. ]+$/g, '');
+}
+
+export function createUntitledFolderSuffix(): string {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let suffix = '';
+  for (let index = 0; index < 6; index += 1) {
+    suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return suffix;
+}
+
+export function createUntitledFolderName(
+  suffix: string = createUntitledFolderSuffix()
+): string {
+  return `${UNTITLED_FOLDER_PREFIX}${suffix}`;
+}
+
+export function resolveNewProjectIdentity(
+  projectNameInput: string,
+  untitledFolderName: string
+): { projectName: string; folderName: string } {
+  const trimmed = projectNameInput.trim();
+  if (!trimmed) {
+    return {
+      projectName: UNTITLED_PROJECT_NAME,
+      folderName: untitledFolderName,
+    };
+  }
+
+  return {
+    projectName: trimmed,
+    folderName: toFolderName(trimmed),
+  };
 }
 
 function joinLocalPath(parent: string, child: string): string {
@@ -414,6 +450,9 @@ const ProjectFormDialogImpl = NiceModal.create<ProjectFormDialogProps>(
     const [projectName, setProjectName] = useState('');
     const [projectDescription, setProjectDescription] = useState('');
     const [parentFolderPath, setParentFolderPath] = useState('');
+    const [untitledFolderName, setUntitledFolderName] = useState(
+      createUntitledFolderName
+    );
     const [selectedFolderPath, setSelectedFolderPath] = useState('');
     const [selectedFolderIsGitRepo, setSelectedFolderIsGitRepo] = useState<
       boolean | null
@@ -426,7 +465,10 @@ const ProjectFormDialogImpl = NiceModal.create<ProjectFormDialogProps>(
     const [error, setError] = useState('');
 
     const hasAutoOpenedFolderRef = useRef(false);
-    const folderName = toFolderName(projectName);
+    const { folderName } = useMemo(
+      () => resolveNewProjectIdentity(projectName, untitledFolderName),
+      [projectName, untitledFolderName]
+    );
     const targetProjectPath = useMemo(() => {
       if (!parentFolderPath || !folderName) {
         return '';
@@ -444,6 +486,7 @@ const ProjectFormDialogImpl = NiceModal.create<ProjectFormDialogProps>(
       setProjectName('');
       setProjectDescription('');
       setParentFolderPath('');
+      setUntitledFolderName(createUntitledFolderName());
       setSelectedFolderPath('');
       setSelectedFolderIsGitRepo(null);
       setIncludeReadme(true);
@@ -505,14 +548,17 @@ const ProjectFormDialogImpl = NiceModal.create<ProjectFormDialogProps>(
       modal.hide();
     };
 
-    const writeTemplateFiles = async (repoPath: string) => {
+    const writeTemplateFiles = async (
+      repoPath: string,
+      finalProjectName: string
+    ) => {
       const writes: Array<Promise<void>> = [];
 
       if (includeReadme) {
         writes.push(
           writeTextFile(
             joinLocalPath(repoPath, 'README.md'),
-            createReadme(projectName.trim(), projectDescription)
+            createReadme(finalProjectName, projectDescription)
           )
         );
       }
@@ -538,7 +584,7 @@ const ProjectFormDialogImpl = NiceModal.create<ProjectFormDialogProps>(
       await Promise.all(writes);
 
       // Scaffold .cinyuverse/ novel metadata directory.
-      await ensureCinyuverseScaffold(repoPath, projectName.trim());
+      await ensureCinyuverseScaffold(repoPath, finalProjectName);
     };
 
     const createProjectRecord = async (
@@ -558,19 +604,27 @@ const ProjectFormDialogImpl = NiceModal.create<ProjectFormDialogProps>(
       return createProject.mutateAsync(createData);
     };
 
+    const allocateFolderName = async (): Promise<string | null> => {
+      if (projectName.trim()) {
+        const namedFolder = toFolderName(projectName);
+        return namedFolder || null;
+      }
+
+      let candidate = untitledFolderName;
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const candidatePath = joinLocalPath(parentFolderPath, candidate);
+        const exists = await desktopApi.pathExists(candidatePath);
+        if (!exists) {
+          setUntitledFolderName(candidate);
+          return candidate;
+        }
+        candidate = createUntitledFolderName();
+      }
+
+      return null;
+    };
+
     const handleCreateNewProject = async () => {
-      const finalProjectName = projectName.trim();
-
-      if (!finalProjectName) {
-        setError(t('projectForm.nameRequired'));
-        return;
-      }
-
-      if (!folderName) {
-        setError(t('projectForm.invalidFolderName'));
-        return;
-      }
-
       if (!parentFolderPath) {
         setError(t('projectForm.locationRequired'));
         return;
@@ -580,11 +634,26 @@ const ProjectFormDialogImpl = NiceModal.create<ProjectFormDialogProps>(
       setIsSubmitting(true);
 
       try {
+        const allocatedFolderName = await allocateFolderName();
+        if (!allocatedFolderName) {
+          setError(
+            projectName.trim()
+              ? t('projectForm.invalidFolderName')
+              : t('projectForm.untitledFolderExhausted')
+          );
+          return;
+        }
+
+        const { projectName: finalProjectName } = resolveNewProjectIdentity(
+          projectName,
+          allocatedFolderName
+        );
+
         const repo = await repoApi.init({
           parent_path: parentFolderPath,
-          folder_name: folderName,
+          folder_name: allocatedFolderName,
         });
-        await writeTemplateFiles(repo.path);
+        await writeTemplateFiles(repo.path, finalProjectName);
         const project = await createProjectRecord(finalProjectName, repo.path);
         modal.resolve({ status: 'saved', project } as ProjectFormDialogResult);
         modal.hide();
@@ -647,7 +716,7 @@ const ProjectFormDialogImpl = NiceModal.create<ProjectFormDialogProps>(
     const isBusy = isSubmitting || isPickingFolder || createProject.isPending;
     const canSubmit = isOpenExistingFolderMode
       ? !!selectedFolderPath
-      : !!projectName.trim() && !!parentFolderPath && !!folderName;
+      : !!parentFolderPath && (!projectName.trim() || !!folderName);
     const submitLabel = isOpenExistingFolderMode
       ? selectedFolderPath && selectedFolderIsGitRepo === false
         ? t('projectForm.submitInitGitAndOpen')
@@ -719,38 +788,6 @@ const ProjectFormDialogImpl = NiceModal.create<ProjectFormDialogProps>(
             ) : (
               <>
                 <div className="space-y-2">
-                  <Label>{t('projectForm.nameLabel')}</Label>
-                  <TextInput
-                    label={t('projectForm.nameLabel')}
-                    isLabelHidden
-                    value={projectName}
-                    onChange={setProjectName}
-                    placeholder={t('projectForm.namePlaceholder')}
-                    isDisabled={isBusy}
-                    hasAutoFocus
-                    width="100%"
-                    className="[&_input]:text-sm"
-                    style={textInputSurfaceStyle}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>{t('projectForm.descriptionLabel')}</Label>
-                  <TextArea
-                    label={t('projectForm.descriptionLabel')}
-                    isLabelHidden
-                    value={projectDescription}
-                    onChange={setProjectDescription}
-                    placeholder={t('projectForm.descriptionPlaceholder')}
-                    rows={4}
-                    isDisabled={isBusy}
-                    width="100%"
-                    className="project-form-description-field [&_textarea]:resize-none [&_textarea]:text-sm"
-                    style={textInputSurfaceStyle}
-                  />
-                </div>
-
-                <div className="space-y-2">
                   <Label>{t('projectForm.locationLabel')}</Label>
                   <div className="flex items-center gap-2">
                     <Button
@@ -775,6 +812,37 @@ const ProjectFormDialogImpl = NiceModal.create<ProjectFormDialogProps>(
                       {t('projectForm.willCreate', { path: targetProjectPath })}
                     </p>
                   ) : null}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>{t('projectForm.nameLabel')}</Label>
+                  <TextInput
+                    label={t('projectForm.nameLabel')}
+                    isLabelHidden
+                    value={projectName}
+                    onChange={setProjectName}
+                    placeholder={t('projectForm.namePlaceholder')}
+                    isDisabled={isBusy}
+                    width="100%"
+                    className="[&_input]:text-sm"
+                    style={textInputSurfaceStyle}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>{t('projectForm.descriptionLabel')}</Label>
+                  <TextArea
+                    label={t('projectForm.descriptionLabel')}
+                    isLabelHidden
+                    value={projectDescription}
+                    onChange={setProjectDescription}
+                    placeholder={t('projectForm.descriptionPlaceholder')}
+                    rows={4}
+                    isDisabled={isBusy}
+                    width="100%"
+                    className="project-form-description-field [&_textarea]:resize-none [&_textarea]:text-sm"
+                    style={textInputSurfaceStyle}
+                  />
                 </div>
 
                 <div className="rounded-lg border bg-muted/20 p-3">

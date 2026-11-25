@@ -41,6 +41,11 @@ pub struct UpdateProject {
     pub default_main_branch: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize, TS)]
+pub struct RenameProjectWork {
+    pub new_name: String,
+}
+
 #[derive(Debug, Serialize, TS)]
 pub struct SearchResult {
     pub path: String,

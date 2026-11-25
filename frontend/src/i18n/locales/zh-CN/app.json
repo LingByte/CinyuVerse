@@ -114,7 +114,7 @@
   },
   "welcomePage": {
     "processing": "处理中...",
-    "recentProjectTooltip": "左键打开作品，右键显示打开和删除操作",
+    "recentProjectTooltip": "左键打开作品，右键显示打开、重命名和删除操作",
     "createProjectFailed": "创建作品失败：{{error}}",
     "deleteProjectConfirmTitle": "删除作品“{{name}}”？",
     "deleteProjectConfirmMessage": "删除作品将移除该作品下的所有创作会话与草稿数据，此操作不可撤销。",
@@ -128,6 +128,9 @@
     "loadingProjects": "加载作品中...",
     "noProjects": "暂无作品，创建一个开始使用吧。",
     "open": "打开",
+    "rename": "重命名",
+    "renameRequiresSingleRepo": "仅支持单个仓库的作品重命名",
+    "renameFailed": "重命名失败",
     "openProjectFolder": "在访达中打开作品目录",
     "missingProjectTitle": "作品目录已不存在",
     "missingProjectMessage": "「{{name}}」的本地路径已失效。是否从最近作品中删除这条记录？",

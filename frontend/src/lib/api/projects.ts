@@ -3,6 +3,7 @@ import type {
   OpenEditorRequest,
   OpenEditorResponse,
   Project,
+  RenameProjectWork,
   Repo,
   CreateProjectRepo,
   SearchMode,
@@ -24,6 +25,13 @@ export const projectsApi = {
 
   update: async (id: string, data: UpdateProject): Promise<Project> => {
     return backendCall<Project>('update_project', { id, payload: data });
+  },
+
+  renameWork: async (
+    id: string,
+    data: RenameProjectWork
+  ): Promise<Project> => {
+    return backendCall<Project>('rename_project_work', { id, payload: data });
   },
 
   delete: async (id: string): Promise<void> => {

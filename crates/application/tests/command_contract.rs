@@ -24,6 +24,7 @@ fn agent_skill_listing_is_available_through_the_application_domain() {
 fn coding_loop_commands_share_the_workstation_application_scope() {
     for name in [
         "create_project",
+        "rename_project_work",
         "create_project_session",
         "get_file_tree",
         "read_file_content",

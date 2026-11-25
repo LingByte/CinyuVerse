@@ -12,7 +12,7 @@ use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use db::models::{
     conversation::DbConversationSummary,
     conversation_turn::ConversationTurnRecord,
-    project::{CreateProject, Project, UpdateProject},
+    project::{CreateProject, Project, RenameProjectWork, UpdateProject},
     project_repo::{CreateProjectRepo, ProjectRepo},
     repo::Repo,
     session::{CreateSession, Session, SessionStatus},
@@ -39,6 +39,7 @@ impl ServerApplicationDomains {
             DomainCommand::ProjectGet => self.get_project(args).await,
             DomainCommand::ProjectCreate => self.create_project(args).await,
             DomainCommand::ProjectUpdate => self.update_project(args).await,
+            DomainCommand::ProjectRenameWork => self.rename_project_work(args).await,
             DomainCommand::ProjectDelete => self.delete_project(args).await,
             DomainCommand::ProjectSearchFiles => self.search_project_files(args).await,
             DomainCommand::ProjectAddRepository => self.add_project_repository(args).await,
@@ -566,6 +567,21 @@ impl ServerApplicationDomains {
                 .update_project(&self.pool, &existing, args.payload)
                 .await
                 .map_err(internal_error)?,
+        )
+    }
+
+    async fn rename_project_work(&self, args: Value) -> Result<Value, ApplicationError> {
+        let args: RenameProjectWorkArgs = parse(args)?;
+        let existing = Project::find_by_id(&self.pool, args.id)
+            .await
+            .map_err(internal_error)?
+            .ok_or_else(|| ApplicationError::not_found(format!("project {}", args.id)))?;
+        serialize(
+            self.deployment
+                .project()
+                .rename_project_work(&self.pool, &existing, args.payload)
+                .await
+                .map_err(|error| ApplicationError::bad_request(error.to_string()))?,
         )
     }
 
@@ -1876,6 +1892,12 @@ struct PayloadArgs<T> {
 struct UpdateProjectArgs {
     id: Uuid,
     payload: UpdateProject,
+}
+
+#[derive(Deserialize)]
+struct RenameProjectWorkArgs {
+    id: Uuid,
+    payload: RenameProjectWork,
 }
 
 #[derive(Deserialize)]
