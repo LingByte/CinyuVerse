@@ -232,6 +232,41 @@ impl ConversationEventRecord {
         .fetch_all(executor)
         .await
     }
+
+    /// Page the projection tail so each `fetch_all` releases its pool slot
+    /// between pages. A single `i64::MAX` fetch holds one connection for the
+    /// whole multi-thousand-event read and starves workspaces/workflow ticks.
+    pub async fn collect_events_since_for_projection(
+        pool: &SqlitePool,
+        conversation_id: Uuid,
+        after_sequence: i64,
+        up_to_inclusive: Option<i64>,
+    ) -> Result<Vec<Self>, sqlx::Error> {
+        const PAGE: i64 = 400;
+        let mut after = after_sequence;
+        let mut out = Vec::new();
+        loop {
+            let page =
+                Self::events_since_for_projection(pool, conversation_id, after, PAGE).await?;
+            if page.is_empty() {
+                break;
+            }
+            let reached_end = (page.len() as i64) < PAGE;
+            for record in page {
+                if let Some(up_to) = up_to_inclusive
+                    && record.sequence > up_to
+                {
+                    return Ok(out);
+                }
+                after = record.sequence;
+                out.push(record);
+            }
+            if reached_end {
+                break;
+            }
+        }
+        Ok(out)
+    }
 }
 
 pub async fn append_conversation_event(

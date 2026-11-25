@@ -650,11 +650,11 @@ impl ConversationProjector {
         conversation_id: Uuid,
     ) -> Result<ConversationTimeline, sqlx::Error> {
         let mut fold = Self::load_fold_from_snapshot(pool, conversation_id).await?;
-        let tail = ConversationEventRecord::events_since_for_projection(
+        let tail = ConversationEventRecord::collect_events_since_for_projection(
             pool,
             conversation_id,
             fold.last_sequence,
-            i64::MAX,
+            None,
         )
         .await?;
         for record in &tail {
@@ -689,11 +689,11 @@ impl ConversationProjector {
         after_sequence: i64,
     ) -> Result<(Vec<TimelineRow>, i64), sqlx::Error> {
         let mut fold = Self::load_fold_from_snapshot(pool, conversation_id).await?;
-        let tail = ConversationEventRecord::events_since_for_projection(
+        let tail = ConversationEventRecord::collect_events_since_for_projection(
             pool,
             conversation_id,
             fold.last_sequence,
-            i64::MAX,
+            None,
         )
         .await?;
         for record in &tail {
@@ -783,11 +783,11 @@ impl ConversationProjector {
             return Ok(());
         }
 
-        let tail = ConversationEventRecord::events_since_for_projection(
+        let tail = ConversationEventRecord::collect_events_since_for_projection(
             pool,
             conversation_id,
             fold.last_sequence,
-            i64::MAX,
+            None,
         )
         .await?;
         for event in &tail {
@@ -1167,17 +1167,15 @@ impl IncrementalRowProjector {
         if fold.last_sequence > up_to_sequence {
             fold = ProjectionFold::default();
         }
-        let tail = ConversationEventRecord::events_since_for_projection(
+        let tail = ConversationEventRecord::collect_events_since_for_projection(
             pool,
             conversation_id,
             fold.last_sequence,
-            i64::MAX,
+            Some(up_to_sequence),
         )
         .await?;
         for record in &tail {
-            if record.sequence <= up_to_sequence {
-                fold.apply(record)?;
-            }
+            fold.apply(record)?;
         }
         Ok(Self { fold })
     }
