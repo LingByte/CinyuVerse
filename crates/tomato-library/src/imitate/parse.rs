@@ -292,8 +292,8 @@ fn validate_cards(mut cards: ImitateCards) -> Result<ImitateCards> {
         if rule.rule.trim().is_empty() {
             bail!("存在空的 craft rule");
         }
-        if rule.evidence.quote.chars().count() > 80 {
-            bail!("evidence.quote 过长（≤80 字取证）");
+        if rule.evidence.quote.chars().count() > 120 {
+            bail!("evidence.quote 过长（≤120 字取证）");
         }
         if is_fluff_rule(&rule.rule) {
             bail!("写法不能是空话: {}", rule.rule);
@@ -454,8 +454,10 @@ fn extract_balanced_object(text: &str) -> Option<String> {
 
 fn sanitize_llm_json(input: &str) -> String {
     let mut s = input.trim().trim_start_matches('\u{feff}').to_string();
-    s = s.replace(['\u{201c}', '\u{201d}'], "\"");
-    s = s.replace(['\u{2018}', '\u{2019}'], "'");
+    // NEVER map Chinese curly quotes to ASCII " — that splits JSON string values
+    // (e.g. quote: "……从“贩人”变成了“造怪”……"). Use corner brackets instead.
+    s = s.replace('\u{201c}', "「").replace('\u{201d}', "」");
+    s = s.replace('\u{2018}', "'").replace('\u{2019}', "'");
     let mut out = String::with_capacity(s.len());
     let chars: Vec<char> = s.chars().collect();
     let mut i = 0;
@@ -464,6 +466,16 @@ fn sanitize_llm_json(input: &str) -> String {
     while i < chars.len() {
         let ch = chars[i];
         if in_string {
+            // Escape raw newlines/tabs that LLMs sometimes emit inside strings.
+            if !escape && (ch == '\n' || ch == '\r' || ch == '\t') {
+                out.push_str(match ch {
+                    '\n' => "\\n",
+                    '\r' => "\\r",
+                    _ => "\\t",
+                });
+                i += 1;
+                continue;
+            }
             out.push(ch);
             if escape {
                 escape = false;
@@ -659,5 +671,47 @@ mod tests {
             "一个只想保住身边小群体的普通生存者，在资源枯竭中不断被迫扩大视野，最终必须在个人安全、群体责任与亲人自主权之间做出不可逆的选择。",
         );
         assert!(parse_imitate_cards_json(&bad).is_err());
+    }
+
+    #[test]
+    fn parses_chinese_curly_quotes_inside_strings() {
+        let raw = r#"{
+  "schemaVersion": 5,
+  "storyline": {
+    "throughline": "米汤对抗把活人变成“造怪”材料的势力",
+    "signatureDevices": ["肾化收编", "物件改战具", "半真审讯"],
+    "acts": [
+      { "name": "一", "function": "立足", "beatPatterns": ["米汤突围"] },
+      { "name": "二", "function": "人祸", "beatPatterns": ["人质诱饵"] },
+      { "name": "三", "function": "异变", "beatPatterns": ["实验验规则"] }
+    ],
+    "escalationLadder": ["缺水"],
+    "foreshadowCadence": "隔章",
+    "chapterEngines": [],
+    "mustMutate": []
+  },
+  "characters": [
+    {"name":"米汤","roleFunction":"决策","desire":"保住身边人","costOrFear":"材料化","voiceTraits":["先动作"],"voiceSamples":[],"keyEvents":["突围"],"voiceRules":[],"arcStages":["躲"],"relationships":[],"tags":[]},
+    {"name":"甘露婷","roleFunction":"伙伴","desire":"自主","costOrFear":"失退出权","voiceTraits":["冷静"],"voiceSamples":[],"keyEvents":["并肩"],"voiceRules":[],"arcStages":["并肩"],"relationships":[],"tags":[]}
+  ],
+  "craft": {
+    "narrationStance": "近身",
+    "howToImitate": ["动作先"],
+    "proseEngines": [{
+      "rule": "动作先于评价",
+      "why": "压迫",
+      "evidence": { "chapterIndex": 194, "quote": "把这个魔窟从“贩人”变成了“造怪”而已！" }
+    }],
+    "dialogueEngines": [],
+    "infoControl": [],
+    "chapterEndingHooks": [],
+    "forbiddenHabits": []
+  },
+  "setting": {"conflictAxes":["异变"],"worldframeType":"灾后","powerSystemType":"肾化","stakesCurrency":[],"tabooTransfers":[],"notes":[]},
+  "antiPlagiarism": {"bannedNames":[],"bannedSetpieces":[],"rewriteMandates":[],"reviewChecklist":[]}
+}"#;
+        let cards = parse_imitate_cards_json(raw).unwrap();
+        assert!(cards.craft.prose_engines[0].evidence.quote.contains("造怪"));
+        assert!(!cards.craft.prose_engines[0].evidence.quote.contains('"'));
     }
 }
