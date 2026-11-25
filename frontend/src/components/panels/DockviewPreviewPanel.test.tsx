@@ -9,21 +9,10 @@ import {
 
 import DockviewPreviewPanel from './DockviewPreviewPanel';
 
-const api = vi.hoisted(() => ({ resolveFileOpener: vi.fn() }));
 const fileContent = vi.hoisted(() => ({
   data: '# Preview title' as string | undefined,
   isLoading: false,
   error: null as Error | null,
-}));
-
-vi.mock('@/lib/api/plugins', () => ({
-  pluginControlApi: { resolveFileOpener: api.resolveFileOpener },
-}));
-
-vi.mock('@/components/previews/PluginArtifactEditor', () => ({
-  PluginArtifactEditor: ({ filePath }: { filePath: string }) => (
-    <div data-testid="plugin-artifact-editor">{filePath}</div>
-  ),
 }));
 
 vi.mock('@monaco-editor/react', () => {
@@ -117,7 +106,6 @@ function panelProps(filePath = 'README.md'): IDockviewPanelProps {
 
 describe('DockviewPreviewPanel', () => {
   beforeEach(() => {
-    api.resolveFileOpener.mockReset().mockResolvedValue(null);
     fileContent.data = '# Preview title';
     fileContent.isLoading = false;
     fileContent.error = null;
@@ -154,30 +142,6 @@ describe('DockviewPreviewPanel', () => {
       screen.getByRole('status', { name: 'Opening README.md' })
     ).toBeVisible();
     expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
-  });
-
-  it('waits for file-handler resolution before creating the Monaco model', async () => {
-    let resolveFileOpener: (value: null) => void = () => undefined;
-    api.resolveFileOpener.mockReturnValue(
-      new Promise<null>((resolve) => {
-        resolveFileOpener = resolve;
-      })
-    );
-    fileContent.data = undefined;
-
-    const props = panelProps('src/main.ts');
-    const { rerender } = render(<DockviewPreviewPanel {...props} />);
-
-    expect(await screen.findByText('Loading file handler...')).toBeVisible();
-
-    fileContent.data = '# Loaded after handler resolution';
-    rerender(<DockviewPreviewPanel {...props} />);
-    resolveFileOpener(null);
-
-    expect(await screen.findByTestId('monaco-editor')).toHaveAttribute(
-      'data-model-value',
-      '# Loaded after handler resolution'
-    );
   });
 
   it('switches Markdown source to preview on a middle click inside Monaco', async () => {
@@ -221,34 +185,5 @@ describe('DockviewPreviewPanel', () => {
     expect(
       screen.getByRole('button', { name: '切换差异视图' })
     ).toBeInTheDocument();
-  });
-
-  it('mounts an App-backed file opener as the editable file tab', async () => {
-    api.resolveFileOpener.mockResolvedValue({
-      pluginId: 'cinyuverse.drawio',
-      contributionId: 'drawio-files',
-      label: 'Drawio editor',
-      handler: 'drawio-editor',
-      target: 'app_surface',
-      priority: 100,
-      generation: 7,
-    });
-
-    render(
-      <DockviewPreviewPanel
-        {...({
-          params: {
-            filePath: 'architecture.drawio',
-            displayPath: 'architecture.drawio',
-            mode: 'editor',
-          },
-        } as unknown as IDockviewPanelProps)}
-      />
-    );
-
-    expect(
-      await screen.findByTestId('plugin-artifact-editor')
-    ).toHaveTextContent('/workspace/architecture.drawio');
-    expect(screen.queryByTestId('monaco-editor')).not.toBeInTheDocument();
   });
 });

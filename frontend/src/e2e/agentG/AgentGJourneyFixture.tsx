@@ -17,21 +17,6 @@ type Evidence = {
   artifact: string | null;
 };
 
-const OFFICE_ACTION = {
-  pluginId: 'cinyuverse.office',
-  actionId: 'create-presentation',
-  label: 'Create presentation',
-  requiredSkills: ['office-pptx'],
-  requiredTools: ['officecli'],
-  promptBlocks: [{ type: 'text', text: 'Create an editable PPTX.' }],
-  artifactIntent: {
-    mediaTypes: [
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    ],
-    provider: 'officecli',
-  },
-};
-
 function run(status: string, evidence: Evidence) {
   const terminal = status !== 'running';
   const details: Record<
@@ -113,7 +98,6 @@ class FakeAutomationTransport implements BackendTransport {
             agent: { agentId: 'codex', executorProfileId: null },
             modeId: null,
             configValues: [],
-            pluginActions: [],
             skills: [],
             workspace: {
               projectId: '00000000-0000-0000-0000-000000000000',
@@ -158,16 +142,6 @@ class FakeAutomationTransport implements BackendTransport {
           { id: 'agent', label: 'Agent' },
         ],
         config_options: [],
-      };
-    }
-    if (command === 'plugin_action_catalog') {
-      return {
-        actions: [OFFICE_ACTION],
-        readiness: {
-          enabled: true,
-          dependency: { id: 'officecli', status: 'ready' },
-          overall: 'ready',
-        },
       };
     }
     if (command === 'automation_create') {

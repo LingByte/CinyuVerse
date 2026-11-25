@@ -25,7 +25,7 @@ test('production Web UI authenticates and exposes only Server capabilities', asy
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: /Plugins|插件/ })
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: /Agents|智能体/ })
   ).toBeVisible();
@@ -38,11 +38,11 @@ test('production Web UI authenticates and exposes only Server capabilities', asy
     page.getByRole('button', { name: /^Devices$|^设备$/ })
   ).toHaveCount(0);
 
-  await page.getByRole('button', { name: /Plugins|插件/ }).click();
+  await page.getByRole('button', { name: /Agents|智能体/ }).click();
   await expect(
-    page.getByRole('heading', { name: /Plugins|插件/ })
+    page.getByRole('heading', { name: /Agents|智能体/ })
   ).toBeVisible();
-  await expect(page).toHaveURL(/\/settings\/plugins$/);
+  await expect(page).toHaveURL(/\/settings\/agents$/);
 
   await page
     .getByRole('button', { name: /Remote connection|远程连接/ })

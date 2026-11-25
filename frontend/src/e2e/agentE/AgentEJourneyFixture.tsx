@@ -79,12 +79,6 @@ export class FakeMcpDelegationTransport implements BackendTransport {
         },
       };
     }
-    if (command === 'plugin_control_catalog') {
-      return {
-        plugins: [{ id: 'cinyuverse.multi-agent', enabled: true }],
-        runtimes: [],
-      };
-    }
     if (command === 'fixture_projection') {
       return readProjection();
     }

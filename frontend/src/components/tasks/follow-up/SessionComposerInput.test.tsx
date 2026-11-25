@@ -263,10 +263,6 @@ describe('SessionComposerInput (Astryx)', () => {
     const transport: BackendTransport = {
       environment: 'desktop',
       call: vi.fn(async (command: string) => {
-        if (command === 'plugin_action_catalog') return { actions: [] };
-        if (command === 'plugin_control_catalog') {
-          return { plugins: [], runtimes: [] };
-        }
         throw new Error(`Unexpected command: ${command}`);
       }),
     };
@@ -295,10 +291,6 @@ describe('SessionComposerInput (Astryx)', () => {
   it('keeps slash search on the live catalog instead of the disk skill list', async () => {
     const user = userEvent.setup();
     const call = vi.fn(async (command: string) => {
-      if (command === 'plugin_action_catalog') return { actions: [] };
-      if (command === 'plugin_control_catalog') {
-        return { plugins: [], runtimes: [] };
-      }
       if (command === 'list_agent_skills') {
         return {
           supported: true,
@@ -349,10 +341,6 @@ describe('SessionComposerInput (Astryx)', () => {
     const transport: BackendTransport = {
       environment: 'desktop',
       call: vi.fn(async (command: string) => {
-        if (command === 'plugin_action_catalog') return { actions: [] };
-        if (command === 'plugin_control_catalog') {
-          return { plugins: [], runtimes: [] };
-        }
         if (command === 'list_agent_skills') {
           return {
             supported: true,
@@ -398,10 +386,6 @@ describe('SessionComposerInput (Astryx)', () => {
     const transport: BackendTransport = {
       environment: 'desktop',
       call: vi.fn(async (command: string) => {
-        if (command === 'plugin_action_catalog') return { actions: [] };
-        if (command === 'plugin_control_catalog') {
-          return { plugins: [], runtimes: [] };
-        }
         if (command === 'list_agent_skills') {
           return {
             supported: true,
@@ -439,10 +423,6 @@ describe('SessionComposerInput (Astryx)', () => {
     const transport: BackendTransport = {
       environment: 'desktop',
       call: vi.fn(async (command: string) => {
-        if (command === 'plugin_action_catalog') return { actions: [] };
-        if (command === 'plugin_control_catalog') {
-          return { plugins: [], runtimes: [] };
-        }
         if (command === 'list_agent_skills') {
           return {
             supported: true,
@@ -513,11 +493,17 @@ describe('SessionComposerInput (Astryx)', () => {
       screen.getByRole('tab', { selected: true }).textContent ?? '';
     const before = selectedTab();
 
-    await user.keyboard('{ArrowRight}');
+    fireEvent.keyDown(editor, { key: 'ArrowRight' });
+    await act(async () => {
+      await Promise.resolve();
+    });
     const afterRight = selectedTab();
     expect(afterRight).not.toBe(before);
 
-    await user.keyboard('{ArrowLeft}');
+    fireEvent.keyDown(editor, { key: 'ArrowLeft' });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(selectedTab()).toBe(before);
   });
 

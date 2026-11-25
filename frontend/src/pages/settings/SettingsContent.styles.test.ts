@@ -49,23 +49,12 @@ describe('settings page alignment', () => {
     expect(content.get('padding')).toBe('0 0 1.5rem');
   });
 
-  it('uses the same content width for the product plugin catalog', () => {
-    const page = declarationsFor('.settings-page .product-plugins-page');
-
-    expect(page.get('width')).toBe('min(100%, 860px)');
-    expect(page.get('margin')).toBe('0 auto');
-    expect(page.get('padding')).toBe('0 0 1.5rem');
-  });
-
-  it('matches chat-channel and plugin catalog titles to other settings headings', () => {
+  it('matches chat-channel titles to other settings headings', () => {
     const chatTitle = declarationsFor(
       '.settings-page .chat-channel-heading__copy h2'
     );
     const chatCopy = declarationsFor(
       '.settings-page .chat-channel-heading__copy p'
-    );
-    const pluginCopy = declarationsFor(
-      '.settings-page .product-plugins-header p'
     );
     const sectionTitle = declarationsFor(
       '.settings-page .settings-card__header h3'
@@ -76,25 +65,7 @@ describe('settings page alignment', () => {
 
     expect(chatTitle.get('font-size')).toBe(sectionTitle.get('font-size'));
     expect(chatCopy.get('font-size')).toBe(sectionCopy.get('font-size'));
-    expect(pluginCopy.get('font-size')).toBe('calc(0.875rem - 2px)');
     expect(chatTitle.get('display')).toBe('flex');
-  });
-
-  it('lets the plugin README scroll inside the clipped plugins pane', () => {
-    const page = declarationsFor('.settings-page .product-plugins-page');
-    const detail = declarationsFor(
-      '.settings-page .product-plugin-detail-page'
-    );
-    const readme = declarationsFor('.settings-page .product-plugin-readme');
-    const contents = declarationsFor('.settings-page .product-plugin-contents');
-
-    expect(page.get('overflow')).toBe('hidden');
-    expect(detail.get('min-height')).toBe('0');
-    expect(readme.get('overflow-y')).toBe('auto');
-    expect(readme.get('min-height')).toBe('0');
-    expect(readme.get('flex')).toBe('1 1 auto');
-    expect(contents.get('overflow-y')).toBe('auto');
-    expect(contents.get('min-height')).toBe('0');
   });
 
   it('keeps the import track compact and accent-filled', () => {
@@ -197,16 +168,6 @@ describe('settings page alignment', () => {
     const list = declarationsFor('.settings-page .agent-model-provider-list');
     expect(list.get('overflow')).toBe('hidden');
     expect(list.get('border-radius')).toBe('var(--radius)');
-  });
-
-  it('paints the plugin catalog list as a white settings surface', () => {
-    const list = declarationsFor('.settings-page .product-plugin-list');
-    const surface = declarationsFor('.settings-surface');
-    const card = declarationsFor('.settings-page .settings-card');
-
-    expect(list.get('background')).toBe(surface.get('background'));
-    expect(list.get('background')).toBe('var(--surface-card-strong)');
-    expect(card.get('background')).toBe('var(--surface-content)');
   });
 
   it('keeps grouped settings surfaces lifted so loading shells show their shadow', () => {

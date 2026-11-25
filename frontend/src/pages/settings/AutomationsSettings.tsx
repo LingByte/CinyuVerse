@@ -476,7 +476,6 @@ export function AutomationsSettings({
             value,
           })
         ),
-        pluginActions: [],
         skills: [],
         workspace: {
           projectId: draft.projectId,

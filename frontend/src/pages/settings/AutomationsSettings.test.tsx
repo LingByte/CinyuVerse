@@ -123,29 +123,6 @@ function createTransport(
                 modes: [],
                 config_options: [],
               };
-        case 'plugin_action_catalog':
-          return options.withComposerControls
-            ? {
-                actions: [
-                  {
-                    pluginId: 'office',
-                    actionId: 'create-presentation',
-                    label: 'Create presentation',
-                    requiredSkills: ['slides'],
-                    requiredTools: ['officecli'],
-                    promptBlocks: [
-                      { type: 'text', text: 'Create an editable deck.' },
-                    ],
-                    artifactIntent: {
-                      mediaTypes: [
-                        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-                      ],
-                      provider: 'officecli',
-                    },
-                  },
-                ],
-              }
-            : { actions: [] };
         case 'automation_preview_next_runs':
           return [
             '2026-07-31T01:30:00Z',
@@ -207,7 +184,6 @@ function automationView(overrides: Record<string, unknown> = {}) {
       },
       modeId: null,
       configValues: [],
-      pluginActions: [],
       skills: [],
       workspace: {
         projectId: 'project-1',
@@ -263,9 +239,9 @@ describe('AutomationsSettings', () => {
 
     await user.click(await screen.findByRole('button', { name: '新建自动化' }));
 
-    expect(screen.getByRole('combobox', { name: '项目' })).toBeDisabled();
-    expect(screen.getByText('还没有可用于自动化的项目。')).toBeVisible();
-    expect(screen.getByRole('link', { name: '添加项目' })).toHaveAttribute(
+    expect(screen.getByRole('combobox', { name: '作品' })).toBeDisabled();
+    expect(screen.getByText('还没有可用于自动化的作品。')).toBeVisible();
+    expect(screen.getByRole('link', { name: '添加作品' })).toHaveAttribute(
       'href',
       '/local-projects'
     );
@@ -337,8 +313,7 @@ describe('AutomationsSettings', () => {
             },
             modeId: null,
             configValues: [],
-            pluginActions: [],
-            skills: [],
+                  skills: [],
             workspace: {
               projectId: 'project-1',
               rootFolder: '/workspace/Cinyuverse',
@@ -382,61 +357,6 @@ describe('AutomationsSettings', () => {
     expect(
       await screen.findByRole('list', { name: '后端计算的运行预览' })
     ).toHaveTextContent('2026');
-  }, 15_000);
-
-  it('saves the shared Agent controls and an editable PluginAction', async () => {
-    const user = userEvent.setup();
-    const { transport, call } = createTransport({
-      withComposerControls: true,
-    });
-    renderSettings(transport);
-
-    await user.click(await screen.findByRole('button', { name: '新建自动化' }));
-    await user.type(screen.getByRole('textbox', { name: '名称' }), '生成周报');
-    const composer = screen.getByRole('combobox', { name: '消息' });
-    composer.textContent = '根据本周记录生成汇报。';
-    fireEvent.input(composer);
-
-    await user.click(await screen.findByRole('button', { name: '创建 PPT' }));
-    const actionPrompt = screen.getByRole('textbox', {
-      name: '动作提示词',
-    });
-    await user.clear(actionPrompt);
-    await user.type(actionPrompt, 'Create a concise editable weekly deck.');
-    await user.click(screen.getByRole('button', { name: '保存' }));
-
-    await waitFor(() => {
-      const createCall = call.mock.calls.find(
-        ([command]) => command === 'automation_create'
-      );
-      expect(createCall?.[1]).toMatchObject({
-        input: {
-          launch: {
-            modeId: 'plan',
-            configValues: [{ key: 'model', value: 'balanced' }],
-            pluginActions: [
-              {
-                pluginId: 'office',
-                action: {
-                  id: 'create-presentation',
-                  requiredSkills: ['slides'],
-                  requiredTools: ['officecli'],
-                  promptBlocks: [
-                    {
-                      type: 'text',
-                      text: 'Create a concise editable weekly deck.',
-                    },
-                  ],
-                  artifactIntent: {
-                    provider: 'officecli',
-                  },
-                },
-              },
-            ],
-          },
-        },
-      });
-    });
   }, 15_000);
 
   it('opens one of seven templates as an editable draft without running it', async () => {
@@ -586,7 +506,7 @@ describe('AutomationsSettings', () => {
     isolation.focus();
     await user.keyboard('{ArrowDown}');
     await user.click(
-      screen.getByRole('option', { name: 'Shared project root' })
+      screen.getByRole('option', { name: 'Shared novel root' })
     );
     expect(screen.getByRole('alert')).toHaveTextContent(
       'backend rejects dirty roots'
