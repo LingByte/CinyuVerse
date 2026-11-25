@@ -303,6 +303,20 @@ _Avoid_: 与 CC Switch 同步, 接管 CC Switch, 直接覆盖当前绑定
 - **History import（历史导入）** — 把外部工具（Claude Code、Codex 等）的本地会话历史接管进 Cinyuverse 会话体系的行为。
 - **Session fork（会话分叉）** — 从**当前状态**分出一个新 Conversation：新会话是原会话完整历史的独立副本（非破坏性，原会话不受影响），此后独立演化。当 agent 广告了 ACP `session/fork` 且有活会话时，agent 侧上下文也随之分叉（继续对话保有分叉前上下文）；否则新会话为无上下文副本，下次发送冷启动。从当前分叉（非历史某点），以保持可见历史与 agent 上下文一致。与 reset-to-here（在原会话上截断重来，破坏性）互为补充。语义决策见 ADR-0005（2026-07-06 更新）。
 
+## Novel writing domain
+
+小说 Workspace 的故事线与元数据。产品决策见 [ADR-0079](docs/adr/0079-storyline-beat-writing-cockpit.md)。
+
+- **Storyline cockpit（故事线 / 节拍驾驶舱）** — Overview 面的主职：围绕当前节拍完成推演、撰写、状态收账与推进。不是通用思维导图，不是第二份散文大纲编辑器，也不是只读的 Agent 结构浏览器。
+- **Story graph（故事节拍图）** — 仓库文件 `.cinyuverse/story-graph.json`：节拍节点与边构成的操作骨架；是推进状态、写作绑定与节拍声明的**唯一操作权威**。
+- **Story beat（节拍）** — 图上的一个可推进事件单元（含类型、status、chapter 绑定、声明的 hook id、完成条件等）。同一项目任意时刻至多一个 `current` 节拍。
+- **Story edge（节拍边）** — 节拍之间的关系；主线默认只强调 `sequential` / `causal`，伏笔线与角色弧为按需图层。
+- **Beat context pack（节拍上下文包）** — Host 从故事图邻域、`hooks.md`、`current-state.md`、近章摘要与角色卡摘录组装、注入写作 prompt 的结构化记忆；优先于让 Agent 每轮重扫磁盘。
+- **Hooks pool（伏笔池）** — `.cinyuverse/hooks.md` 中的表格权威；与节拍上的 hook id 声明对账（图有池无 / 池有图无）。统计与 seed 必须使用同一表格契约，不得用 checkbox 任务列表冒充伏笔数。
+- **Writing memory sidecars（写作记忆侧车）** — `hooks.md`、`current-state.md`、`chapter-summaries.md` 等由 Agent 在 `update-state` 回写的记忆文件；它们不是第二套节拍图。
+- **Outline document（大纲文档）** — `.cinyuverse/outline.md`：可读摘要或遗留 prompt 输入；**不是**与故事图并列的结构权威。与图冲突时以故事图为准。
+_Avoid_: 把 outline 当可写结构权威, JSON 与 SQLite story_beat 双写, 第三套平行故事线模型
+
 ## ACP 官方参考文档
 
 来源：ACP 官方文档索引（[llms.txt](https://agentclientprotocol.com/llms.txt)）。最后核对：2026-08-02。
