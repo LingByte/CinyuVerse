@@ -183,25 +183,108 @@ type DownloadProgressEvent = {
 
 type ImitateStatusView = {
   phase: 'idle' | 'queued' | 'running' | 'completed' | 'failed' | string;
+  step: number | null;
+  stepTotal: number | null;
   progress: string | null;
   error: string | null;
   updatedAt: string;
   conversationId: string | null;
 };
 
+type ImitateCraftRule = {
+  rule: string;
+  why?: string;
+  evidence: { chapterIndex: number; quote: string };
+};
+
+type ImitateCharacterCard = {
+  slot: string;
+  roleFunction: string;
+  desire: string;
+  costOrFear: string;
+  voiceRules: string[];
+  arcStages: string[];
+  relationships: Array<{ toSlot: string; tension: string }>;
+  tags: string[];
+};
+
+type ImitatePackView = {
+  schemaVersion: number;
+  storyline: {
+    throughline: string;
+    acts: Array<{
+      name: string;
+      function: string;
+      beatPatterns: string[];
+    }>;
+    escalationLadder: string[];
+    foreshadowCadence: string;
+    chapterEngines: Array<{
+      pattern: string;
+      purpose: string;
+      placement: string;
+    }>;
+    mustMutate: string[];
+  };
+  characters: ImitateCharacterCard[];
+  craft: {
+    proseEngines: ImitateCraftRule[];
+    dialogueEngines: ImitateCraftRule[];
+    infoControl: string[];
+    chapterEndingHooks: string[];
+    forbiddenHabits: string[];
+    narrationStance: string;
+  };
+  setting: {
+    conflictAxes: string[];
+    worldframeType: string;
+    powerSystemType: string;
+    stakesCurrency: string[];
+    tabooTransfers: string[];
+    notes: string[];
+  };
+  antiPlagiarism: {
+    bannedNames: string[];
+    bannedSetpieces: string[];
+    rewriteMandates: string[];
+    reviewChecklist: string[];
+  };
+};
+
+type ImitateSeedResult = {
+  projectPath: string;
+  projectId: string;
+  title: string;
+};
+
 export function imitateStatusLabel(status: ImitateStatusView | null): string {
   if (!status) return '未分析';
+  const stepPrefix =
+    status.step != null && status.stepTotal != null
+      ? `${status.step}/${status.stepTotal} · `
+      : '';
   switch (status.phase) {
     case 'queued':
     case 'running':
-      return status.progress || '分析中';
+      return `${stepPrefix}${status.progress || '分析中'}`;
     case 'completed':
-      return '已完成';
+      return '已拆出故事线/人物卡/写法';
     case 'failed':
       return status.error ? `失败：${status.error}` : '失败';
+    case 'idle':
+      return status.progress === '已中断' ? '已中断' : '未分析';
     default:
       return '未分析';
   }
+}
+
+export function imitateStepPercent(status: ImitateStatusView | null): number | null {
+  if (!status || status.step == null || status.stepTotal == null || status.stepTotal <= 0) {
+    return null;
+  }
+  if (status.phase === 'completed') return 100;
+  if (status.phase !== 'queued' && status.phase !== 'running') return null;
+  return Math.min(100, Math.round((status.step / status.stepTotal) * 100));
 }
 
 export function NovelLibraryPanel() {
@@ -230,7 +313,14 @@ export function NovelLibraryPanel() {
   const [imitateStatus, setImitateStatus] = useState<ImitateStatusView | null>(
     null
   );
+  const [imitatePack, setImitatePack] = useState<ImitatePackView | null>(null);
+  const [imitatePackLoading, setImitatePackLoading] = useState(false);
   const [imitateStarting, setImitateStarting] = useState(false);
+  const [imitateCancelling, setImitateCancelling] = useState(false);
+  const [seedDialogOpen, setSeedDialogOpen] = useState(false);
+  const [seedTitle, setSeedTitle] = useState('');
+  const [seedParentDir, setSeedParentDir] = useState('');
+  const [seedBusy, setSeedBusy] = useState(false);
   const [downloader, setDownloader] = useState<DownloaderStatus | null>(null);
   const [downloaderBusy, setDownloaderBusy] = useState(false);
   const [downloaderPromptOpen, setDownloaderPromptOpen] = useState(false);
@@ -640,6 +730,7 @@ export function NovelLibraryPanel() {
       setEpubChapter(null);
       setTextPreview(null);
       setImitateStatus(null);
+      setImitatePack(null);
       toast.success(`已删除「${name}」`);
       await loadLocal();
     } catch (err) {
@@ -660,9 +751,26 @@ export function NovelLibraryPanel() {
     }
   }, []);
 
+  const refreshImitatePack = useCallback(async (path: string) => {
+    setImitatePackLoading(true);
+    try {
+      const pack = await invoke<ImitatePackView>('library_imitate_pack', {
+        path,
+      });
+      setImitatePack(pack);
+      return pack;
+    } catch {
+      setImitatePack(null);
+      return null;
+    } finally {
+      setImitatePackLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!selectedLocal || selectedLocal.ext !== 'book') {
       setImitateStatus(null);
+      setImitatePack(null);
       return;
     }
     void refreshImitateStatus(selectedLocal.path);
@@ -684,22 +792,90 @@ export function NovelLibraryPanel() {
     return () => window.clearInterval(timer);
   }, [selectedLocal, imitateStatus, refreshImitateStatus]);
 
+  useEffect(() => {
+    if (
+      !selectedLocal ||
+      selectedLocal.ext !== 'book' ||
+      imitateStatus?.phase !== 'completed'
+    ) {
+      if (imitateStatus?.phase !== 'completed') {
+        setImitatePack(null);
+      }
+      return;
+    }
+    void refreshImitatePack(selectedLocal.path);
+  }, [selectedLocal, imitateStatus?.phase, refreshImitatePack]);
+
   const handleStartImitate = useCallback(async () => {
     if (!selectedLocal || selectedLocal.ext !== 'book') return;
     setImitateStarting(true);
+    setImitatePack(null);
     try {
       const status = await invoke<ImitateStatusView>(
         'library_start_imitate_analysis',
         { path: selectedLocal.path }
       );
       setImitateStatus(status);
-      toast.success('已开始仿写分析');
+      toast.success('已开始深度分析（故事线 / 人物卡 / 写法）');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setImitateStarting(false);
     }
   }, [selectedLocal]);
+
+  const handleCancelImitate = useCallback(async () => {
+    if (!selectedLocal || selectedLocal.ext !== 'book') return;
+    setImitateCancelling(true);
+    try {
+      const status = await invoke<ImitateStatusView>(
+        'library_cancel_imitate_analysis',
+        { path: selectedLocal.path }
+      );
+      setImitateStatus(status);
+      toast.success('已中断分析');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setImitateCancelling(false);
+    }
+  }, [selectedLocal]);
+
+  const handleOpenSeedDialog = useCallback(() => {
+    if (!selectedLocal) return;
+    setSeedTitle(`${displayBookName(selectedLocal.name)}·转置`);
+    setSeedParentDir('');
+    setSeedDialogOpen(true);
+  }, [selectedLocal]);
+
+  const handleSeedProject = useCallback(async () => {
+    if (!selectedLocal || selectedLocal.ext !== 'book') return;
+    if (!seedTitle.trim()) {
+      toast.error('请填写新书标题');
+      return;
+    }
+    if (!seedParentDir.trim()) {
+      toast.error('请选择保存目录');
+      return;
+    }
+    setSeedBusy(true);
+    try {
+      const result = await invoke<ImitateSeedResult>(
+        'library_imitate_seed_project',
+        {
+          path: selectedLocal.path,
+          parentDir: seedParentDir,
+          newTitle: seedTitle.trim(),
+        }
+      );
+      setSeedDialogOpen(false);
+      toast.success(`已开新书「${result.title}」`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSeedBusy(false);
+    }
+  }, [selectedLocal, seedParentDir, seedTitle]);
 
   const handleDownload = useCallback(
     async (item: SearchItem) => {
@@ -968,7 +1144,10 @@ export function NovelLibraryPanel() {
                 textPreview={textPreview}
                 textPreviewLoading={textPreviewLoading}
                 imitateStatus={imitateStatus}
+                imitatePack={imitatePack}
+                imitatePackLoading={imitatePackLoading}
                 imitateStarting={imitateStarting}
+                imitateCancelling={imitateCancelling}
                 currentChapterIndex={currentChapterIndex}
                 chapterCount={chapterCount}
                 readerScrollRef={readerScrollRef}
@@ -977,6 +1156,8 @@ export function NovelLibraryPanel() {
                   void loadEpubChapter(selectedLocal.path, index, requestId);
                 }}
                 onImitate={() => void handleStartImitate()}
+                onCancelImitate={() => void handleCancelImitate()}
+                onSeed={() => handleOpenSeedDialog()}
                 onDelete={() => void handleDeleteLocal()}
               />
             ) : null}
@@ -1004,6 +1185,71 @@ export function NovelLibraryPanel() {
           }}
           onAction={() => void handleDownloaderPromptAction()}
         />
+
+        <Dialog open={seedDialogOpen} onOpenChange={setSeedDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>据此开新书</DialogTitle>
+              <DialogDescription>
+                写入故事线骨架、人物卡与写法引擎，不粘贴原书范文。
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-1">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">新书标题</label>
+                <Input
+                  value={seedTitle}
+                  onChange={(e) => setSeedTitle(e.target.value)}
+                  placeholder="新书名"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">保存位置</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={seedParentDir}
+                    readOnly
+                    placeholder="选择父目录"
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={seedBusy}
+                    onClick={() => {
+                      void pickHostDirectory({ title: '选择新书保存目录' }).then(
+                        (dir) => {
+                          if (dir) setSeedParentDir(dir);
+                        }
+                      );
+                    }}
+                  >
+                    浏览
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                disabled={seedBusy}
+                onClick={() => setSeedDialogOpen(false)}
+              >
+                取消
+              </Button>
+              <Button
+                disabled={seedBusy}
+                onClick={() => void handleSeedProject()}
+                data-testid="library-imitate-seed-confirm"
+              >
+                {seedBusy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : null}
+                创建项目
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   );
@@ -1544,12 +1790,17 @@ function LocalReader({
   textPreview,
   textPreviewLoading,
   imitateStatus,
+  imitatePack,
+  imitatePackLoading,
   imitateStarting,
+  imitateCancelling,
   currentChapterIndex,
   chapterCount,
   readerScrollRef,
   onChapter,
   onImitate,
+  onCancelImitate,
+  onSeed,
   onDelete,
 }: {
   book: LocalBook;
@@ -1559,15 +1810,29 @@ function LocalReader({
   textPreview: string | null;
   textPreviewLoading: boolean;
   imitateStatus: ImitateStatusView | null;
+  imitatePack: ImitatePackView | null;
+  imitatePackLoading: boolean;
   imitateStarting: boolean;
+  imitateCancelling: boolean;
   currentChapterIndex: number;
   chapterCount: number;
   readerScrollRef: RefObject<HTMLDivElement | null>;
   onChapter: (index: number) => void;
   onImitate: () => void;
+  onCancelImitate: () => void;
+  onSeed: () => void;
   onDelete: () => void;
 }) {
   const isEpub = book.ext === 'epub' || book.ext === 'book';
+  const imitateBusy =
+    imitateStarting ||
+    imitateStatus?.phase === 'queued' ||
+    imitateStatus?.phase === 'running';
+  const showPack =
+    book.ext === 'book' &&
+    (imitatePack != null ||
+      imitatePackLoading ||
+      imitateStatus?.phase === 'completed');
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -1647,34 +1912,66 @@ function LocalReader({
             ) : null}
             {book.ext === 'book' ? (
               <>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="h-7"
-                  disabled={
-                    imitateStarting ||
-                    imitateStatus?.phase === 'queued' ||
-                    imitateStatus?.phase === 'running'
-                  }
-                  onClick={onImitate}
-                  data-testid="library-imitate-analyze"
-                >
-                  {imitateStarting ||
-                  imitateStatus?.phase === 'queued' ||
-                  imitateStatus?.phase === 'running' ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
+                {imitateBusy ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-7"
+                    disabled={imitateCancelling}
+                    onClick={onCancelImitate}
+                    data-testid="library-imitate-cancel"
+                  >
+                    {imitateCancelling ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Square className="h-3.5 w-3.5" />
+                    )}
+                    中断
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-7"
+                    onClick={onImitate}
+                    data-testid="library-imitate-analyze"
+                  >
                     <Sparkles className="h-3.5 w-3.5" />
-                  )}
-                  分析
-                </Button>
+                    深度分析
+                  </Button>
+                )}
+                {imitateStatus?.phase === 'completed' && imitatePack ? (
+                  <Button
+                    size="sm"
+                    className="h-7"
+                    onClick={onSeed}
+                    data-testid="library-imitate-seed"
+                  >
+                    据此开新书
+                  </Button>
+                ) : null}
                 <Badge
                   variant="outline"
-                  className="h-5 text-[10px] font-normal"
+                  className="h-5 max-w-[22rem] truncate text-[10px] font-normal"
                   data-testid="library-imitate-status"
+                  title={imitateStatusLabel(imitateStatus)}
                 >
                   {imitateStatusLabel(imitateStatus)}
                 </Badge>
+                {imitateBusy && imitateStepPercent(imitateStatus) != null ? (
+                  <div
+                    className="flex w-28 items-center gap-1.5"
+                    data-testid="library-imitate-progress"
+                  >
+                    <Progress
+                      value={imitateStepPercent(imitateStatus) ?? 0}
+                      className="h-1.5"
+                    />
+                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                      {imitateStepPercent(imitateStatus)}%
+                    </span>
+                  </div>
+                ) : null}
               </>
             ) : null}
             <Button
@@ -1712,6 +2009,17 @@ function LocalReader({
         </div>
 
         <div ref={readerScrollRef} className="min-h-0 flex-1 overflow-y-auto p-4">
+          {showPack ? (
+            <div className="mb-6 space-y-4" data-testid="library-imitate-pack">
+              {imitatePackLoading && !imitatePack ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  加载分析包…
+                </div>
+              ) : null}
+              {imitatePack ? <ImitatePackPanel pack={imitatePack} /> : null}
+            </div>
+          ) : null}
           {isEpub ? (
             epubLoading && !epubChapter ? (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -1751,6 +2059,105 @@ function LocalReader({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ImitatePackPanel({ pack }: { pack: ImitatePackView }) {
+  return (
+    <div className="mx-auto max-w-2xl space-y-5 rounded-lg border border-border/60 bg-[var(--surface-raised)]/40 p-4">
+      <section className="space-y-2">
+        <h4 className="text-sm font-semibold">故事线</h4>
+        <p className="text-[13px] leading-relaxed text-foreground/90">
+          {pack.storyline.throughline || '（无主线）'}
+        </p>
+        {pack.storyline.acts.length > 0 ? (
+          <ul className="space-y-1.5 text-[12px] text-muted-foreground">
+            {pack.storyline.acts.map((act, i) => (
+              <li key={`${act.name}-${i}`}>
+                <span className="font-medium text-foreground/80">
+                  {act.name || `幕${i + 1}`}
+                </span>
+                {act.function ? ` · ${act.function}` : ''}
+                {act.beatPatterns.length > 0
+                  ? ` — ${act.beatPatterns.join(' / ')}`
+                  : ''}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {pack.storyline.escalationLadder.length > 0 ? (
+          <p className="text-[12px] text-muted-foreground">
+            升级：{pack.storyline.escalationLadder.join(' → ')}
+          </p>
+        ) : null}
+      </section>
+
+      <section className="space-y-2">
+        <h4 className="text-sm font-semibold">
+          人物卡（{pack.characters.length}）
+        </h4>
+        <div className="space-y-3">
+          {pack.characters.map((ch) => (
+            <div
+              key={ch.slot}
+              className="rounded-md border border-border/50 px-3 py-2"
+            >
+              <div className="text-[13px] font-medium">
+                {ch.slot}
+                {ch.roleFunction ? (
+                  <span className="ml-2 text-[11px] font-normal text-muted-foreground">
+                    {ch.roleFunction}
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 text-[12px] text-muted-foreground">
+                欲望：{ch.desire || '—'}
+                {ch.costOrFear ? ` · 代价：${ch.costOrFear}` : ''}
+              </p>
+              {ch.voiceRules.length > 0 ? (
+                <p className="mt-1 text-[12px] text-foreground/80">
+                  声音：{ch.voiceRules.join('；')}
+                </p>
+              ) : null}
+              {ch.arcStages.length > 0 ? (
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  弧光：{ch.arcStages.join(' → ')}
+                </p>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <h4 className="text-sm font-semibold">写法引擎</h4>
+        {pack.craft.narrationStance ? (
+          <p className="text-[12px] text-muted-foreground">
+            立场：{pack.craft.narrationStance}
+          </p>
+        ) : null}
+        <ul className="space-y-1.5 text-[12px]">
+          {[...pack.craft.proseEngines, ...pack.craft.dialogueEngines].map(
+            (rule, i) => (
+              <li key={`${rule.rule}-${i}`} className="leading-snug">
+                <span className="text-foreground/90">{rule.rule}</span>
+                {rule.evidence?.quote ? (
+                  <span className="text-muted-foreground">
+                    {' '}
+                    · 取证「{rule.evidence.quote}」
+                  </span>
+                ) : null}
+              </li>
+            )
+          )}
+        </ul>
+        {pack.craft.forbiddenHabits.length > 0 ? (
+          <p className="text-[11px] text-muted-foreground">
+            禁止：{pack.craft.forbiddenHabits.join('；')}
+          </p>
+        ) : null}
+      </section>
     </div>
   );
 }
