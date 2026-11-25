@@ -15,6 +15,7 @@ use std::{
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
+use tracing::{info, warn};
 
 use crate::config::LOCAL_API_BASE;
 
@@ -153,12 +154,20 @@ impl TomatoDownloaderRuntime {
     }
 
     pub async fn install_latest(&self) -> Result<DownloaderStatus> {
+        info!(target: "tomato_downloader", "install requested");
         {
             let mut guard = self.inner.lock().expect("tomato runtime lock");
             if guard.installing {
+                warn!(target: "tomato_downloader", "install rejected: already installing");
                 bail!("番茄下载器正在安装中");
             }
             if guard.child.is_some() || probe_local_server_blocking() {
+                warn!(
+                    target: "tomato_downloader",
+                    child_tracked = guard.child.is_some(),
+                    port_busy = probe_local_server_blocking(),
+                    "install rejected: downloader still running"
+                );
                 bail!("请先停止正在运行的番茄下载器，再安装或更新");
             }
             guard.installing = true;
@@ -176,10 +185,12 @@ impl TomatoDownloaderRuntime {
             Ok(()) => {
                 guard.phase = DownloaderPhase::Ready;
                 guard.message = Some("安装完成".to_string());
+                info!(target: "tomato_downloader", "install completed");
             }
             Err(error) => {
                 guard.phase = DownloaderPhase::Error;
                 guard.message = Some(error.to_string());
+                warn!(target: "tomato_downloader", error = %error, "install failed");
             }
         }
         drop(guard);
@@ -262,13 +273,30 @@ impl TomatoDownloaderRuntime {
 
     pub async fn start_server(&self) -> Result<DownloaderStatus> {
         let binary = resolve_binary_path().context("尚未安装番茄下载器")?;
+        info!(
+            target: "tomato_downloader",
+            binary = %binary.display(),
+            api_base = LOCAL_API_BASE,
+            "start requested"
+        );
         {
             let mut guard = self.inner.lock().expect("tomato runtime lock");
             refresh_child_locked(&mut guard);
+            info!(
+                target: "tomato_downloader",
+                phase = ?guard.phase,
+                child_tracked = guard.child.is_some(),
+                "start: refreshed tracked child"
+            );
         }
 
         // Reattach if a previous app session (or manual launch) already owns the port.
         if probe_local_server().await {
+            info!(
+                target: "tomato_downloader",
+                api_base = LOCAL_API_BASE,
+                "start: port already ready, adopting existing server"
+            );
             let mut guard = self.inner.lock().expect("tomato runtime lock");
             guard.phase = DownloaderPhase::Running;
             guard.message = Some(format!("本机服务已在运行（{LOCAL_API_BASE}）"));
@@ -288,6 +316,12 @@ impl TomatoDownloaderRuntime {
         let stderr_file = fs::File::create(&stderr_path).ok();
 
         let data_dir = install_dir()?;
+        info!(
+            target: "tomato_downloader",
+            data_dir = %data_dir.display(),
+            stderr_log = %stderr_path.display(),
+            "start: spawning --server process"
+        );
         let mut command = Command::new(&binary);
         command
             .arg("--server")
@@ -303,39 +337,89 @@ impl TomatoDownloaderRuntime {
             command.stderr(Stdio::null());
         }
 
+        // Stay out of the app / script process group so unrelated SIGINT cleanup
+        // (utils::process::kill_process_group) cannot take this server down.
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            unsafe {
+                command.pre_exec(|| {
+                    if libc::setsid() == -1 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    Ok(())
+                });
+            }
+        }
+
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
             const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-            command.creation_flags(CREATE_NO_WINDOW);
+            const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+            command.creation_flags(CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP);
         }
 
         let child = command
             .spawn()
             .with_context(|| format!("启动失败: {}", binary.display()))?;
+        let child_pid = child.id();
+        info!(
+            target: "tomato_downloader",
+            pid = child_pid,
+            "start: process spawned, waiting for port readiness"
+        );
 
         {
             let mut guard = self.inner.lock().expect("tomato runtime lock");
             guard.child = Some(child);
         }
 
-        // Normal cold start is ~0.5–2s (binary does a short network prewarm, then binds).
-        // Prefer TCP readiness over HTTP so we don't pay a 2s reqwest timeout per miss.
-        for _ in 0..40 {
+        // Cold start often spends several seconds on Tomato's network "IID 预热"
+        // before binding 18423. Wait long enough, and never kill a still-live child
+        // just because the first window expired — that was aborting healthy starts.
+        const READY_ATTEMPTS: u32 = 120; // ~60s at 500ms
+        for attempt in 0..READY_ATTEMPTS {
             if probe_local_server().await {
+                let waited_ms = (attempt + 1) * 500;
+                info!(
+                    target: "tomato_downloader",
+                    pid = child_pid,
+                    waited_ms,
+                    api_base = LOCAL_API_BASE,
+                    "start: port ready"
+                );
                 let mut guard = self.inner.lock().expect("tomato runtime lock");
                 guard.phase = DownloaderPhase::Running;
                 guard.message = Some(format!("本机服务已启动（{LOCAL_API_BASE}）"));
                 persist_local_api_base();
-                return Ok(self.status());
+                // Must use status_unlocked: Mutex is not reentrant.
+                return Ok(self.status_unlocked(&guard));
             }
-            // Bail early if the child already died.
             {
                 let mut guard = self.inner.lock().expect("tomato runtime lock");
                 refresh_child_locked(&mut guard);
                 if guard.child.is_none() {
+                    // Port may already be owned by an orphan from a prior session.
+                    if probe_local_server_blocking() {
+                        info!(
+                            target: "tomato_downloader",
+                            "start: tracked child exited but port is live; adopting"
+                        );
+                        guard.phase = DownloaderPhase::Running;
+                        guard.message =
+                            Some(format!("本机服务已在运行（{LOCAL_API_BASE}）"));
+                        persist_local_api_base();
+                        return Ok(self.status_unlocked(&guard));
+                    }
                     let detail = fs::read_to_string(&stderr_path).unwrap_or_default();
                     let detail = detail.trim();
+                    warn!(
+                        target: "tomato_downloader",
+                        pid = child_pid,
+                        stderr = %detail,
+                        "start: process exited before port was ready"
+                    );
                     bail!(
                         "番茄下载器进程已退出，服务未就绪{}",
                         if detail.is_empty() {
@@ -345,15 +429,67 @@ impl TomatoDownloaderRuntime {
                         }
                     );
                 }
+                if attempt == 20 || attempt == 60 {
+                    let waited_s = (attempt + 1) / 2;
+                    info!(
+                        target: "tomato_downloader",
+                        pid = child_pid,
+                        waited_s,
+                        "start: still waiting (network prewarm)"
+                    );
+                    guard.message = Some(format!(
+                        "正在启动（网络预热中，已等待 ~{waited_s}s）…"
+                    ));
+                }
             }
-            sleep(Duration::from_millis(150)).await;
+            sleep(Duration::from_millis(500)).await;
         }
 
-        let _ = self.stop_server().await;
+        // Last chance: process may have bound between probes.
+        if probe_local_server().await {
+            info!(
+                target: "tomato_downloader",
+                pid = child_pid,
+                "start: port ready on final probe"
+            );
+            let mut guard = self.inner.lock().expect("tomato runtime lock");
+            guard.phase = DownloaderPhase::Running;
+            guard.message = Some(format!("本机服务已启动（{LOCAL_API_BASE}）"));
+            persist_local_api_base();
+            return Ok(self.status_unlocked(&guard));
+        }
+
+        // Leave a live child alone — killing it on timeout caused repeated failures.
+        {
+            let mut guard = self.inner.lock().expect("tomato runtime lock");
+            refresh_child_locked(&mut guard);
+            if guard.child.is_some() || probe_local_server_blocking() {
+                warn!(
+                    target: "tomato_downloader",
+                    pid = child_pid,
+                    child_tracked = guard.child.is_some(),
+                    port_busy = probe_local_server_blocking(),
+                    "start: timed out waiting for port; leaving process running"
+                );
+                guard.phase = DownloaderPhase::Starting;
+                guard.message = Some(
+                    "启动较慢（网络预热）。进程仍在运行，请稍后点刷新。"
+                        .to_string(),
+                );
+                return Ok(self.status_unlocked(&guard));
+            }
+        }
+
         let detail = fs::read_to_string(&stderr_path).unwrap_or_default();
         let detail = detail.trim();
+        warn!(
+            target: "tomato_downloader",
+            pid = child_pid,
+            stderr = %detail,
+            "start failed: process gone and port not ready"
+        );
         bail!(
-            "启动超时（约 6s）：本机服务未在 {LOCAL_API_BASE} 就绪{}",
+            "启动失败：本机服务未在 {LOCAL_API_BASE} 就绪{}",
             if detail.is_empty() {
                 String::new()
             } else {
@@ -363,33 +499,66 @@ impl TomatoDownloaderRuntime {
     }
 
     pub async fn stop_server(&self) -> Result<DownloaderStatus> {
-        {
+        info!(target: "tomato_downloader", "stop requested");
+        let tracked_pid = {
             let mut guard = self.inner.lock().expect("tomato runtime lock");
             guard.phase = DownloaderPhase::Stopping;
             guard.message = Some("正在停止本机服务…".to_string());
             if let Some(mut child) = guard.child.take() {
-                let _ = child.kill();
-                let _ = child.wait();
+                let pid = child.id();
+                info!(target: "tomato_downloader", pid, "stop: killing tracked child");
+                let kill_result = child.kill();
+                let wait_result = child.wait();
+                info!(
+                    target: "tomato_downloader",
+                    pid,
+                    kill_ok = kill_result.is_ok(),
+                    wait = ?wait_result.as_ref().ok().map(|status| status.to_string()),
+                    "stop: tracked child finished"
+                );
+                Some(pid)
+            } else {
+                info!(target: "tomato_downloader", "stop: no tracked child handle");
+                None
             }
-        }
+        };
 
         // Also stop an orphaned listener left from a previous app session.
-        if probe_local_server_blocking() {
-            let _ = kill_local_server_listeners();
+        let port_busy_before = probe_local_server_blocking();
+        if port_busy_before {
+            info!(
+                target: "tomato_downloader",
+                tracked_pid,
+                "stop: port still busy, killing listeners on 18423"
+            );
+            match kill_local_server_listeners() {
+                Ok(()) => info!(target: "tomato_downloader", "stop: listener cleanup issued"),
+                Err(error) => warn!(
+                    target: "tomato_downloader",
+                    error = %error,
+                    "stop: listener cleanup failed"
+                ),
+            }
+        } else {
+            info!(target: "tomato_downloader", "stop: port already free");
         }
 
         sleep(Duration::from_millis(300)).await;
         let mut guard = self.inner.lock().expect("tomato runtime lock");
-        if probe_local_server_blocking() {
+        let port_busy_after = probe_local_server_blocking();
+        if port_busy_after {
+            warn!(target: "tomato_downloader", "stop: port 18423 still occupied");
             guard.phase = DownloaderPhase::Error;
             guard.message = Some(
                 "未能释放 18423 端口。请手动结束 TomatoNovelDownloader 进程后重试。"
                     .to_string(),
             );
         } else if resolve_binary_path().ok().is_some_and(|path| path.is_file()) {
+            info!(target: "tomato_downloader", "stop completed; service ready to start again");
             guard.phase = DownloaderPhase::Ready;
             guard.message = Some("本机服务已停止".to_string());
         } else {
+            info!(target: "tomato_downloader", "stop completed; binary missing");
             guard.phase = DownloaderPhase::Missing;
             guard.message = None;
         }
