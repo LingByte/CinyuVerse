@@ -4,11 +4,12 @@ use std::{path::PathBuf, sync::Arc};
 
 use futures::stream::{FuturesUnordered, StreamExt};
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter};
 use tomato_library::{
-    DownloadRequest, DownloadResult, DownloaderStatus, EpubBook, EpubChapter, LocalBook,
-    TomatoClient, TomatoLibraryConfig, TomatoLibraryConfigManager, cover_url_from_raw,
-    default_library_path, delete_book, download_book_to_library, ensure_book_dir, list_local_books,
-    open_book, read_chapter, read_local_text, runtime,
+    DownloadProgressEvent, DownloadRequest, DownloadResult, DownloaderStatus, EpubBook, EpubChapter,
+    LocalBook, TomatoClient, TomatoLibraryConfig, TomatoLibraryConfigManager, cover_url_from_raw,
+    default_library_path, delete_book, download_book_to_library_with_progress, ensure_book_dir,
+    list_local_books, open_book, read_chapter, read_local_text, runtime,
 };
 
 use crate::error::AppError;
@@ -274,19 +275,62 @@ pub struct LibraryDownloadArgs {
 }
 
 #[tauri::command]
-pub async fn library_download(args: LibraryDownloadArgs) -> Result<DownloadResult, String> {
+pub async fn library_download(
+    app: AppHandle,
+    args: LibraryDownloadArgs,
+) -> Result<DownloadResult, String> {
     let cfg = load_cfg()?;
-    download_book_to_library(
+    let book_id = args.book_id.trim().to_string();
+    tracing::info!(
+        target: "tomato_downloader",
+        book_id = %book_id,
+        preferred_name = ?args.preferred_name,
+        "IPC library_download"
+    );
+    let result = download_book_to_library_with_progress(
         &cfg,
         DownloadRequest {
-            book_id: args.book_id.trim().to_string(),
+            book_id: book_id.clone(),
             preferred_name: args.preferred_name,
             range_start: args.range_start,
             range_end: args.range_end,
         },
+        |progress: DownloadProgressEvent| {
+            let _ = app.emit("library-download-progress", &progress);
+        },
     )
     .await
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string());
+
+    match &result {
+        Ok(done) => tracing::info!(
+            target: "tomato_downloader",
+            book_id = %book_id,
+            title = %done.title,
+            path = %done.local_path,
+            "IPC library_download ok"
+        ),
+        Err(error) => {
+            let _ = app.emit(
+                "library-download-progress",
+                &DownloadProgressEvent {
+                    book_id: book_id.clone(),
+                    title: book_id.clone(),
+                    phase: "failed".to_string(),
+                    message: Some(error.clone()),
+                    job_id: None,
+                    percent: None,
+                },
+            );
+            tracing::warn!(
+                target: "tomato_downloader",
+                book_id = %book_id,
+                error = %error,
+                "IPC library_download failed"
+            );
+        }
+    }
+    result
 }
 
 #[tauri::command]
@@ -391,29 +435,87 @@ pub async fn library_open_local(path: String) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn library_downloader_status() -> Result<DownloaderStatus, String> {
-    Ok(runtime().status())
+    let status = runtime().status();
+    tracing::debug!(
+        target: "tomato_downloader",
+        phase = ?status.phase,
+        running = status.running,
+        installed = status.installed,
+        "status polled"
+    );
+    Ok(status)
 }
 
 #[tauri::command]
 pub async fn library_install_downloader() -> Result<DownloaderStatus, String> {
-    runtime()
-        .install_latest()
-        .await
-        .map_err(|error| error.to_string())
+    tracing::info!(target: "tomato_downloader", "IPC library_install_downloader");
+    match runtime().install_latest().await {
+        Ok(status) => {
+            tracing::info!(
+                target: "tomato_downloader",
+                phase = ?status.phase,
+                version = ?status.version,
+                "IPC library_install_downloader ok"
+            );
+            Ok(status)
+        }
+        Err(error) => {
+            tracing::warn!(
+                target: "tomato_downloader",
+                error = %error,
+                "IPC library_install_downloader failed"
+            );
+            Err(error.to_string())
+        }
+    }
 }
 
 #[tauri::command]
 pub async fn library_start_downloader() -> Result<DownloaderStatus, String> {
-    runtime()
-        .start_server()
-        .await
-        .map_err(|error| error.to_string())
+    tracing::info!(target: "tomato_downloader", "IPC library_start_downloader");
+    match runtime().start_server().await {
+        Ok(status) => {
+            tracing::info!(
+                target: "tomato_downloader",
+                phase = ?status.phase,
+                running = status.running,
+                message = ?status.message,
+                "IPC library_start_downloader ok"
+            );
+            Ok(status)
+        }
+        Err(error) => {
+            tracing::warn!(
+                target: "tomato_downloader",
+                error = %error,
+                "IPC library_start_downloader failed"
+            );
+            Err(error.to_string())
+        }
+    }
 }
 
 #[tauri::command]
 pub async fn library_stop_downloader() -> Result<DownloaderStatus, String> {
-    runtime()
-        .stop_server()
-        .await
-        .map_err(|error| error.to_string())
+    tracing::info!(target: "tomato_downloader", "IPC library_stop_downloader");
+    match runtime().stop_server().await {
+        Ok(status) => {
+            tracing::info!(
+                target: "tomato_downloader",
+                phase = ?status.phase,
+                running = status.running,
+                message = ?status.message,
+                "IPC library_stop_downloader ok"
+            );
+            Ok(status)
+        }
+        Err(error) => {
+            tracing::warn!(
+                target: "tomato_downloader",
+                error = %error,
+                "IPC library_stop_downloader failed"
+            );
+            Err(error.to_string())
+        }
+    }
 }

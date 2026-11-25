@@ -29,8 +29,11 @@ import {
   Play,
   Square,
   HardDriveDownload,
+  ListTodo,
+  X,
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -43,6 +46,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -145,6 +153,34 @@ type DownloaderStatus = {
   installProgress: number | null;
 };
 
+type DownloadPhase =
+  | 'waiting_slot'
+  | 'queued'
+  | 'running'
+  | 'saving'
+  | 'converting'
+  | 'done'
+  | 'failed'
+  | string;
+
+type ActiveDownload = {
+  bookId: string;
+  title: string;
+  phase: DownloadPhase;
+  message: string | null;
+  percent: number | null;
+  updatedAt: number;
+};
+
+type DownloadProgressEvent = {
+  bookId: string;
+  title: string;
+  phase: DownloadPhase;
+  message: string | null;
+  jobId: number | null;
+  percent: number | null;
+};
+
 type ImitateStatusView = {
   phase: 'idle' | 'queued' | 'running' | 'completed' | 'failed' | string;
   progress: string | null;
@@ -176,7 +212,9 @@ export function NovelLibraryPanel() {
   const [searchResults, setSearchResults] = useState<SearchItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [activeDownloads, setActiveDownloads] = useState<
+    Record<string, ActiveDownload>
+  >({});
   const [selectedLocal, setSelectedLocal] = useState<LocalBook | null>(null);
   const [selectedRemote, setSelectedRemote] = useState<SearchItem | null>(null);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
@@ -259,6 +297,9 @@ export function NovelLibraryPanel() {
         setDownloader(status);
         if (command === 'library_start_downloader') {
           await loadSettings();
+          if (status.phase === 'starting') {
+            toast.info(status.message || '下载器仍在启动，请稍候刷新');
+          }
         }
         return status;
       } catch (err) {
@@ -290,6 +331,37 @@ export function NovelLibraryPanel() {
     void loadLocal();
     void loadDownloaderStatus();
   }, [loadDownloaderStatus, loadLocal, loadSettings]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void listen<DownloadProgressEvent>('library-download-progress', (event) => {
+      if (disposed) return;
+      const payload = event.payload;
+      setActiveDownloads((prev) => {
+        const next = { ...prev };
+        if (payload.phase === 'done') {
+          delete next[payload.bookId];
+          return next;
+        }
+        next[payload.bookId] = {
+          bookId: payload.bookId,
+          title: payload.title || prev[payload.bookId]?.title || payload.bookId,
+          phase: payload.phase,
+          message: payload.message,
+          percent: payload.percent,
+          updatedAt: Date.now(),
+        };
+        return next;
+      });
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
 
   useEffect(() => {
     const phase = downloader?.phase;
@@ -636,7 +708,22 @@ export function NovelLibraryPanel() {
         setDownloaderPromptOpen(true);
         return;
       }
-      setDownloadingId(item.bookId);
+      if (activeDownloads[item.bookId]) {
+        toast.info(`「${item.title}」已在下载队列中`);
+        return;
+      }
+      // Tomato server is single-slot; multiple invokes queue on the busy slot.
+      setActiveDownloads((prev) => ({
+        ...prev,
+        [item.bookId]: {
+          bookId: item.bookId,
+          title: item.title,
+          phase: 'waiting_slot',
+          message: '已加入下载队列…',
+          percent: 5,
+          updatedAt: Date.now(),
+        },
+      }));
       try {
         const result = await invoke<DownloadResult>('library_download', {
           args: {
@@ -645,15 +732,43 @@ export function NovelLibraryPanel() {
           },
         });
         toast.success(`已下载「${result.title}」`);
-        setMode('local');
+        setActiveDownloads((prev) => {
+          const next = { ...prev };
+          delete next[item.bookId];
+          return next;
+        });
         await loadLocal();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : String(err));
-      } finally {
-        setDownloadingId(null);
+        const message = err instanceof Error ? err.message : String(err);
+        toast.error(message);
+        setActiveDownloads((prev) => ({
+          ...prev,
+          [item.bookId]: {
+            bookId: item.bookId,
+            title: item.title,
+            phase: 'failed',
+            message,
+            percent: null,
+            updatedAt: Date.now(),
+          },
+        }));
       }
     },
-    [downloader?.running, loadLocal]
+    [activeDownloads, downloader?.running, loadLocal]
+  );
+
+  const dismissFailedDownload = useCallback((bookId: string) => {
+    setActiveDownloads((prev) => {
+      const next = { ...prev };
+      delete next[bookId];
+      return next;
+    });
+  }, []);
+
+  const activeDownloadList = useMemo(
+    () =>
+      Object.values(activeDownloads).sort((a, b) => a.updatedAt - b.updatedAt),
+    [activeDownloads]
   );
 
   const currentChapterIndex = epubChapter?.index ?? 0;
@@ -670,29 +785,75 @@ export function NovelLibraryPanel() {
         className="library-overlay flex h-full w-full flex-col overflow-hidden bg-background text-foreground"
         data-panel="library"
       >
-        <header className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <Library className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <h2 className="shrink-0 text-sm font-semibold">
-              {t('toolbar.library')}
-            </h2>
+        <header className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Library className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold">{t('toolbar.library')}</h2>
             <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
               {localBooks.length}
             </Badge>
           </div>
 
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            <Input
-              value={pathDraft}
-              onChange={(e) => setPathDraft(e.target.value)}
-              onBlur={() => void saveLibraryPath(pathDraft)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') e.currentTarget.blur();
+          <div className="flex items-center gap-0.5 rounded-md border border-border/50 p-0.5">
+            <Button
+              size="sm"
+              variant={mode === 'local' ? 'secondary' : 'ghost'}
+              className="h-6 px-2 text-[11px]"
+              onClick={() => {
+                setMode('local');
+                setSelectedRemote(null);
+                setPreview(null);
               }}
-              placeholder={settings?.defaultLibraryPath || '本地书库路径'}
-              className="h-7 min-w-0 flex-1 text-[11px]"
-              title={pathDraft}
+            >
+              本地
+            </Button>
+            <Button
+              size="sm"
+              variant={mode === 'search' ? 'secondary' : 'ghost'}
+              className="h-6 px-2 text-[11px]"
+              onClick={() => {
+                setMode('search');
+                setSelectedLocal(null);
+                setEpubBook(null);
+                setEpubChapter(null);
+                setTextPreview(null);
+                setImitateStatus(null);
+              }}
+            >
+              搜索
+            </Button>
+          </div>
+
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void handleSearch();
+              }}
+              placeholder={
+                mode === 'local' ? '筛选本地…' : '搜索书名或作者…'
+              }
+              className="h-7 pl-7 text-xs"
             />
+          </div>
+
+          <Button
+            size="sm"
+            variant="secondary"
+            className="h-7 shrink-0"
+            disabled={searching || !searchQuery.trim()}
+            onClick={() => void handleSearch()}
+          >
+            {searching ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              '搜索'
+            )}
+          </Button>
+
+          <div className="flex shrink-0 items-center gap-0.5">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -709,109 +870,63 @@ export function NovelLibraryPanel() {
                   )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>选择目录</TooltipContent>
+              <TooltipContent className="max-w-sm break-all">
+                {pathDraft || settings?.defaultLibraryPath || '选择书库目录'}
+              </TooltipContent>
+            </Tooltip>
+
+            <TomatoDownloaderControls
+              status={downloader}
+              busy={downloaderBusy}
+              onInstall={() =>
+                void runDownloaderAction('library_install_downloader')
+              }
+              onStart={() =>
+                void runDownloaderAction('library_start_downloader')
+              }
+              onStop={() =>
+                void runDownloaderAction('library_stop_downloader')
+              }
+              onRefresh={() => void loadDownloaderStatus()}
+              onPrompt={() => setDownloaderPromptOpen(true)}
+            />
+
+            <DownloadQueuePopover
+              downloads={activeDownloadList}
+              onDismissFailed={dismissFailedDownload}
+              onShowLocal={() => setMode('local')}
+            />
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2"
+                  onClick={() => void loadLocal()}
+                >
+                  <RefreshCw
+                    className={cn('h-3.5 w-3.5', loading && 'animate-spin')}
+                  />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>刷新</TooltipContent>
             </Tooltip>
           </div>
-
-          <div className="flex items-center gap-1 rounded-md border border-border/60 bg-[var(--surface-control)] p-0.5">
-            <Button
-              size="sm"
-              variant={mode === 'local' ? 'secondary' : 'ghost'}
-              className="h-6 px-2.5 text-[11px]"
-              onClick={() => {
-                setMode('local');
-                setSelectedRemote(null);
-                setPreview(null);
-              }}
-            >
-              本地
-            </Button>
-            <Button
-              size="sm"
-              variant={mode === 'search' ? 'secondary' : 'ghost'}
-              className="h-6 px-2.5 text-[11px]"
-              onClick={() => {
-                setMode('search');
-                setSelectedLocal(null);
-                setEpubBook(null);
-                setEpubChapter(null);
-                setTextPreview(null);
-                setImitateStatus(null);
-              }}
-            >
-              搜索
-            </Button>
-          </div>
-
-          <TomatoDownloaderControls
-            status={downloader}
-            busy={downloaderBusy}
-            onInstall={() => void runDownloaderAction('library_install_downloader')}
-            onStart={() => void runDownloaderAction('library_start_downloader')}
-            onStop={() => void runDownloaderAction('library_stop_downloader')}
-            onRefresh={() => void loadDownloaderStatus()}
-            onPrompt={() => setDownloaderPromptOpen(true)}
-          />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 px-2"
-                onClick={() => void loadLocal()}
-              >
-                <RefreshCw
-                  className={cn('h-3.5 w-3.5', loading && 'animate-spin')}
-                />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>刷新本地书库</TooltipContent>
-          </Tooltip>
         </header>
 
-        <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void handleSearch();
-              }}
-              placeholder={
-                mode === 'local' ? '筛选本地书名…' : '搜索书名或作者…'
-              }
-              className="h-8 pl-8 text-xs"
-            />
-          </div>
-          <Button
-            size="sm"
-            className="h-8"
-            disabled={searching || !searchQuery.trim()}
-            onClick={() => void handleSearch()}
-          >
-            {searching ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Search className="h-3.5 w-3.5" />
-            )}
-            搜索下载
-          </Button>
-        </div>
-
         {downloaderPhase === 'installing' && installProgress != null ? (
-          <div className="border-b px-3 py-2">
+          <div className="border-b px-3 py-1.5">
             <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>{downloader?.message || '正在安装番茄下载器…'}</span>
+              <span>{downloader?.message || '正在安装…'}</span>
               <span>{installProgress}%</span>
             </div>
-            <Progress value={installProgress} className="h-1.5" />
+            <Progress value={installProgress} className="h-1" />
           </div>
         ) : null}
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <aside className="flex w-80 shrink-0 flex-col border-r">
+          <aside className="flex w-[18.5rem] shrink-0 flex-col border-r">
             <ScrollArea className="min-h-0 flex-1">
               {mode === 'local' ? (
                 <LocalBookList
@@ -825,7 +940,7 @@ export function NovelLibraryPanel() {
                   searching={searching}
                   items={searchResults}
                   selectedId={selectedRemote?.bookId ?? null}
-                  downloadingId={downloadingId}
+                  downloads={activeDownloads}
                   isDownloaded={isDownloaded}
                   onSelect={(item) => void handleSelectRemote(item)}
                   onDownload={(item) => void handleDownload(item)}
@@ -872,7 +987,7 @@ export function NovelLibraryPanel() {
                 preview={preview}
                 previewLoading={previewLoading}
                 downloaded={isDownloaded(selectedRemote.title)}
-                downloading={downloadingId === selectedRemote.bookId}
+                download={activeDownloads[selectedRemote.bookId] ?? null}
                 onDownload={() => void handleDownload(selectedRemote)}
               />
             ) : null}
@@ -934,95 +1049,75 @@ function TomatoDownloaderControls({
   onPrompt: () => void;
 }) {
   const phase = status?.phase ?? 'missing';
-  const badgeVariant =
-    phase === 'running'
-      ? 'default'
-      : phase === 'error'
-        ? 'destructive'
-        : 'secondary';
+  const running = phase === 'running';
+  const action =
+    phase === 'missing' || (phase === 'error' && !status?.installed)
+      ? { label: '安装', onClick: onInstall, icon: Download }
+      : phase === 'ready' || (phase === 'error' && status?.installed)
+        ? { label: '启动', onClick: onStart, icon: Play }
+        : running
+          ? { label: '停止', onClick: onStop, icon: Square }
+          : null;
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-0.5">
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
-            type="button"
-            className="inline-flex"
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2"
             onClick={onPrompt}
           >
-            <Badge
-              variant={badgeVariant}
-              className="h-6 cursor-pointer gap-1 px-2 text-[10px] font-medium"
-            >
-              <HardDriveDownload className="h-3 w-3" />
-              {downloaderPhaseLabel(status)}
-            </Badge>
-          </button>
+            <HardDriveDownload
+              className={cn(
+                'h-3.5 w-3.5',
+                running && 'text-foreground',
+                phase === 'error' && 'text-destructive',
+                (phase === 'starting' || phase === 'installing') &&
+                  'animate-pulse'
+              )}
+            />
+          </Button>
         </TooltipTrigger>
         <TooltipContent>
-          {status?.message || '番茄下载器状态'}
+          {status?.message || downloaderPhaseLabel(status)}
         </TooltipContent>
       </Tooltip>
-
-      {phase === 'missing' || (phase === 'error' && !status?.installed) ? (
-        <Button
-          size="sm"
-          variant="secondary"
-          className="h-7"
-          disabled={busy}
-          onClick={onInstall}
-        >
-          {busy ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Download className="h-3.5 w-3.5" />
-          )}
-          安装
-        </Button>
+      {action ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2"
+              disabled={busy}
+              onClick={action.onClick}
+            >
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <action.icon className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{action.label}</TooltipContent>
+        </Tooltip>
       ) : null}
-
-      {phase === 'ready' || (phase === 'error' && status?.installed) ? (
-        <Button
-          size="sm"
-          variant="secondary"
-          className="h-7"
-          disabled={busy}
-          onClick={onStart}
-        >
-          {busy ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Play className="h-3.5 w-3.5" />
-          )}
-          启动
-        </Button>
-      ) : null}
-
-      {phase === 'running' ? (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2"
-          disabled={busy}
-          onClick={onStop}
-        >
-          {busy ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Square className="h-3.5 w-3.5" />
-          )}
-        </Button>
-      ) : null}
-
-      <Button
-        size="sm"
-        variant="ghost"
-        className="h-7 px-2"
-        disabled={busy}
-        onClick={onRefresh}
-      >
-        <RefreshCw className={cn('h-3.5 w-3.5', busy && 'animate-spin')} />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2"
+            disabled={busy}
+            onClick={onRefresh}
+          >
+            <RefreshCw className={cn('h-3.5 w-3.5', busy && 'animate-spin')} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>刷新下载器状态</TooltipContent>
+      </Tooltip>
     </div>
   );
 }
@@ -1186,11 +1281,135 @@ function LocalBookList({
   );
 }
 
+function downloadPhaseLabel(phase: DownloadPhase): string {
+  switch (phase) {
+    case 'waiting_slot':
+      return '排队';
+    case 'queued':
+      return '等待';
+    case 'running':
+      return '下载中';
+    case 'saving':
+      return '保存中';
+    case 'converting':
+      return '转换中';
+    case 'failed':
+      return '失败';
+    case 'done':
+      return '完成';
+    default:
+      return phase;
+  }
+}
+
+function DownloadQueuePopover({
+  downloads,
+  onDismissFailed,
+  onShowLocal,
+}: {
+  downloads: ActiveDownload[];
+  onDismissFailed: (bookId: string) => void;
+  onShowLocal: () => void;
+}) {
+  const count = downloads.length;
+  const hasActive = downloads.some((job) => job.phase !== 'failed');
+
+  return (
+    <Popover>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="relative h-7 px-2"
+              disabled={count === 0}
+            >
+              <ListTodo
+                className={cn(
+                  'h-3.5 w-3.5',
+                  hasActive && 'text-foreground',
+                  count === 0 && 'text-muted-foreground'
+                )}
+              />
+              {count > 0 ? (
+                <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-foreground px-0.5 text-[9px] font-medium text-background">
+                  {count}
+                </span>
+              ) : null}
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent>
+          {count > 0 ? `下载队列 · ${count}` : '暂无下载任务'}
+        </TooltipContent>
+      </Tooltip>
+      <PopoverContent align="end" className="w-80 p-2">
+        <div className="mb-2 flex items-center justify-between px-1">
+          <div className="text-xs font-medium">下载队列</div>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-2 text-[11px]"
+            onClick={onShowLocal}
+          >
+            本地书库
+          </Button>
+        </div>
+        {count === 0 ? (
+          <p className="px-1 py-3 text-center text-[11px] text-muted-foreground">
+            暂无进行中的下载
+          </p>
+        ) : (
+          <div className="max-h-64 space-y-1.5 overflow-y-auto">
+            {downloads.map((job) => (
+              <div
+                key={job.bookId}
+                className="rounded-md border border-border/50 px-2 py-1.5"
+              >
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[12px] font-medium">
+                      {job.title}
+                    </div>
+                    <div className="truncate text-[10px] text-muted-foreground">
+                      {job.message || downloadPhaseLabel(job.phase)}
+                    </div>
+                  </div>
+                  {job.phase === 'failed' ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 w-6 shrink-0 p-0"
+                      onClick={() => onDismissFailed(job.bookId)}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  ) : (
+                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                      {typeof job.percent === 'number'
+                        ? `${job.percent}%`
+                        : downloadPhaseLabel(job.phase)}
+                    </span>
+                  )}
+                </div>
+                {typeof job.percent === 'number' && job.phase !== 'failed' ? (
+                  <Progress value={job.percent} className="mt-1.5 h-1" />
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function SearchBookList({
   searching,
   items,
   selectedId,
-  downloadingId,
+  downloads,
   isDownloaded,
   onSelect,
   onDownload,
@@ -1198,7 +1417,7 @@ function SearchBookList({
   searching: boolean;
   items: SearchItem[];
   selectedId: string | null;
-  downloadingId: string | null;
+  downloads: Record<string, ActiveDownload>;
   isDownloaded: (title: string) => boolean;
   onSelect: (item: SearchItem) => void;
   onDownload: (item: SearchItem) => void;
@@ -1232,12 +1451,13 @@ function SearchBookList({
       {items.map((item) => {
         const selected = selectedId === item.bookId;
         const downloaded = isDownloaded(item.title);
-        const downloading = downloadingId === item.bookId;
+        const download = downloads[item.bookId];
+        const downloading = Boolean(download) && download.phase !== 'failed';
         return (
           <div
             key={item.bookId}
             className={cn(
-              'rounded-md px-2.5 py-2 transition-colors',
+              'flex items-center gap-2 rounded-md px-2.5 py-2 transition-colors',
               selected
                 ? 'bg-[var(--surface-active)]'
                 : 'hover:bg-[var(--surface-control-hover)]'
@@ -1245,7 +1465,7 @@ function SearchBookList({
           >
             <button
               type="button"
-              className="flex w-full items-start gap-2.5 text-left"
+              className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
               onClick={() => onSelect(item)}
             >
               <CoverThumb
@@ -1254,33 +1474,37 @@ function SearchBookList({
                   <BookOpen className="h-4 w-4 text-muted-foreground/50" />
                 }
               />
-              <div className="min-w-0 flex-1 pt-0.5">
+              <div className="min-w-0 flex-1">
                 <div className="line-clamp-2 text-[13px] font-medium leading-snug">
                   {item.title}
                 </div>
-                <div className="mt-1 text-[10px] text-muted-foreground">
-                  {item.author || '未知作者'}
+                <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                  {download
+                    ? download.message || downloadPhaseLabel(download.phase)
+                    : item.author || '未知作者'}
                 </div>
               </div>
             </button>
-            <div className="mt-2 flex justify-end">
+            <div className="shrink-0">
               {downloaded ? (
                 <Badge variant="secondary" className="h-5 text-[10px]">
                   已在本地
+                </Badge>
+              ) : downloading ? (
+                <Badge variant="secondary" className="h-6 gap-1 px-2 text-[10px]">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {typeof download.percent === 'number'
+                    ? `${download.percent}%`
+                    : downloadPhaseLabel(download.phase)}
                 </Badge>
               ) : (
                 <Button
                   size="sm"
                   variant="secondary"
                   className="h-7 px-2.5 text-[11px]"
-                  disabled={downloading}
                   onClick={() => onDownload(item)}
                 >
-                  {downloading ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Download className="h-3.5 w-3.5" />
-                  )}
+                  <Download className="h-3.5 w-3.5" />
                   下载
                 </Button>
               )}
@@ -1536,16 +1760,17 @@ function RemotePreview({
   preview,
   previewLoading,
   downloaded,
-  downloading,
+  download,
   onDownload,
 }: {
   item: SearchItem;
   preview: PreviewResponse | null;
   previewLoading: boolean;
   downloaded: boolean;
-  downloading: boolean;
+  download: ActiveDownload | null;
   onDownload: () => void;
 }) {
+  const downloading = Boolean(download) && download?.phase !== 'failed';
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="shrink-0 border-b px-4 py-3">
@@ -1582,20 +1807,27 @@ function RemotePreview({
                 </Badge>
               ) : null}
             </div>
-            <div className="flex justify-end">
+            <div className="flex flex-col items-end gap-1.5">
               {downloaded ? (
                 <Badge variant="secondary">已在本地</Badge>
+              ) : downloading ? (
+                <div className="w-full max-w-xs space-y-1">
+                  <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                    <span className="truncate">
+                      {download?.message ||
+                        downloadPhaseLabel(download?.phase ?? 'running')}
+                    </span>
+                    <span>
+                      {typeof download?.percent === 'number'
+                        ? `${download.percent}%`
+                        : null}
+                    </span>
+                  </div>
+                  <Progress value={download?.percent ?? 15} className="h-1.5" />
+                </div>
               ) : (
-                <Button
-                  size="sm"
-                  disabled={downloading}
-                  onClick={onDownload}
-                >
-                  {downloading ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Download className="h-3.5 w-3.5" />
-                  )}
+                <Button size="sm" onClick={onDownload}>
+                  <Download className="h-3.5 w-3.5" />
                   下载到本地
                 </Button>
               )}

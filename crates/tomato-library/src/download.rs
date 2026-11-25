@@ -31,16 +31,70 @@ pub struct DownloadResult {
     pub size: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadProgressEvent {
+    pub book_id: String,
+    pub title: String,
+    pub phase: String,
+    pub message: Option<String>,
+    pub job_id: Option<u64>,
+    /// Coarse 0..=100 progress for UI; null when unknown.
+    pub percent: Option<u8>,
+}
+
 pub async fn download_book_to_library(
     cfg: &TomatoLibraryConfig,
     request: DownloadRequest,
 ) -> Result<DownloadResult> {
+    download_book_to_library_with_progress(cfg, request, |_| {}).await
+}
+
+pub async fn download_book_to_library_with_progress(
+    cfg: &TomatoLibraryConfig,
+    request: DownloadRequest,
+    mut on_progress: impl FnMut(DownloadProgressEvent),
+) -> Result<DownloadResult> {
     let client = TomatoClient::new(cfg.resolve_api_base(), cfg.resolve_api_password()?)?;
     let library_dir = cfg.ensure_library_dir()?;
+    let book_id = request.book_id.clone();
+    let mut title = request
+        .preferred_name
+        .clone()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| book_id.clone());
+
+    let emit = |on_progress: &mut dyn FnMut(DownloadProgressEvent),
+                title: &str,
+                phase: &str,
+                message: Option<String>,
+                job_id: Option<u64>,
+                percent: Option<u8>| {
+        on_progress(DownloadProgressEvent {
+            book_id: book_id.clone(),
+            title: title.to_string(),
+            phase: phase.to_string(),
+            message,
+            job_id,
+            percent,
+        });
+    };
+
+    emit(
+        &mut on_progress,
+        &title,
+        "waiting_slot",
+        Some("等待下载槽…".into()),
+        None,
+        Some(5),
+    );
 
     let preview = client.preview(&request.book_id).await.ok();
     let mut cover_bytes: Option<(Vec<u8>, String)> = None;
     if let Some(ref preview) = preview {
+        if !preview.book_name.trim().is_empty() {
+            title = preview.book_name.clone();
+        }
         if !preview.cover_url.trim().is_empty() {
             match client.fetch_authenticated_bytes(&preview.cover_url).await {
                 Ok(data) => cover_bytes = Some(data),
@@ -66,6 +120,14 @@ pub async fn download_book_to_library(
                 let msg = err.to_string();
                 if msg.contains("busy") || msg.contains("429") {
                     info!("download slot busy, retry {attempt}");
+                    emit(
+                        &mut on_progress,
+                        &title,
+                        "waiting_slot",
+                        Some(format!("下载槽占用中，排队重试（{attempt}）…")),
+                        None,
+                        Some(8),
+                    );
                     tokio::time::sleep(Duration::from_secs(2)).await;
                     continue;
                 }
@@ -75,13 +137,15 @@ pub async fn download_book_to_library(
     }
     let created = created.context("Timed out waiting for a free download slot")?;
     let job_id = created.id;
+    emit(
+        &mut on_progress,
+        &title,
+        "queued",
+        Some("已创建下载任务".into()),
+        Some(job_id),
+        Some(15),
+    );
 
-    let mut title = preview
-        .as_ref()
-        .map(|p| p.book_name.clone())
-        .filter(|s| !s.trim().is_empty())
-        .or(request.preferred_name.clone())
-        .unwrap_or_else(|| request.book_id.clone());
     let mut author = preview
         .as_ref()
         .map(|p| p.author.clone())
@@ -103,6 +167,26 @@ pub async fn download_book_to_library(
 
         match job.state.as_str() {
             "queued" | "running" => {
+                let phase = if job.state == "queued" {
+                    "queued"
+                } else {
+                    "running"
+                };
+                let percent = if job.state == "queued" { 20 } else { 55 };
+                emit(
+                    &mut on_progress,
+                    &title,
+                    phase,
+                    job.message
+                        .clone()
+                        .or_else(|| Some(if job.state == "queued" {
+                            "排队中…".into()
+                        } else {
+                            "下载中…".into()
+                        })),
+                    Some(job_id),
+                    Some(percent),
+                );
                 if let Some(options) = job.book_name_options.as_ref().filter(|o| !o.is_empty()) {
                     let value = options[0].clone();
                     client.set_book_name(job_id, &value).await?;
@@ -121,6 +205,15 @@ pub async fn download_book_to_library(
             other => bail!("unexpected job state: {other}"),
         }
     }
+
+    emit(
+        &mut on_progress,
+        &title,
+        "saving",
+        Some("正在保存到本地书库…".into()),
+        Some(job_id),
+        Some(80),
+    );
 
     let file_item = wait_for_remote_file(&client, &title).await?;
     if !file_item.ext.is_empty() {
@@ -145,6 +238,14 @@ pub async fn download_book_to_library(
 
     // Prefer a folder book (parsed chapters) over keeping the raw EPUB around.
     let (final_path, final_format, final_size) = if chosen_format.eq_ignore_ascii_case("epub") {
+        emit(
+            &mut on_progress,
+            &title,
+            "converting",
+            Some("正在转换为书库格式…".into()),
+            Some(job_id),
+            Some(92),
+        );
         match crate::book_dir::import_epub_as_book_dir(&target, &library_dir) {
             Ok(book_dir) => {
                 let size = std::fs::metadata(&book_dir)
@@ -160,6 +261,15 @@ pub async fn download_book_to_library(
     } else {
         (target, chosen_format, bytes.len() as u64)
     };
+
+    emit(
+        &mut on_progress,
+        &title,
+        "done",
+        Some("下载完成".into()),
+        Some(job_id),
+        Some(100),
+    );
 
     Ok(DownloadResult {
         job_id,
