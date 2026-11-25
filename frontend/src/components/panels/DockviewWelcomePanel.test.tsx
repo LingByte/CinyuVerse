@@ -114,15 +114,19 @@ describe('DockviewWelcomePanel', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders the start-work copy and the four workspace entries', () => {
+  it('renders concrete draft tools and the working directory', () => {
     renderPanel();
 
     expect(
-      screen.getByRole('heading', { name: '开始你的工作' })
+      screen.getByRole('heading', { name: '打开工作区工具' })
     ).toBeInTheDocument();
     expect(
-      screen.getByText('在此打开文件编辑预览、浏览器、终端、Git Diff 面板等')
+      screen.getByText(
+        '文件、差异、终端和预览都落在这个草稿目录里。'
+      )
     ).toBeInTheDocument();
+    expect(screen.getByText('/repo')).toBeInTheDocument();
+    expect(screen.getByText('项目目录')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /浏览文件/ })
     ).toBeInTheDocument();
@@ -135,9 +139,8 @@ describe('DockviewWelcomePanel', () => {
     expect(
       screen.getByRole('button', { name: /打开浏览器/ })
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /搜索项目/ })
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Workspace ready')).not.toBeInTheDocument();
+    expect(screen.queryByText('worktree snapshot')).not.toBeInTheDocument();
   });
 
   it('opens the file tree without toggling it closed and previews a root file', async () => {

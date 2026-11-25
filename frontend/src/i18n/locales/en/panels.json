@@ -23,17 +23,26 @@
     "noChanges": "No changes yet"
   },
   "welcomePanel": {
+    "eyebrow": "This draft",
+    "title": "Open workspace tools",
+    "copy": "Files, diffs, terminal, and preview all run against this draft directory.",
+    "actionsAriaLabel": "Draft tools",
+    "contextAriaLabel": "Draft working directory",
+    "contextTitle": "Working directory",
+    "contextEmpty": "No working directory bound yet",
+    "metaIsolation": "Directory mode",
+    "isolationWorktree": "Isolated draft",
+    "isolationProject": "Project directory",
+    "metaRepos": "Repos",
+    "metaReposValue": "{{count}}",
     "actionFilesLabel": "Browse files",
-    "actionFilesDescription": "Open the file tree and preview a root-level file.",
+    "actionFilesDescription": "Open the file tree and preview a root file",
     "actionDiffsLabel": "View diffs",
-    "actionDiffsDescription": "Inspect the volume's current changes.",
+    "actionDiffsDescription": "Inspect changes in this draft",
     "actionTerminalLabel": "Open terminal",
-    "actionTerminalDescription": "Run commands in the current working directory.",
+    "actionTerminalDescription": "Run commands in the working directory",
     "actionBrowserLabel": "Open browser",
-    "actionBrowserDescription": "Open a web preview in the editor.",
-    "title": "Start your work",
-    "copy": "Open file previews, the browser, the terminal, and the Git Diff panel here",
-    "actionsAriaLabel": "Volume entry points"
+    "actionBrowserDescription": "Open a web preview"
   },
   "diffsReviewPanel": {
     "selectWorkspaceToViewChanges": "Select a volume to view changes",

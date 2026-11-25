@@ -1,10 +1,10 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { IDockviewPanelProps } from 'dockview-react';
 import {
-  FileSearch,
   FolderOpen,
   GitCompare,
   Globe2,
+  HardDrive,
   Terminal,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -49,6 +49,15 @@ const welcomeActions = [
   },
 ] as const;
 
+function displayWorkspacePath(path: string): string {
+  const normalized = path.replace(/\\/g, '/');
+  const parts = normalized.split('/').filter(Boolean);
+  if (parts.length <= 3) {
+    return normalized.startsWith('/') ? normalized : path;
+  }
+  return `…/${parts.slice(-3).join('/')}`;
+}
+
 function DockviewWelcomePanel(_props: IDockviewPanelProps) {
   const { t } = useTranslation(['panels', 'common']);
   const {
@@ -67,15 +76,25 @@ function DockviewWelcomePanel(_props: IDockviewPanelProps) {
   const { projectId } = useProject();
   const { data: projectRepos } = useProjectRepos(projectId);
 
+  const workspaceRoot = useMemo(
+    () =>
+      resolveWelcomeWorkspaceRootPath({
+        storedRootPath,
+        workspace,
+        workspaceRepos,
+        projectRepoPath: projectRepos?.[0]?.path ?? null,
+      }),
+    [projectRepos, storedRootPath, workspace, workspaceRepos]
+  );
+
+  const isolationLabel = workspace?.use_worktree
+    ? t('welcomePanel.isolationWorktree')
+    : t('welcomePanel.isolationProject');
+  const repoCount = workspaceRepos.length || projectRepos?.length || 0;
+
   const openBrowseFiles = useCallback(async () => {
     showFileTree();
 
-    const workspaceRoot = resolveWelcomeWorkspaceRootPath({
-      storedRootPath,
-      workspace,
-      workspaceRepos,
-      projectRepoPath: projectRepos?.[0]?.path ?? null,
-    });
     if (!workspaceRoot) {
       return;
     }
@@ -96,14 +115,7 @@ function DockviewWelcomePanel(_props: IDockviewPanelProps) {
     } catch {
       // The file tree is already open; skip preview if listing fails.
     }
-  }, [
-    openFilePreview,
-    projectRepos,
-    showFileTree,
-    storedRootPath,
-    workspace,
-    workspaceRepos,
-  ]);
+  }, [openFilePreview, showFileTree, workspaceRoot]);
 
   const handleAction = (action: (typeof welcomeActions)[number]['action']) => {
     if (action === 'files') {
@@ -131,10 +143,9 @@ function DockviewWelcomePanel(_props: IDockviewPanelProps) {
           className="workspace-welcome__intro"
           aria-labelledby="welcome-title"
         >
-          <div className="workspace-welcome__mark" aria-hidden="true">
-            <FileSearch className="h-5 w-5" />
-          </div>
-          <p className="workspace-welcome__eyebrow">Workspace ready</p>
+          <p className="workspace-welcome__eyebrow">
+            {t('welcomePanel.eyebrow')}
+          </p>
           <h2 id="welcome-title">{t('welcomePanel.title')}</h2>
           <p className="workspace-welcome__copy">{t('welcomePanel.copy')}</p>
           <div
@@ -151,7 +162,7 @@ function DockviewWelcomePanel(_props: IDockviewPanelProps) {
                   onClick={() => handleAction(item.action)}
                 >
                   <span className="workspace-welcome__action-icon">
-                    <Icon className="h-4 w-4" />
+                    <Icon className="h-4 w-4" aria-hidden="true" />
                   </span>
                   <span className="min-w-0">
                     <span className="workspace-welcome__action-title">
@@ -167,29 +178,38 @@ function DockviewWelcomePanel(_props: IDockviewPanelProps) {
           </div>
         </section>
 
-        <aside className="workspace-welcome__artifact" aria-hidden="true">
-          <div className="workspace-welcome__artifact-header">
-            <span>worktree snapshot</span>
-            <span>HEAD</span>
+        <aside
+          className="workspace-welcome__context"
+          aria-label={t('welcomePanel.contextAriaLabel')}
+        >
+          <div className="workspace-welcome__context-header">
+            <HardDrive className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>{t('welcomePanel.contextTitle')}</span>
           </div>
-          <div className="workspace-welcome__artifact-body">
-            <div className="workspace-welcome__line is-add">
-              <span>+</span>
-              <code>compose new task context</code>
+          {workspaceRoot ? (
+            <p
+              className="workspace-welcome__path"
+              title={workspaceRoot}
+            >
+              {displayWorkspacePath(workspaceRoot)}
+            </p>
+          ) : (
+            <p className="workspace-welcome__path is-empty">
+              {t('welcomePanel.contextEmpty')}
+            </p>
+          )}
+          <dl className="workspace-welcome__meta">
+            <div>
+              <dt>{t('welcomePanel.metaIsolation')}</dt>
+              <dd>{isolationLabel}</dd>
             </div>
-            <div className="workspace-welcome__line">
-              <span>•</span>
-              <code>inspect changed files</code>
+            <div>
+              <dt>{t('welcomePanel.metaRepos')}</dt>
+              <dd>
+                {t('welcomePanel.metaReposValue', { count: repoCount })}
+              </dd>
             </div>
-            <div className="workspace-welcome__line is-run">
-              <span>$</span>
-              <code>pnpm run check</code>
-            </div>
-            <div className="workspace-welcome__line is-note">
-              <span>→</span>
-              <code>send findings to agent</code>
-            </div>
-          </div>
+          </dl>
         </aside>
       </div>
     </div>

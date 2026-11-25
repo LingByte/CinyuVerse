@@ -23,17 +23,26 @@
     "noChanges": "尚未进行任何更改"
   },
   "welcomePanel": {
+    "eyebrow": "当前草稿",
+    "title": "打开工作区工具",
+    "copy": "文件、差异、终端和预览都落在这个草稿目录里。",
+    "actionsAriaLabel": "草稿工具",
+    "contextAriaLabel": "草稿工作目录",
+    "contextTitle": "工作目录",
+    "contextEmpty": "尚未绑定工作目录",
+    "metaIsolation": "目录模式",
+    "isolationWorktree": "隔离草稿",
+    "isolationProject": "项目目录",
+    "metaRepos": "仓库",
+    "metaReposValue": "{{count}} 个",
     "actionFilesLabel": "浏览文件",
-    "actionFilesDescription": "打开文件树并预览一个根目录文件。",
+    "actionFilesDescription": "打开文件树，预览根目录文件",
     "actionDiffsLabel": "查看差异",
-    "actionDiffsDescription": "检查草稿当前改动。",
+    "actionDiffsDescription": "检查这个草稿的改动",
     "actionTerminalLabel": "打开终端",
-    "actionTerminalDescription": "在当前工作目录运行命令。",
+    "actionTerminalDescription": "在工作目录运行命令",
     "actionBrowserLabel": "打开浏览器",
-    "actionBrowserDescription": "在编辑区打开网页预览。",
-    "title": "开始你的工作",
-    "copy": "在此打开文件编辑预览、浏览器、终端、Git Diff 面板等",
-    "actionsAriaLabel": "草稿入口"
+    "actionBrowserDescription": "打开网页预览"
   },
   "diffsReviewPanel": {
     "selectWorkspaceToViewChanges": "选择一个草稿以查看变更",
