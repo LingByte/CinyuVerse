@@ -3,8 +3,11 @@ use std::{collections::BTreeMap, sync::Arc};
 pub use agents::conversation::ConversationInputEvent;
 use agents::{ConversationEvent, ConversationInputPayload};
 use chrono::{DateTime, Duration, Utc};
-use db::models::{
-    conversation_event::AppendConversationEvent, conversation_input::ConversationInputRecord,
+use db::{
+    models::{
+        conversation_event::AppendConversationEvent, conversation_input::ConversationInputRecord,
+    },
+    sqlite_writer_gate,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -165,6 +168,7 @@ impl ConversationInputControl {
         let input_id = Uuid::new_v4();
         let event_id = Uuid::new_v4();
         let idempotency_key = format!("conversation-input-operation:{}", input.operation_id);
+        let _write_gate = sqlite_writer_gate().lock().await;
         let mut conn = self.pool.acquire().await?;
         sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
         let append = async {
@@ -379,6 +383,7 @@ impl ConversationInputControl {
                 input_id: Uuid::nil(),
             });
         }
+        let _write_gate = sqlite_writer_gate().lock().await;
         let mut conn = self.pool.acquire().await?;
         sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
         let result = async {

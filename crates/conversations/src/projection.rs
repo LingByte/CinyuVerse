@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    sync::{Arc, OnceLock},
+    sync::{Arc, Mutex as StdMutex, OnceLock},
 };
 
 use agents::conversation::{
@@ -31,6 +31,7 @@ use db::models::{
     session::Session,
 };
 use serde::{Deserialize, Serialize};
+use db::sqlite_writer_gate;
 use sqlx::{Executor, Sqlite, SqliteConnection, SqlitePool};
 use tokio::{sync::Mutex, time::Instant};
 use uuid::Uuid;
@@ -40,21 +41,18 @@ use uuid::Uuid;
 pub const CONVERSATION_PROJECTION_VERSION: u32 = 17;
 /// Mid-turn snapshot cadence. Larger gap = fewer full-tail folds on the
 /// post-commit refresh path while an agent is streaming (ADR-0061 §8.2).
-const SNAPSHOT_REFRESH_EVENT_GAP: i64 = 80;
+const SNAPSHOT_REFRESH_EVENT_GAP: i64 = 120;
 
 const AGENT_BINDING_LOAD_FAILURE_NOTICE_ROW_ID: &str = "notice:agent-binding-load-failed";
 const AGENT_BINDING_REBIND_NOTICE_ROW_ID: &str = "notice:agent-session-rebound";
 const AGENT_CONNECTION_RECOVERING_NOTICE_ROW_ID: &str = "notice:agent-connection-recovering";
 const ANNOUNCEMENT_ROW_PREFIX: &str = "notice:announcement:";
 
-/// Serialize conversation writers **before** they check out a pool connection.
-///
-/// Without this, many tasks each `acquire()` a slot then block inside
-/// `BEGIN IMMEDIATE` on SQLite's busy_timeout — every waiting writer holds a
-/// pool connection and starves detail / git / session reads (ADR-0061 §8.3).
-pub(crate) fn conversation_writer_gate() -> &'static Mutex<()> {
-    static GATE: OnceLock<Mutex<()>> = OnceLock::new();
-    GATE.get_or_init(|| Mutex::new(()))
+/// Conversations that already have a background snapshot refresh running.
+/// Spawning one task per stream flush would pile up writers behind the gate.
+fn snapshot_refresh_in_flight() -> &'static StdMutex<HashSet<Uuid>> {
+    static IN_FLIGHT: OnceLock<StdMutex<HashSet<Uuid>>> = OnceLock::new();
+    IN_FLIGHT.get_or_init(|| StdMutex::new(HashSet::new()))
 }
 
 pub struct ConversationEventAppender;
@@ -88,7 +86,7 @@ impl ConversationEventAppender {
         }
 
         let records = {
-            let _gate = conversation_writer_gate().lock().await;
+            let _gate = sqlite_writer_gate().lock().await;
             let mut conn = pool.acquire().await?;
             sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
 
@@ -110,7 +108,8 @@ impl ConversationEventAppender {
             records
         };
 
-        ConversationProjector::refresh_snapshots_after_append(pool, &records).await;
+        // Snapshot is a rebuildable cache — never block the append path on fold/FTS.
+        ConversationProjector::spawn_snapshot_refresh_after_append(pool, &records);
         Ok(records)
     }
 
@@ -724,35 +723,51 @@ impl ConversationProjector {
         }
     }
 
-    /// Refresh snapshots for the latest record of each conversation in `records`.
+    /// Schedule a best-effort snapshot refresh off the append hot path.
     ///
-    /// Best-effort: a snapshot miss only means the next `project()` folds more
-    /// events from the log. Never fails the durable append.
-    pub(crate) async fn refresh_snapshots_after_append(
+    /// At most one refresh task runs per conversation; further flushes while it
+    /// is in flight are skipped (the next free flush or turn settle refreshes).
+    pub(crate) fn spawn_snapshot_refresh_after_append(
         pool: &SqlitePool,
         records: &[ConversationEventRecord],
     ) {
-        let mut latest_by_conversation: HashMap<Uuid, &ConversationEventRecord> = HashMap::new();
+        let mut latest_by_conversation: HashMap<Uuid, ConversationEventRecord> = HashMap::new();
         for record in records {
-            latest_by_conversation.insert(record.conversation_id, record);
+            latest_by_conversation.insert(record.conversation_id, record.clone());
         }
-        for record in latest_by_conversation.into_values() {
-            if let Err(error) = Self::refresh_snapshot_after_append(pool, record).await {
-                tracing::warn!(
-                    conversation_id = %record.conversation_id,
-                    sequence = record.sequence,
-                    %error,
-                    "conversation snapshot refresh after append failed"
-                );
+
+        for (conversation_id, record) in latest_by_conversation {
+            {
+                let Ok(mut in_flight) = snapshot_refresh_in_flight().lock() else {
+                    continue;
+                };
+                if !in_flight.insert(conversation_id) {
+                    continue;
+                }
             }
+            let pool = pool.clone();
+            tokio::spawn(async move {
+                if let Err(error) = Self::refresh_snapshot_after_append(&pool, &record).await {
+                    tracing::warn!(
+                        conversation_id = %conversation_id,
+                        sequence = record.sequence,
+                        %error,
+                        "conversation snapshot refresh after append failed"
+                    );
+                }
+                if let Ok(mut in_flight) = snapshot_refresh_in_flight().lock() {
+                    in_flight.remove(&conversation_id);
+                }
+            });
         }
     }
 
     /// Refresh the materialized snapshot after the append txn has committed.
     ///
-    /// Runs every `SNAPSHOT_REFRESH_EVENT_GAP` events mid-turn and on settle so
-    /// detail/gap reloads do not replay the whole turn. FTS reindex is a second
-    /// short write so a large body never extends the fold's writer hold.
+    /// Fold the event tail on **read** connections; take the writer lock only
+    /// for the short snapshot upsert (and settle-time FTS). Holding IMMEDIATE
+    /// across a multi-thousand-event fold was starving every other writer
+    /// (pool acquire + trivial `UPDATE workspaces` waiting 3–4s).
     pub(crate) async fn refresh_snapshot_after_append(
         pool: &SqlitePool,
         record: &ConversationEventRecord,
@@ -762,65 +777,70 @@ impl ConversationProjector {
             "turn_completed" | "turn_failed" | "turn_cancelled" | "turn_interrupted"
         );
 
-        // Cheap read outside the writer gate — skip when the gap is still small.
-        let preview = Self::load_fold_from_snapshot(pool, record.conversation_id).await?;
-        if !settled && record.sequence - preview.last_sequence < SNAPSHOT_REFRESH_EVENT_GAP {
+        let conversation_id = record.conversation_id;
+        let mut fold = Self::load_fold_from_snapshot(pool, conversation_id).await?;
+        if !settled && record.sequence - fold.last_sequence < SNAPSHOT_REFRESH_EVENT_GAP {
             return Ok(());
         }
 
-        let fts_body = {
-            let _gate = conversation_writer_gate().lock().await;
+        let tail = ConversationEventRecord::events_since(
+            pool,
+            conversation_id,
+            fold.last_sequence,
+            i64::MAX,
+        )
+        .await?;
+        for event in &tail {
+            fold.apply(event)?;
+        }
+        let folded_sequence = fold.last_sequence;
+        let fts_body = if settled {
+            let timeline = ProjectionFold::from_snapshot_state(fold.to_snapshot_state())
+                .into_timeline(conversation_id);
+            Some(crate::search::extract_searchable_text(&timeline))
+        } else {
+            None
+        };
+
+        {
+            let _gate = sqlite_writer_gate().lock().await;
             let mut conn = pool.acquire().await?;
             sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
-
             let result = async {
-                let conversation_id = record.conversation_id;
-                let mut fold = Self::load_fold_from_snapshot(&mut *conn, conversation_id).await?;
-                if !settled && record.sequence - fold.last_sequence < SNAPSHOT_REFRESH_EVENT_GAP {
-                    return Ok::<_, sqlx::Error>(None);
+                if let Some(existing) =
+                    ConversationProjectionSnapshotRecord::find(&mut *conn, conversation_id).await?
+                {
+                    if existing.projection_version == CONVERSATION_PROJECTION_VERSION as i64
+                        && existing.last_sequence >= folded_sequence
+                    {
+                        return Ok(());
+                    }
                 }
-                let tail = ConversationEventRecord::events_since(
-                    &mut *conn,
-                    conversation_id,
-                    fold.last_sequence,
-                    i64::MAX,
-                )
-                .await?;
-                for event in &tail {
-                    fold.apply(event)?;
-                }
-                Self::persist_snapshot(&mut *conn, conversation_id, &fold).await?;
-                if !settled {
-                    return Ok(None);
-                }
-                let timeline = fold.into_timeline(conversation_id);
-                Ok(Some(crate::search::extract_searchable_text(&timeline)))
+                Self::persist_snapshot(&mut *conn, conversation_id, &fold).await
             }
             .await;
-
             match result {
-                Ok(body) => {
+                Ok(()) => {
                     if let Err(error) = sqlx::query("COMMIT").execute(&mut *conn).await {
                         let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
                         return Err(error);
                     }
-                    body
                 }
                 Err(error) => {
                     let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
                     return Err(error);
                 }
             }
-        };
+        }
 
         if let Some(body) = fts_body {
-            let _gate = conversation_writer_gate().lock().await;
+            let _gate = sqlite_writer_gate().lock().await;
             let mut conn = pool.acquire().await?;
             if let Err(error) =
-                crate::search::reindex_conversation(&mut conn, record.conversation_id, &body).await
+                crate::search::reindex_conversation(&mut conn, conversation_id, &body).await
             {
                 tracing::warn!(
-                    conversation_id = %record.conversation_id,
+                    conversation_id = %conversation_id,
                     %error,
                     "conversation FTS reindex on settle failed"
                 );
@@ -836,6 +856,7 @@ impl ConversationProjector {
         pool: &SqlitePool,
         conversation_id: Uuid,
     ) -> Result<(), sqlx::Error> {
+        let _gate = sqlite_writer_gate().lock().await;
         let mut conn = pool.acquire().await?;
         sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
 

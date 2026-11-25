@@ -33,8 +33,8 @@ use crate::{
     ConversationProjector, ConversationServiceError, ConversationSessionService,
     commit_reminder::{is_complete_ai_reply, start_commit_reminder_if_needed},
     finalize_checkpoint_file_changes,
-    projection::conversation_writer_gate,
 };
+use db::sqlite_writer_gate;
 
 /// Transport-neutral recorder used by all application hosts.
 pub struct ConversationAgentEventRecorder {
@@ -232,7 +232,7 @@ impl ConversationAgentEventRecorder {
         // Gate before acquire so waiting writers do not occupy pool slots while
         // blocked on SQLite's busy_timeout.
         let persisted = {
-            let _gate = conversation_writer_gate().lock().await;
+            let _gate = sqlite_writer_gate().lock().await;
             let mut conn = self.pool.acquire().await?;
             sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
 
@@ -355,7 +355,10 @@ impl ConversationAgentEventRecorder {
 
         let durable_records: Vec<ConversationEventRecord> =
             persisted.iter().map(|(_, record)| record.clone()).collect();
-        ConversationProjector::refresh_snapshots_after_append(&self.pool, &durable_records).await;
+        ConversationProjector::spawn_snapshot_refresh_after_append(
+            &self.pool,
+            &durable_records,
+        );
 
         // Side-effects after the writer lock is released so detail/git readers
         // are not queued behind checkpoint / publish / queue-dispatch work.

@@ -20,21 +20,24 @@ use agents::{
     },
 };
 use chrono::{DateTime, Utc};
-use db::models::{
-    agent_management::SessionDefaultRepository,
-    conversation::{
-        BindingStatus, ConversationAgentBindingRecord, ConversationRecord,
-        CreateConversationAgentBinding, CreateConversationRecord,
+use db::{
+    models::{
+        agent_management::SessionDefaultRepository,
+        conversation::{
+            BindingStatus, ConversationAgentBindingRecord, ConversationRecord,
+            CreateConversationAgentBinding, CreateConversationRecord,
+        },
+        conversation_event::AppendConversationEvent,
+        conversation_side_effects::ConversationPermissionRecord,
+        conversation_steering::ConversationSteeringRecord,
+        conversation_turn::{ConversationTurnRecord, CreateConversationTurn},
+        repo::Repo,
+        session::{CreateSession, Session, SessionStatus},
+        session_checkpoint::SessionCheckpoint,
+        workspace::Workspace,
+        workspace_repo::WorkspaceRepo,
     },
-    conversation_event::AppendConversationEvent,
-    conversation_side_effects::ConversationPermissionRecord,
-    conversation_steering::ConversationSteeringRecord,
-    conversation_turn::{ConversationTurnRecord, CreateConversationTurn},
-    repo::Repo,
-    session::{CreateSession, Session, SessionStatus},
-    session_checkpoint::SessionCheckpoint,
-    workspace::Workspace,
-    workspace_repo::WorkspaceRepo,
+    sqlite_writer_gate,
 };
 use deployment::Deployment;
 use executors::profile::ExecutorProfileId;
@@ -992,106 +995,112 @@ impl ConversationSessionService {
             let created_key = format!("turn:{turn_id}:created");
             let dispatched_id = Uuid::new_v4();
             let created_id = Uuid::new_v4();
-            let mut conn = pool.acquire().await?;
-            sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
-            let transaction = async {
-                let active_status: Option<String> = sqlx::query_scalar(
-                    r#"SELECT status
-                       FROM conversation_turns
-                       WHERE id = (
-                           SELECT active_turn_id FROM sessions WHERE id = ?
-                       )"#,
-                )
-                .bind(input.conversation_id)
-                .fetch_optional(&mut *conn)
-                .await?;
-                if active_status
-                    .as_deref()
-                    .is_some_and(is_in_flight_turn_status)
-                {
-                    return Err(ConversationServiceError::Conflict(
-                        "Conversation already has an active turn".to_string(),
-                    ));
-                }
-
-                ConversationRecord::capture_initial_prompt_on_connection(
-                    &mut conn,
-                    input.conversation_id,
-                    &display_text,
-                )
-                .await?;
-                let turn = ConversationTurnRecord::create_pending_on_connection(
-                    &mut conn,
-                    turn_id,
-                    CreateConversationTurn {
-                        conversation_id: input.conversation_id,
-                        prompt_id: None,
-                        text_preview: Some(&display_text),
-                        input_blocks_json: &conversation_blocks_json,
-                    },
-                )
-                .await?;
-                if origin != crate::commit_reminder::USER_ORIGIN {
-                    ConversationTurnRecord::set_origin_on_connection(&mut conn, turn.id, origin)
-                        .await?;
-                }
-                ConversationRecord::update_active_turn_on_connection(
-                    &mut conn,
-                    input.conversation_id,
-                    Some(turn.id),
-                )
-                .await?;
-                let dispatched = ConversationEventAppender::append_and_apply(
-                    &mut conn,
-                    AppendConversationEvent {
-                        id: dispatched_id,
-                        conversation_id: input.conversation_id,
-                        turn_id: Some(turn.id),
-                        binding_id: None,
-                        connection_id: None,
-                        prompt_id: None,
-                        source: "system",
-                        event_kind: "conversation_input",
-                        normalized_json: &dispatched_json,
-                        raw_json: None,
-                        idempotency_key: Some(&dispatched_key),
-                    },
-                )
-                .await?;
-                let created = ConversationEventAppender::append_and_apply(
-                    &mut conn,
-                    AppendConversationEvent {
-                        id: created_id,
-                        conversation_id: input.conversation_id,
-                        turn_id: Some(turn.id),
-                        binding_id: None,
-                        connection_id: None,
-                        prompt_id: None,
-                        source: "user",
-                        event_kind: "user_turn_created",
-                        normalized_json: &created_json,
-                        raw_json: None,
-                        idempotency_key: Some(&created_key),
-                    },
-                )
-                .await?;
-                Ok::<_, ConversationServiceError>((turn, dispatched, created))
-            }
-            .await;
-            let (turn, dispatched, created) = match transaction {
-                Ok(committed) => {
-                    if let Err(error) = sqlx::query("COMMIT").execute(&mut *conn).await {
-                        let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-                        return Err(error.into());
+            let (turn, dispatched, created) = {
+                let _write_gate = sqlite_writer_gate().lock().await;
+                let mut conn = pool.acquire().await?;
+                sqlx::query("BEGIN IMMEDIATE").execute(&mut *conn).await?;
+                let transaction = async {
+                    let active_status: Option<String> = sqlx::query_scalar(
+                        r#"SELECT status
+                           FROM conversation_turns
+                           WHERE id = (
+                               SELECT active_turn_id FROM sessions WHERE id = ?
+                           )"#,
+                    )
+                    .bind(input.conversation_id)
+                    .fetch_optional(&mut *conn)
+                    .await?;
+                    if active_status
+                        .as_deref()
+                        .is_some_and(is_in_flight_turn_status)
+                    {
+                        return Err(ConversationServiceError::Conflict(
+                            "Conversation already has an active turn".to_string(),
+                        ));
                     }
-                    committed
+
+                    ConversationRecord::capture_initial_prompt_on_connection(
+                        &mut conn,
+                        input.conversation_id,
+                        &display_text,
+                    )
+                    .await?;
+                    let turn = ConversationTurnRecord::create_pending_on_connection(
+                        &mut conn,
+                        turn_id,
+                        CreateConversationTurn {
+                            conversation_id: input.conversation_id,
+                            prompt_id: None,
+                            text_preview: Some(&display_text),
+                            input_blocks_json: &conversation_blocks_json,
+                        },
+                    )
+                    .await?;
+                    if origin != crate::commit_reminder::USER_ORIGIN {
+                        ConversationTurnRecord::set_origin_on_connection(
+                            &mut conn,
+                            turn.id,
+                            origin,
+                        )
+                        .await?;
+                    }
+                    ConversationRecord::update_active_turn_on_connection(
+                        &mut conn,
+                        input.conversation_id,
+                        Some(turn.id),
+                    )
+                    .await?;
+                    let dispatched = ConversationEventAppender::append_and_apply(
+                        &mut conn,
+                        AppendConversationEvent {
+                            id: dispatched_id,
+                            conversation_id: input.conversation_id,
+                            turn_id: Some(turn.id),
+                            binding_id: None,
+                            connection_id: None,
+                            prompt_id: None,
+                            source: "system",
+                            event_kind: "conversation_input",
+                            normalized_json: &dispatched_json,
+                            raw_json: None,
+                            idempotency_key: Some(&dispatched_key),
+                        },
+                    )
+                    .await?;
+                    let created = ConversationEventAppender::append_and_apply(
+                        &mut conn,
+                        AppendConversationEvent {
+                            id: created_id,
+                            conversation_id: input.conversation_id,
+                            turn_id: Some(turn.id),
+                            binding_id: None,
+                            connection_id: None,
+                            prompt_id: None,
+                            source: "user",
+                            event_kind: "user_turn_created",
+                            normalized_json: &created_json,
+                            raw_json: None,
+                            idempotency_key: Some(&created_key),
+                        },
+                    )
+                    .await?;
+                    Ok::<_, ConversationServiceError>((turn, dispatched, created))
                 }
-                Err(error) => {
-                    let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
-                    return Err(error);
+                .await;
+                match transaction {
+                    Ok(committed) => {
+                        if let Err(error) = sqlx::query("COMMIT").execute(&mut *conn).await {
+                            let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+                            return Err(error.into());
+                        }
+                        committed
+                    }
+                    Err(error) => {
+                        let _ = sqlx::query("ROLLBACK").execute(&mut *conn).await;
+                        return Err(error);
+                    }
                 }
             };
-            drop(conn);
             self.ctx.event_publisher.publish(&dispatched).await;
             self.ctx.event_publisher.publish(&created).await;
             (turn, created)
