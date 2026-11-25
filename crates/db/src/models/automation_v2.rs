@@ -639,43 +639,62 @@ impl ClaimStorePort for SqliteAutomationStore {
 #[async_trait]
 impl RecoveryStorePort for SqliteAutomationStore {
     async fn interrupt_running(&self, now: DateTime<Utc>) -> Result<Vec<Uuid>, EngineError> {
-        let mut transaction = self
+        // Gate before begin so startup recovery does not check out a pool slot
+        // and spin on busy_timeout against conversation orphan-turn recovery.
+        let _gate = crate::sqlite_writer_gate().lock().await;
+        let mut connection = self
             .pool
-            .begin()
+            .acquire()
             .await
             .map_err(|error| EngineError::RecoveryStore(error.to_string()))?;
-        let ids = sqlx::query_scalar::<_, Uuid>(
-            "SELECT id FROM automation_runs
+        sqlx::query("BEGIN IMMEDIATE")
+            .execute(&mut *connection)
+            .await
+            .map_err(|error| EngineError::RecoveryStore(error.to_string()))?;
+        let result = async {
+            let ids = sqlx::query_scalar::<_, Uuid>(
+                "SELECT id FROM automation_runs
              WHERE status = 'running' AND workflow_run_id IS NULL",
-        )
-        .fetch_all(&mut *transaction)
-        .await
-        .map_err(|error| EngineError::RecoveryStore(error.to_string()))?;
-        sqlx::query(
-            "DELETE FROM automation_shared_root_locks
+            )
+            .fetch_all(&mut *connection)
+            .await
+            .map_err(|error| EngineError::RecoveryStore(error.to_string()))?;
+            sqlx::query(
+                "DELETE FROM automation_shared_root_locks
              WHERE run_id IN (
                 SELECT id FROM automation_runs
                 WHERE status = 'running' AND workflow_run_id IS NULL
              )",
-        )
-        .execute(&mut *transaction)
-        .await
-        .map_err(|error| EngineError::RecoveryStore(error.to_string()))?;
-        sqlx::query(
-            "UPDATE automation_runs
+            )
+            .execute(&mut *connection)
+            .await
+            .map_err(|error| EngineError::RecoveryStore(error.to_string()))?;
+            sqlx::query(
+                "UPDATE automation_runs
              SET status = 'interrupted', stop_reason = 'host_restarted',
                  finished_at = ?
              WHERE status = 'running' AND workflow_run_id IS NULL",
-        )
-        .bind(now)
-        .execute(&mut *transaction)
-        .await
-        .map_err(|error| EngineError::RecoveryStore(error.to_string()))?;
-        transaction
-            .commit()
+            )
+            .bind(now)
+            .execute(&mut *connection)
             .await
             .map_err(|error| EngineError::RecoveryStore(error.to_string()))?;
-        Ok(ids)
+            Ok(ids)
+        }
+        .await;
+        match result {
+            Ok(ids) => {
+                if let Err(error) = sqlx::query("COMMIT").execute(&mut *connection).await {
+                    let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
+                    return Err(EngineError::RecoveryStore(error.to_string()));
+                }
+                Ok(ids)
+            }
+            Err(error) => {
+                let _ = sqlx::query("ROLLBACK").execute(&mut *connection).await;
+                Err(error)
+            }
+        }
     }
 
     async fn claim_catch_up(&self, now: DateTime<Utc>) -> Result<Vec<ClaimedRun>, EngineError> {

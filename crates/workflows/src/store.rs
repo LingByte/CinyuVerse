@@ -1481,9 +1481,35 @@ impl WorkflowStore {
         global_limit: u32,
         claim_ttl: Duration,
     ) -> Result<Option<ClaimedWorkflowStep>, WorkflowError> {
+        // Idle ticks must not take the writer gate. Probe on a short-lived read
+        // connection; only escalate to IMMEDIATE when there is ready or stale work.
+        let now = Utc::now();
+        let needs_writer: i64 = sqlx::query_scalar(
+            "SELECT EXISTS(
+                 SELECT 1
+                 FROM workflow_ready_steps ready
+                 JOIN workflow_runs run ON run.id = ready.run_id
+                 WHERE ready.status = 'ready'
+                   AND run.status IN ('running', 'waiting')
+                   AND run.control_state = 'active'
+                   AND run.deadline_at > ?
+                   AND run.dispatch_ready = 1
+             ) OR EXISTS(
+                 SELECT 1 FROM workflow_ready_steps
+                 WHERE status = 'claimed' AND claim_deadline < ?
+             )",
+        )
+        .bind(now)
+        .bind(now)
+        .fetch_one(&self.pool)
+        .await?;
+        if needs_writer == 0 {
+            return Ok(None);
+        }
+
         let mut conn = self.begin_immediate().await?;
         let result = async {
-            recover_stale_claims(&mut conn, Utc::now()).await?;
+            recover_stale_claims(&mut conn, now).await?;
             let global_active: i64 = sqlx::query_scalar(
                 "SELECT COUNT(*) FROM workflow_step_runs
                  WHERE status IN ('claimed', 'running')",
@@ -1504,7 +1530,7 @@ impl WorkflowStore {
                  ORDER BY ready.ready_sequence, ready.run_id, ready.step_id
                  LIMIT 100",
             )
-            .bind(Utc::now())
+            .bind(now)
             .fetch_all(&mut *conn)
             .await?;
             for candidate in candidates {
