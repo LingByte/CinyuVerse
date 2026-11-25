@@ -135,7 +135,7 @@ const DEFAULT_LAYOUT_SNAPSHOT: LayoutSnapshot = {
   isKanbanListVisible: true,
   isKanbanMonitorVisible: true,
   isKanbanSessionVisible: true,
-  activeTab: 'kanban',
+  activeTab: 'workspace',
 };
 
 function clampSessionWidth(width: number): number {
@@ -283,16 +283,34 @@ export function migratePersistedLayoutState(
     if (version < 24) {
       accumulator[projectKey].serializedLayout = null;
     }
+    // v27: drafts/workspace is the default landing tab (was kanban).
+    // Only migrate the previous default so overview/library choices stay.
+    if (
+      version < 27 &&
+      accumulator[projectKey].activeTab === 'kanban'
+    ) {
+      accumulator[projectKey].activeTab = 'workspace';
+    }
     return accumulator;
   }, {});
 
   if (!projectLayouts[currentProjectKey]) {
+    if (version < 27 && legacySnapshot.activeTab === 'kanban') {
+      legacySnapshot.activeTab = 'workspace';
+    }
     projectLayouts[currentProjectKey] = legacySnapshot;
   }
 
   const activeSnapshot = buildProjectLayoutState(
     projectLayouts[currentProjectKey]
   );
+  if (version < 27 && activeSnapshot.activeTab === 'kanban') {
+    activeSnapshot.activeTab = 'workspace';
+    projectLayouts[currentProjectKey] = {
+      ...projectLayouts[currentProjectKey],
+      activeTab: 'workspace',
+    };
+  }
 
   return {
     currentProjectKey,

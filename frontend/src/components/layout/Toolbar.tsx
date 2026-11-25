@@ -359,8 +359,8 @@ function WorkspaceTabSwitcher() {
     label: string;
     icon: typeof LayoutDashboard;
   }[] = [
-    { key: 'kanban', label: t('toolbar.kanban'), icon: LayoutDashboard },
     { key: 'workspace', label: t('toolbar.workspace'), icon: Monitor },
+    { key: 'kanban', label: t('toolbar.kanban'), icon: LayoutDashboard },
     { key: 'overview', label: t('toolbar.overview'), icon: BookOpen },
     { key: 'library', label: t('toolbar.library'), icon: Library },
   ];
