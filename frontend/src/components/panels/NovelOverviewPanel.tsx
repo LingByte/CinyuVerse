@@ -27,6 +27,7 @@ import {
 } from '@xyflow/react';
 import {
   BookOpen,
+  Library,
   Loader2,
   RefreshCw,
   Sparkles,
@@ -57,12 +58,18 @@ import {
   completeBeatAndAdvance,
   formatContextPackMarkdown,
   loadStorylineMeta,
+  loadTransferSourceMarkdown,
   reconcileHooks,
   type HookReconciliation,
   type StorylineMetaFiles,
 } from '@/lib/storylineContext';
+import {
+  parseTransferSourceMarkdown,
+  type TransferSource,
+} from '@/lib/transferSource';
 import { useLayoutStore } from '@/stores/useLayoutStore';
 import { useComposerPrefillStore } from '@/stores/useComposerPrefillStore';
+import { useLibraryFocusStore } from '@/stores/useLibraryFocusStore';
 import { useKanbanSessionContext } from '@/contexts/KanbanSessionContext';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -870,7 +877,12 @@ export function NovelOverviewPanel() {
   const [expandedArcs, setExpandedArcs] = useState<Set<string>>(new Set());
   const seededForPathRef = useRef('');
   const [storyMeta, setStoryMeta] = useState<StorylineMetaFiles | null>(null);
+  const [transferSource, setTransferSource] = useState<TransferSource | null>(
+    null
+  );
   const [packBusy, setPackBusy] = useState(false);
+  const setActiveTab = useLayoutStore((s) => s.setActiveTab);
+  const focusLibraryBook = useLibraryFocusStore((s) => s.focusBook);
   /** After「撰写」— remind user to sync hooks/summaries. */
   const [pendingWriteBackBeatId, setPendingWriteBackBeatId] = useState<
     string | null
@@ -948,6 +960,7 @@ export function NovelOverviewPanel() {
   const refreshStoryMeta = useCallback(async () => {
     if (!rootPath) {
       setStoryMeta(null);
+      setTransferSource(null);
       return;
     }
     try {
@@ -955,7 +968,19 @@ export function NovelOverviewPanel() {
     } catch {
       setStoryMeta(null);
     }
+    try {
+      const md = await loadTransferSourceMarkdown(rootPath);
+      setTransferSource(parseTransferSourceMarkdown(md));
+    } catch {
+      setTransferSource(null);
+    }
   }, [rootPath]);
+
+  const handleOpenSourceBook = useCallback(() => {
+    if (!transferSource?.sourceBookDir) return;
+    focusLibraryBook(transferSource.sourceBookDir);
+    setActiveTab('library');
+  }, [focusLibraryBook, setActiveTab, transferSource]);
 
   useEffect(() => {
     refreshStats();
@@ -1583,6 +1608,31 @@ export function NovelOverviewPanel() {
             </div>
 
             <div className="ml-auto flex shrink-0 items-center gap-0.5">
+              {transferSource ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 max-w-[11rem] gap-1 px-2"
+                      onClick={handleOpenSourceBook}
+                      data-testid="overview-open-source-book"
+                    >
+                      <Library className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">
+                        {t('panels:overview.openSourceBook', {
+                          title: transferSource.sourceBookTitle,
+                        })}
+                      </span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    {t('panels:overview.openSourceBookHint', {
+                      path: transferSource.sourceBookDir,
+                    })}
+                  </TooltipContent>
+                </Tooltip>
+              ) : null}
               <Button
                 size="sm"
                 variant="secondary"

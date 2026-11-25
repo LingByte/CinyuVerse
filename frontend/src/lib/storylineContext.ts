@@ -192,6 +192,12 @@ export async function loadStorylineMeta(
   };
 }
 
+export async function loadTransferSourceMarkdown(
+  rootPath: string
+): Promise<string> {
+  return readOptional(`${rootPath}/.cinyuverse/transfer-source.md`);
+}
+
 export async function loadCharacterExcerpts(
   rootPath: string,
   names: string[]

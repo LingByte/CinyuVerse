@@ -69,6 +69,7 @@ import {
 import { ConfirmDialog } from '@/components/dialogs/shared/ConfirmDialog';
 import { pickHostDirectory } from '@/lib/hostFs';
 import { cn } from '@/lib/utils';
+import { useLibraryFocusStore } from '@/stores/useLibraryFocusStore';
 
 type LocalBook = {
   name: string;
@@ -266,6 +267,8 @@ export function NovelLibraryPanel() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchItem[]>([]);
   const [loading, setLoading] = useState(false);
+  /** True after the first library_list_local attempt finishes (success or error). */
+  const [localListReady, setLocalListReady] = useState(false);
   const [searching, setSearching] = useState(false);
   const [activeDownloads, setActiveDownloads] = useState<
     Record<string, ActiveDownload>
@@ -386,6 +389,7 @@ export function NovelLibraryPanel() {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
+      setLocalListReady(true);
     }
   }, []);
 
@@ -614,9 +618,17 @@ export function NovelLibraryPanel() {
     }
   }, []);
 
+  const normalizePath = useCallback((path: string) => {
+    return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  }, []);
+
+  const pendingLibraryPath = useLibraryFocusStore((s) => s.pendingPath);
+  const consumeLibraryFocus = useLibraryFocusStore((s) => s.consume);
+
   const handleSelectLocal = useCallback(
     async (book: LocalBook) => {
       const requestId = ++localPreviewRequestRef.current;
+      setMode('local');
       setSelectedLocal(book);
       setSelectedRemote(null);
       setPreview(null);
@@ -684,6 +696,34 @@ export function NovelLibraryPanel() {
     },
     [loadEpubChapter, loadLocal]
   );
+
+  useEffect(() => {
+    if (!pendingLibraryPath || loading || !localListReady) {
+      return;
+    }
+    const target = normalizePath(pendingLibraryPath);
+    const match = localBooks.find(
+      (book) => normalizePath(book.path) === target
+    );
+    if (match) {
+      const path = consumeLibraryFocus();
+      if (!path) return;
+      void handleSelectLocal(match);
+      return;
+    }
+    const path = consumeLibraryFocus();
+    if (!path) return;
+    toast.error(t('panels:overview.openSourceBookMissing'));
+  }, [
+    consumeLibraryFocus,
+    handleSelectLocal,
+    loading,
+    localBooks,
+    localListReady,
+    normalizePath,
+    pendingLibraryPath,
+    t,
+  ]);
 
   const handleDeleteLocal = useCallback(async () => {
     if (!selectedLocal) return;
