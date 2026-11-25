@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   imitateStatusLabel,
   imitateStepPercent,
-} from './NovelLibraryPanel';
+} from './novelLibraryImitateUi';
 
 const base = {
   step: null as number | null,

@@ -47,6 +47,11 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
+  imitateStatusLabel,
+  imitateStepPercent,
+  type ImitateStatusView,
+} from '@/components/panels/novelLibraryImitateUi';
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -181,16 +186,6 @@ type DownloadProgressEvent = {
   percent: number | null;
 };
 
-type ImitateStatusView = {
-  phase: 'idle' | 'queued' | 'running' | 'completed' | 'failed' | string;
-  step: number | null;
-  stepTotal: number | null;
-  progress: string | null;
-  error: string | null;
-  updatedAt: string;
-  conversationId: string | null;
-};
-
 type ImitateCraftRule = {
   rule: string;
   why?: string;
@@ -264,36 +259,6 @@ type ImitateSeedResult = {
   title: string;
 };
 
-export function imitateStatusLabel(status: ImitateStatusView | null): string {
-  if (!status) return '未分析';
-  const stepPrefix =
-    status.step != null && status.stepTotal != null
-      ? `${status.step}/${status.stepTotal} · `
-      : '';
-  switch (status.phase) {
-    case 'queued':
-    case 'running':
-      return `${stepPrefix}${status.progress || '分析中'}`;
-    case 'completed':
-      return '已拆出故事线/人物卡/写法';
-    case 'failed':
-      return status.error ? `失败：${status.error}` : '失败';
-    case 'idle':
-      return status.progress === '已中断' ? '已中断' : '未分析';
-    default:
-      return '未分析';
-  }
-}
-
-export function imitateStepPercent(status: ImitateStatusView | null): number | null {
-  if (!status || status.step == null || status.stepTotal == null || status.stepTotal <= 0) {
-    return null;
-  }
-  if (status.phase === 'completed') return 100;
-  if (status.phase !== 'queued' && status.phase !== 'running') return null;
-  return Math.min(100, Math.round((status.step / status.stepTotal) * 100));
-}
-
 export function NovelLibraryPanel() {
   const { t } = useTranslation('panels');
   const [mode, setMode] = useState<Mode>('local');
@@ -324,6 +289,7 @@ export function NovelLibraryPanel() {
   const [imitatePackLoading, setImitatePackLoading] = useState(false);
   const [imitateStarting, setImitateStarting] = useState(false);
   const [imitateCancelling, setImitateCancelling] = useState(false);
+  const [imitateRecovering, setImitateRecovering] = useState(false);
   const [seedDialogOpen, setSeedDialogOpen] = useState(false);
   const [seedTitle, setSeedTitle] = useState('');
   const [seedParentDir, setSeedParentDir] = useState('');
@@ -848,6 +814,24 @@ export function NovelLibraryPanel() {
     }
   }, [selectedLocal]);
 
+  const handleRecoverImitate = useCallback(async () => {
+    if (!selectedLocal || selectedLocal.ext !== 'book') return;
+    setImitateRecovering(true);
+    try {
+      const status = await invoke<ImitateStatusView>(
+        'library_imitate_recover',
+        { path: selectedLocal.path }
+      );
+      setImitateStatus(status);
+      await refreshImitatePack(selectedLocal.path);
+      toast.success('已从原文重新解析');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setImitateRecovering(false);
+    }
+  }, [refreshImitatePack, selectedLocal]);
+
   const handleOpenSeedDialog = useCallback(() => {
     if (!selectedLocal) return;
     setSeedTitle(`${displayBookName(selectedLocal.name)}·转置`);
@@ -1109,8 +1093,8 @@ export function NovelLibraryPanel() {
         ) : null}
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <aside className="flex w-[18.5rem] shrink-0 flex-col border-r">
-            <ScrollArea className="min-h-0 flex-1">
+          <aside className="flex w-80 shrink-0 flex-col overflow-hidden border-r">
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
               {mode === 'local' ? (
                 <LocalBookList
                   loading={loading}
@@ -1129,7 +1113,7 @@ export function NovelLibraryPanel() {
                   onDownload={(item) => void handleDownload(item)}
                 />
               )}
-            </ScrollArea>
+            </div>
           </aside>
 
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -1164,6 +1148,8 @@ export function NovelLibraryPanel() {
                 }}
                 onImitate={() => void handleStartImitate()}
                 onCancelImitate={() => void handleCancelImitate()}
+                onRecoverImitate={() => void handleRecoverImitate()}
+                imitateRecovering={imitateRecovering}
                 onSeed={() => handleOpenSeedDialog()}
                 onDelete={() => void handleDeleteLocal()}
               />
@@ -1494,7 +1480,7 @@ function LocalBookList({
   }
 
   return (
-    <div className="space-y-0.5 p-1.5">
+    <div className="space-y-0.5 p-2">
       {books.map((book) => {
         const selected = selectedPath === book.path;
         return (
@@ -1502,7 +1488,7 @@ function LocalBookList({
             key={book.path}
             type="button"
             className={cn(
-              'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors',
+              'flex w-full min-w-0 items-center gap-2.5 rounded-md px-2 py-2 text-left transition-colors',
               selected
                 ? 'bg-[var(--surface-active)]'
                 : 'hover:bg-[var(--surface-control-hover)]'
@@ -1700,7 +1686,7 @@ function SearchBookList({
   }
 
   return (
-    <div className="space-y-0.5 p-1.5">
+    <div className="space-y-0.5 p-2">
       {items.map((item) => {
         const selected = selectedId === item.bookId;
         const downloaded = isDownloaded(item.title);
@@ -1710,7 +1696,7 @@ function SearchBookList({
           <div
             key={item.bookId}
             className={cn(
-              'flex items-center gap-2 rounded-md px-2.5 py-2 transition-colors',
+              'flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-2 transition-colors',
               selected
                 ? 'bg-[var(--surface-active)]'
                 : 'hover:bg-[var(--surface-control-hover)]'
@@ -1727,7 +1713,7 @@ function SearchBookList({
                   <BookOpen className="h-4 w-4 text-muted-foreground/50" />
                 }
               />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 overflow-hidden">
                 <div className="line-clamp-2 text-[13px] font-medium leading-snug">
                   {item.title}
                 </div>
@@ -1738,28 +1724,36 @@ function SearchBookList({
                 </div>
               </div>
             </button>
-            <div className="shrink-0">
+            <div className="flex shrink-0 items-center justify-end">
               {downloaded ? (
-                <Badge variant="secondary" className="h-5 text-[10px]">
-                  已在本地
+                <Badge variant="secondary" className="h-6 px-1.5 text-[10px]">
+                  已存
                 </Badge>
               ) : downloading ? (
-                <Badge variant="secondary" className="h-6 gap-1 px-2 text-[10px]">
+                <Badge
+                  variant="secondary"
+                  className="h-6 min-w-7 justify-center gap-1 px-1.5 text-[10px]"
+                >
                   <Loader2 className="h-3 w-3 animate-spin" />
                   {typeof download.percent === 'number'
                     ? `${download.percent}%`
-                    : downloadPhaseLabel(download.phase)}
+                    : null}
                 </Badge>
               ) : (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="h-7 px-2.5 text-[11px]"
-                  onClick={() => onDownload(item)}
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  下载
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-7 w-7 shrink-0 p-0"
+                      aria-label={`下载 ${item.title}`}
+                      onClick={() => onDownload(item)}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>下载</TooltipContent>
+                </Tooltip>
               )}
             </div>
           </div>
@@ -1801,12 +1795,14 @@ function LocalReader({
   imitatePackLoading,
   imitateStarting,
   imitateCancelling,
+  imitateRecovering,
   currentChapterIndex,
   chapterCount,
   readerScrollRef,
   onChapter,
   onImitate,
   onCancelImitate,
+  onRecoverImitate,
   onSeed,
   onDelete,
 }: {
@@ -1821,12 +1817,14 @@ function LocalReader({
   imitatePackLoading: boolean;
   imitateStarting: boolean;
   imitateCancelling: boolean;
+  imitateRecovering: boolean;
   currentChapterIndex: number;
   chapterCount: number;
   readerScrollRef: RefObject<HTMLDivElement | null>;
   onChapter: (index: number) => void;
   onImitate: () => void;
   onCancelImitate: () => void;
+  onRecoverImitate: () => void;
   onSeed: () => void;
   onDelete: () => void;
 }) {
@@ -1947,6 +1945,21 @@ function LocalReader({
                     深度分析
                   </Button>
                 )}
+                {imitateStatus?.phase === 'failed' ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-7"
+                    disabled={imitateRecovering}
+                    onClick={onRecoverImitate}
+                    data-testid="library-imitate-recover"
+                  >
+                    {imitateRecovering ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : null}
+                    重解析原文
+                  </Button>
+                ) : null}
                 {imitateStatus?.phase === 'completed' && imitatePack ? (
                   <Button
                     size="sm"
